@@ -2,12 +2,6 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from "recharts";
-
-const COLORS = ['#18181B', '#C4A47C', '#52525B', '#A1A1AA', '#E5E7EB'];
 
 const CoreLogics = () => {
   const [activeTab, setActiveTab] = useState("ros");
@@ -44,6 +38,7 @@ const CoreLogics = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const tabs = [
@@ -52,15 +47,17 @@ const CoreLogics = () => {
   ];
 
   const formatCurrency = (value) => {
+    if (!value) return "₹0";
     if (value >= 1000000) return `₹${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `₹${(value / 1000).toFixed(0)}K`;
-    return `₹${value?.toFixed(0) || 0}`;
+    return `₹${Math.round(value)}`;
   };
 
   const formatNumber = (value) => {
+    if (!value) return "0";
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-    return value?.toFixed(0) || 0;
+    return Math.round(value).toString();
   };
 
   const handleExport = () => {
@@ -177,53 +174,6 @@ const CoreLogics = () => {
             </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Status Distribution */}
-            <div className="bg-white border border-neutral-200 p-6">
-              <h3 className="text-lg font-medium text-neutral-900 mb-4">Status Distribution</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Healthy', value: rosData.summary?.healthy_count || 0 },
-                      { name: 'Broken', value: rosData.summary?.broken_count || 0 }
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  >
-                    <Cell fill="#10B981" />
-                    <Cell fill="#EF4444" />
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Top Performers */}
-            <div className="bg-white border border-neutral-200 p-6">
-              <h3 className="text-lg font-medium text-neutral-900 mb-4">Top ROS Performers</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart
-                  data={rosData.data?.sort((a, b) => b.ros - a.ros).slice(0, 10)}
-                  layout="vertical"
-                  margin={{ left: 80 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="style" type="category" tick={{ fontSize: 11 }} width={75} />
-                  <Tooltip />
-                  <Bar dataKey="ros" fill="#C4A47C" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
           {/* Data Table */}
           <div className="bg-white border border-neutral-200">
             <div className="p-4 border-b border-neutral-100">
@@ -321,10 +271,10 @@ const CoreLogics = () => {
                           ) : (
                             <TrendingDown size={14} className="text-red-400" />
                           )}
-                          #{row.store_rank_for_style?.toFixed(0)}
+                          #{Math.round(row.store_rank_for_style)}
                         </span>
                       </td>
-                      <td>#{row.style_rank_for_store?.toFixed(0)}</td>
+                      <td>#{Math.round(row.style_rank_for_store)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -2,10 +2,6 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download, Users, Briefcase, BarChart3 } from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, ZAxis
-} from "recharts";
 
 const GapAnalysis = () => {
   const [activeTab, setActiveTab] = useState("noos");
@@ -43,6 +39,7 @@ const GapAnalysis = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const tabs = [
@@ -57,15 +54,17 @@ const GapAnalysis = () => {
   ];
 
   const formatCurrency = (value) => {
+    if (!value) return "₹0";
     if (value >= 1000000) return `₹${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `₹${(value / 1000).toFixed(0)}K`;
-    return `₹${value?.toFixed(0) || 0}`;
+    return `₹${Math.round(value)}`;
   };
 
   const formatNumber = (value) => {
+    if (!value) return "0";
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-    return value?.toFixed(0) || 0;
+    return Math.round(value).toString();
   };
 
   const handleExport = () => {
@@ -180,133 +179,45 @@ const GapAnalysis = () => {
       {/* NOOS Analysis */}
       {activeTab === "noos" && noosData && !loading && (
         <div data-testid="noos-analysis-section">
-          {/* CXO View */}
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="metric-card">
+              <span className="metric-label">Store-Style Combinations</span>
+              <span className="metric-value">{formatNumber(noosData.summary?.total_combinations)}</span>
+            </div>
+            <div className="metric-card">
+              <span className="metric-label">NOOS Candidates</span>
+              <span className="metric-value text-emerald-600">
+                {formatNumber(noosData.summary?.noos_candidates)}
+              </span>
+            </div>
+            <div className="metric-card">
+              <span className="metric-label">Avg Availability</span>
+              <span className="metric-value">
+                {noosData.summary?.avg_availability?.toFixed(1)}%
+              </span>
+            </div>
+            <div className="metric-card">
+              <span className="metric-label">Total Revenue</span>
+              <span className="metric-value">{formatCurrency(noosData.summary?.total_revenue)}</span>
+            </div>
+          </div>
+
+          {/* CXO Executive Insight */}
           {persona === "cxo" && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div className="metric-card">
-                  <span className="metric-label">Store-Style Combinations</span>
-                  <span className="metric-value">{formatNumber(noosData.summary?.total_combinations)}</span>
-                </div>
-                <div className="metric-card">
-                  <span className="metric-label">NOOS Candidates</span>
-                  <span className="metric-value text-emerald-600">
-                    {formatNumber(noosData.summary?.noos_candidates)}
-                  </span>
-                </div>
-                <div className="metric-card">
-                  <span className="metric-label">Avg Availability</span>
-                  <span className="metric-value">
-                    {noosData.summary?.avg_availability?.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="metric-card">
-                  <span className="metric-label">Total Revenue</span>
-                  <span className="metric-value">{formatCurrency(noosData.summary?.total_revenue)}</span>
-                </div>
-              </div>
-
-              {/* Key Insight Card */}
-              <div className="bg-[#C4A47C] bg-opacity-10 border border-[#C4A47C] p-6 mb-8">
-                <h3 className="font-medium text-neutral-900 mb-2">Executive Insight</h3>
-                <p className="text-neutral-700">
-                  {noosData.summary?.noos_candidates > 0 
-                    ? `${noosData.summary?.noos_candidates} store-style combinations qualify as NOOS candidates with high availability and proven sales performance. Maintaining stock for these items could prevent significant revenue loss.`
-                    : "Analyze your inventory to identify NOOS candidates that should always remain in stock."}
-                </p>
-              </div>
-            </>
+            <div className="bg-[#C4A47C] bg-opacity-10 border border-[#C4A47C] p-6 mb-8">
+              <h3 className="font-medium text-neutral-900 mb-2">Executive Insight</h3>
+              <p className="text-neutral-700">
+                {noosData.summary?.noos_candidates > 0 
+                  ? `${noosData.summary?.noos_candidates} store-style combinations qualify as NOOS candidates with high availability and proven sales performance. Maintaining stock for these items could prevent significant revenue loss.`
+                  : "Analyze your inventory to identify NOOS candidates that should always remain in stock."}
+              </p>
+            </div>
           )}
 
-          {/* Merchandiser View */}
-          {persona === "merchandiser" && (
-            <>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                {/* Top by Revenue */}
-                <div className="bg-white border border-neutral-200 p-6">
-                  <h3 className="text-lg font-medium text-neutral-900 mb-4">Top NOOS Candidates by Revenue</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={noosData.data?.filter(d => d.noos_candidate).sort((a, b) => b.revenue - a.revenue).slice(0, 10)}
-                      layout="vertical"
-                      margin={{ left: 80 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={formatCurrency} />
-                      <YAxis dataKey="style" type="category" tick={{ fontSize: 11 }} width={75} />
-                      <Tooltip formatter={(value) => formatCurrency(value)} />
-                      <Bar dataKey="revenue" fill="#C4A47C" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Availability Distribution */}
-                <div className="bg-white border border-neutral-200 p-6">
-                  <h3 className="text-lg font-medium text-neutral-900 mb-4">Availability vs Revenue</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ScatterChart>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="availability_pct" name="Availability" unit="%" />
-                      <YAxis dataKey="revenue" name="Revenue" tickFormatter={formatCurrency} />
-                      <ZAxis dataKey="quantity" name="Quantity" range={[50, 300]} />
-                      <Tooltip 
-                        cursor={{ strokeDasharray: '3 3' }}
-                        formatter={(value, name) => name === "Revenue" ? formatCurrency(value) : value}
-                      />
-                      <Scatter 
-                        data={noosData.data?.slice(0, 100)} 
-                        fill="#18181B"
-                        opacity={0.6}
-                      />
-                    </ScatterChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Data Table */}
-              <div className="bg-white border border-neutral-200">
-                <div className="p-4 border-b border-neutral-100">
-                  <h3 className="font-medium text-neutral-900">NOOS Candidate Details</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="data-table w-full">
-                    <thead>
-                      <tr>
-                        <th>Store</th>
-                        <th>Style</th>
-                        <th>Exposure Days</th>
-                        <th>Availability %</th>
-                        <th>Quantity</th>
-                        <th>Revenue</th>
-                        <th>NOOS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {noosData.data?.slice(0, 25).map((row, i) => (
-                        <tr key={i}>
-                          <td className="font-medium text-neutral-900">{row.store_code}</td>
-                          <td>{row.style}</td>
-                          <td>{row.exposure_days}</td>
-                          <td>{row.availability_pct?.toFixed(1)}%</td>
-                          <td>{formatNumber(row.quantity)}</td>
-                          <td>{formatCurrency(row.revenue)}</td>
-                          <td>
-                            <span className={`badge ${row.noos_candidate ? 'badge-healthy' : 'bg-neutral-100 text-neutral-500'}`}>
-                              {row.noos_candidate ? "Yes" : "No"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Consultant View */}
+          {/* Consultant Methodology */}
           {persona === "consultant" && (
-            <div className="bg-white border border-neutral-200 p-6">
+            <div className="bg-white border border-neutral-200 p-6 mb-8">
               <h3 className="text-lg font-medium text-neutral-900 mb-4">NOOS Methodology</h3>
               <div className="space-y-4 text-sm text-neutral-600">
                 <div className="p-4 bg-neutral-50 border border-neutral-100">
@@ -331,6 +242,47 @@ const GapAnalysis = () => {
                     <li><strong>NOOS Gap:</strong> Revenue lost due to stockouts for NOOS items</li>
                   </ul>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Data Table - Merchandiser/CXO */}
+          {(persona === "merchandiser" || persona === "cxo") && (
+            <div className="bg-white border border-neutral-200">
+              <div className="p-4 border-b border-neutral-100">
+                <h3 className="font-medium text-neutral-900">NOOS Candidate Details</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="data-table w-full">
+                  <thead>
+                    <tr>
+                      <th>Store</th>
+                      <th>Style</th>
+                      <th>Exposure Days</th>
+                      <th>Availability %</th>
+                      <th>Quantity</th>
+                      <th>Revenue</th>
+                      <th>NOOS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {noosData.data?.slice(0, 25).map((row, i) => (
+                      <tr key={i}>
+                        <td className="font-medium text-neutral-900">{row.store_code}</td>
+                        <td>{row.style}</td>
+                        <td>{row.exposure_days}</td>
+                        <td>{row.availability_pct?.toFixed(1)}%</td>
+                        <td>{formatNumber(row.quantity)}</td>
+                        <td>{formatCurrency(row.revenue)}</td>
+                        <td>
+                          <span className={`badge ${row.noos_candidate ? 'badge-healthy' : 'bg-neutral-100 text-neutral-500'}`}>
+                            {row.noos_candidate ? "Yes" : "No"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -361,34 +313,6 @@ const GapAnalysis = () => {
             </div>
           </div>
 
-          {/* Status Distribution Chart */}
-          <div className="bg-white border border-neutral-200 p-6 mb-8">
-            <h3 className="text-lg font-medium text-neutral-900 mb-4">Gap by Size</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={sizeGapData.data?.reduce((acc, curr) => {
-                  const existing = acc.find(a => a.size === curr.size);
-                  if (existing) {
-                    existing.gap += curr.gap;
-                    existing.count += 1;
-                  } else {
-                    acc.push({ size: curr.size, gap: curr.gap, count: 1 });
-                  }
-                  return acc;
-                }, []).sort((a, b) => {
-                  const sizeOrder = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL'];
-                  return sizeOrder.indexOf(a.size) - sizeOrder.indexOf(b.size);
-                })}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="size" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="gap" fill="#C4A47C" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
           {/* Data Table */}
           <div className="bg-white border border-neutral-200">
             <div className="p-4 border-b border-neutral-100">
@@ -417,7 +341,11 @@ const GapAnalysis = () => {
                         {row.gap > 0 ? '+' : ''}{formatNumber(row.gap)}
                       </td>
                       <td>
-                        <span className={`badge badge-${row.status?.toLowerCase()}`}>
+                        <span className={`badge ${
+                          row.status === 'Overstock' ? 'badge-overstock' :
+                          row.status === 'Understock' ? 'badge-understock' :
+                          'badge-optimal'
+                        }`}>
                           {row.status}
                         </span>
                       </td>

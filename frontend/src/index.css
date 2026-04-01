@@ -166,13 +166,4 @@ code {
     animation: fadeInUp 0.4s ease-out forwards;
 }
 
-/* Chart styling */
-.recharts-cartesian-grid-horizontal line,
-.recharts-cartesian-grid-vertical line {
-    stroke: var(--border-default);
-}
-
-.recharts-text {
-    font-family: 'Satoshi', sans-serif;
-    font-size: 12px;
-}
+/* Chart styling - managed by recharts */

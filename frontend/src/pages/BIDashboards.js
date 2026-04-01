@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "../App";
-import { RefreshCw, Download, Filter } from "lucide-react";
-import { 
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from "recharts";
+import { RefreshCw, Download } from "lucide-react";
 
 const BIDashboards = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -32,19 +28,22 @@ const BIDashboards = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const formatCurrency = (value) => {
+    if (!value) return "₹0";
     if (value >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
     if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
     if (value >= 1000) return `₹${(value / 1000).toFixed(0)}K`;
-    return `₹${value?.toFixed(0) || 0}`;
+    return `₹${Math.round(value)}`;
   };
 
   const formatNumber = (value) => {
+    if (!value) return "0";
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-    return value?.toFixed(0) || 0;
+    return Math.round(value).toString();
   };
 
   const views = [
@@ -63,6 +62,8 @@ const BIDashboards = () => {
     else if (activeView === "trends") data = dashboardData.monthly_trends;
     else return;
 
+    if (!data || data.length === 0) return;
+    
     const csv = [
       Object.keys(data[0]).join(','),
       ...data.map(row => Object.values(row).join(','))
@@ -167,95 +168,94 @@ const BIDashboards = () => {
                 </div>
               </div>
 
-              {/* Charts Grid */}
+              {/* Monthly Trends Table */}
+              {dashboardData.monthly_trends?.length > 0 && (
+                <div className="bg-white border border-neutral-200 mb-6">
+                  <div className="p-4 border-b border-neutral-100">
+                    <h3 className="font-medium text-neutral-900">Monthly Trends</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="data-table w-full">
+                      <thead>
+                        <tr>
+                          <th>Month</th>
+                          <th>Quantity</th>
+                          <th>Revenue</th>
+                          <th>ASP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashboardData.monthly_trends.map((row, i) => (
+                          <tr key={i}>
+                            <td className="font-medium text-neutral-900">{row.month}</td>
+                            <td>{formatNumber(row.quantity)}</td>
+                            <td>{formatCurrency(row.revenue)}</td>
+                            <td>{formatCurrency(row.asp)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Top Stores & Styles Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Monthly Revenue Trend */}
-                <div className="bg-white border border-neutral-200 p-6">
-                  <h3 className="text-lg font-medium text-neutral-900 mb-4">Monthly Revenue Trend</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={dashboardData.monthly_trends}>
-                      <defs>
-                        <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#C4A47C" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#C4A47C" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(value) => formatCurrency(value)} />
-                      <Area 
-                        type="monotone" 
-                        dataKey="revenue" 
-                        stroke="#C4A47C" 
-                        fill="url(#revenueGradient)"
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Monthly Quantity Trend */}
-                <div className="bg-white border border-neutral-200 p-6">
-                  <h3 className="text-lg font-medium text-neutral-900 mb-4">Monthly Units Sold</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={dashboardData.monthly_trends}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tickFormatter={formatNumber} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(value) => formatNumber(value)} />
-                      <Bar dataKey="quantity" fill="#18181B" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
                 {/* Top Stores */}
                 {dashboardData.by_store?.length > 0 && (
-                  <div className="bg-white border border-neutral-200 p-6">
-                    <h3 className="text-lg font-medium text-neutral-900 mb-4">Top 10 Stores by Revenue</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart
-                        data={dashboardData.by_store?.slice(0, 10)}
-                        layout="vertical"
-                        margin={{ left: 60 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis type="number" tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
-                        <YAxis 
-                          dataKey="store_code" 
-                          type="category" 
-                          tick={{ fontSize: 10 }}
-                          width={55}
-                        />
-                        <Tooltip formatter={(value) => formatCurrency(value)} />
-                        <Bar dataKey="revenue" fill="#52525B" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div className="bg-white border border-neutral-200">
+                    <div className="p-4 border-b border-neutral-100">
+                      <h3 className="font-medium text-neutral-900">Top 10 Stores by Revenue</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            <th>Store</th>
+                            <th>Revenue</th>
+                            <th>Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashboardData.by_store.slice(0, 10).map((row, i) => (
+                            <tr key={i}>
+                              <td className="font-medium text-neutral-900">{row.store_code}</td>
+                              <td>{formatCurrency(row.revenue)}</td>
+                              <td>{formatNumber(row.quantity)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
 
                 {/* Top Styles */}
                 {dashboardData.by_style?.length > 0 && (
-                  <div className="bg-white border border-neutral-200 p-6">
-                    <h3 className="text-lg font-medium text-neutral-900 mb-4">Top 10 Styles by Revenue</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart
-                        data={dashboardData.by_style?.slice(0, 10)}
-                        layout="vertical"
-                        margin={{ left: 80 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                        <XAxis type="number" tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
-                        <YAxis 
-                          dataKey="style" 
-                          type="category" 
-                          tick={{ fontSize: 10 }}
-                          width={75}
-                        />
-                        <Tooltip formatter={(value) => formatCurrency(value)} />
-                        <Bar dataKey="revenue" fill="#C4A47C" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <div className="bg-white border border-neutral-200">
+                    <div className="p-4 border-b border-neutral-100">
+                      <h3 className="font-medium text-neutral-900">Top 10 Styles by Revenue</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            <th>Style</th>
+                            <th>Revenue</th>
+                            <th>Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashboardData.by_style.slice(0, 10).map((row, i) => (
+                            <tr key={i}>
+                              <td className="font-medium text-neutral-900">{row.style}</td>
+                              <td>{formatCurrency(row.revenue)}</td>
+                              <td>{formatNumber(row.quantity)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -288,7 +288,7 @@ const BIDashboards = () => {
                           <td className="font-medium text-neutral-900">{row.store_code}</td>
                           <td>{formatNumber(row.quantity)}</td>
                           <td>{formatCurrency(row.revenue)}</td>
-                          <td>{formatCurrency(row.revenue / row.quantity)}</td>
+                          <td>{formatCurrency(row.quantity > 0 ? row.revenue / row.quantity : 0)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -324,7 +324,7 @@ const BIDashboards = () => {
                           <td className="font-medium text-neutral-900">{row.style}</td>
                           <td>{formatNumber(row.quantity)}</td>
                           <td>{formatCurrency(row.revenue)}</td>
-                          <td>{formatCurrency(row.revenue / row.quantity)}</td>
+                          <td>{formatCurrency(row.quantity > 0 ? row.revenue / row.quantity : 0)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -337,83 +337,32 @@ const BIDashboards = () => {
           {/* Trends View */}
           {activeView === "trends" && (
             <div data-testid="bi-trends-section">
-              <div className="bg-white border border-neutral-200 p-6 mb-6">
-                <h3 className="text-lg font-medium text-neutral-900 mb-4">Revenue vs Quantity Trends</h3>
-                <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={dashboardData.monthly_trends}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="revenue" tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="quantity" orientation="right" tickFormatter={formatNumber} tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Line 
-                      yAxisId="revenue"
-                      type="monotone" 
-                      dataKey="revenue" 
-                      stroke="#C4A47C" 
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      name="Revenue"
-                    />
-                    <Line 
-                      yAxisId="quantity"
-                      type="monotone" 
-                      dataKey="quantity" 
-                      stroke="#18181B" 
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      name="Quantity"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-white border border-neutral-200 p-6">
-                <h3 className="text-lg font-medium text-neutral-900 mb-4">ASP Trend (Average Selling Price)</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={dashboardData.monthly_trends}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="asp" 
-                      stroke="#52525B" 
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      name="ASP"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {/* By Region */}
-          {dashboardData.by_region?.length > 0 && activeView === "overview" && (
-            <div className="mt-6 bg-white border border-neutral-200 p-6">
-              <h3 className="text-lg font-medium text-neutral-900 mb-4">Performance by Region</h3>
-              <div className="overflow-x-auto">
-                <table className="data-table w-full">
-                  <thead>
-                    <tr>
-                      <th>Region</th>
-                      <th>Quantity</th>
-                      <th>Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dashboardData.by_region?.map((row, i) => (
-                      <tr key={i}>
-                        <td className="font-medium text-neutral-900">{row.region}</td>
-                        <td>{formatNumber(row.quantity)}</td>
-                        <td>{formatCurrency(row.revenue)}</td>
+              <div className="bg-white border border-neutral-200">
+                <div className="p-4 border-b border-neutral-100">
+                  <h3 className="font-medium text-neutral-900">Monthly Performance Trends</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="data-table w-full">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th>Quantity</th>
+                        <th>Revenue</th>
+                        <th>ASP</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {dashboardData.monthly_trends?.map((row, i) => (
+                        <tr key={i}>
+                          <td className="font-medium text-neutral-900">{row.month}</td>
+                          <td>{formatNumber(row.quantity)}</td>
+                          <td>{formatCurrency(row.revenue)}</td>
+                          <td>{formatCurrency(row.asp)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
