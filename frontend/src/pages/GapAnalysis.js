@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download, Users, Briefcase, BarChart3 } from "lucide-react";
+import FilterPanel from "../components/FilterPanel";
 
 const GapAnalysis = () => {
   const [activeTab, setActiveTab] = useState("noos");
@@ -10,20 +11,66 @@ const GapAnalysis = () => {
   const [sizeGapData, setSizeGapData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [filterOptions, setFilterOptions] = useState({});
+  const [filters, setFilters] = useState({
+    startDate: "",
+    endDate: "",
+    categories: [],
+    channels: [],
+    regions: [],
+    understockThreshold: -5,
+    overstockThreshold: 5
+  });
 
-  const fetchData = async () => {
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/analytics/filter-options`);
+      setFilterOptions(response.data);
+      if (response.data.dateRange?.min) {
+        setFilters(prev => ({
+          ...prev,
+          startDate: response.data.dateRange.min.split('T')[0],
+          endDate: response.data.dateRange.max.split('T')[0]
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching filter options:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, [fetchFilterOptions]);
+
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append('start_date', filters.startDate);
+    if (filters.endDate) params.append('end_date', filters.endDate);
+    if (filters.categories?.length) params.append('categories', filters.categories.join(','));
+    if (filters.channels?.length) params.append('channels', filters.channels.join(','));
+    if (filters.regions?.length) params.append('regions', filters.regions.join(','));
+    if (activeTab === "size-gap") {
+      params.append('understock_threshold', filters.understockThreshold);
+      params.append('overstock_threshold', filters.overstockThreshold);
+    }
+    return params.toString();
+  };
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const queryParams = buildQueryParams();
+    
     try {
       if (activeTab === "noos") {
-        const response = await axios.get(`${API}/analytics/noos`);
+        const response = await axios.get(`${API}/analytics/noos?${queryParams}`);
         if (response.data.error) {
           setError(response.data.error);
         } else {
           setNoosData(response.data);
         }
       } else if (activeTab === "size-gap") {
-        const response = await axios.get(`${API}/analytics/size-gap`);
+        const response = await axios.get(`${API}/analytics/size-gap?${queryParams}`);
         if (response.data.error) {
           setError(response.data.error);
         } else {
@@ -35,12 +82,31 @@ const GapAnalysis = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, filters]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleApplyFilters = () => {
+    fetchData();
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      startDate: filterOptions.dateRange?.min?.split('T')[0] || "",
+      endDate: filterOptions.dateRange?.max?.split('T')[0] || "",
+      categories: [],
+      channels: [],
+      regions: [],
+      understockThreshold: -5,
+      overstockThreshold: 5
+    });
+  };
 
   const tabs = [
     { key: "noos", label: "NOOS Analysis" },
@@ -87,12 +153,12 @@ const GapAnalysis = () => {
   return (
     <div className="animate-fade-in-up" data-testid="gap-analysis-page">
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-4xl font-light tracking-tight text-neutral-900 mb-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">
             Gap Analysis
           </h1>
-          <p className="text-neutral-500">
+          <p className="text-slate-500">
             Identify sales gaps and optimization opportunities
           </p>
         </div>
@@ -102,7 +168,7 @@ const GapAnalysis = () => {
             data-testid="refresh-gap-btn"
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
+            className="btn-secondary flex items-center gap-2"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -110,7 +176,7 @@ const GapAnalysis = () => {
           <button
             data-testid="export-gap-btn"
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-neutral-900 text-white hover:bg-neutral-800 transition-colors"
+            className="btn-primary flex items-center gap-2"
           >
             <Download size={16} />
             Export
@@ -118,9 +184,19 @@ const GapAnalysis = () => {
         </div>
       </div>
 
+      {/* Filter Panel */}
+      <FilterPanel
+        filters={filters}
+        filterOptions={filterOptions}
+        onFilterChange={handleFilterChange}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+        pageType="gap-analysis"
+      />
+
       {/* Persona Selector */}
       <div className="mb-6">
-        <span className="text-xs font-medium uppercase tracking-widest text-neutral-400 block mb-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-3">
           View As
         </span>
         <div className="flex flex-wrap gap-2">
@@ -131,10 +207,10 @@ const GapAnalysis = () => {
                 key={p.key}
                 data-testid={`persona-${p.key}`}
                 onClick={() => setPersona(p.key)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 text-sm rounded transition-all ${
                   persona === p.key
-                    ? 'bg-neutral-900 text-white'
-                    : 'border border-neutral-200 hover:border-neutral-400'
+                    ? 'bg-[#0176D3] text-white shadow-sm'
+                    : 'border border-slate-200 text-slate-600 hover:border-slate-400'
                 }`}
               >
                 <Icon size={16} />
@@ -161,7 +237,7 @@ const GapAnalysis = () => {
 
       {/* Error State */}
       {error && (
-        <div className="bg-amber-50 border border-amber-200 p-6 mb-6">
+        <div className="bg-amber-50 border border-amber-200 p-6 mb-6 rounded">
           <p className="text-amber-800">{error}</p>
           <p className="text-sm text-amber-600 mt-1">
             Please upload the required data files from the Data Upload page.
@@ -187,7 +263,7 @@ const GapAnalysis = () => {
             </div>
             <div className="metric-card">
               <span className="metric-label">NOOS Candidates</span>
-              <span className="metric-value text-emerald-600">
+              <span className="metric-value text-green-600">
                 {formatNumber(noosData.summary?.noos_candidates)}
               </span>
             </div>
@@ -205,9 +281,9 @@ const GapAnalysis = () => {
 
           {/* CXO Executive Insight */}
           {persona === "cxo" && (
-            <div className="bg-[#C4A47C] bg-opacity-10 border border-[#C4A47C] p-6 mb-8">
-              <h3 className="font-medium text-neutral-900 mb-2">Executive Insight</h3>
-              <p className="text-neutral-700">
+            <div className="bg-blue-50 border border-blue-200 p-6 mb-8 rounded">
+              <h3 className="font-semibold text-slate-900 mb-2">Executive Insight</h3>
+              <p className="text-slate-700">
                 {noosData.summary?.noos_candidates > 0 
                   ? `${noosData.summary?.noos_candidates} store-style combinations qualify as NOOS candidates with high availability and proven sales performance. Maintaining stock for these items could prevent significant revenue loss.`
                   : "Analyze your inventory to identify NOOS candidates that should always remain in stock."}
@@ -217,16 +293,16 @@ const GapAnalysis = () => {
 
           {/* Consultant Methodology */}
           {persona === "consultant" && (
-            <div className="bg-white border border-neutral-200 p-6 mb-8">
-              <h3 className="text-lg font-medium text-neutral-900 mb-4">NOOS Methodology</h3>
-              <div className="space-y-4 text-sm text-neutral-600">
-                <div className="p-4 bg-neutral-50 border border-neutral-100">
-                  <h4 className="font-medium text-neutral-900 mb-2">Definition</h4>
+            <div className="bg-white border border-slate-200 p-6 mb-8 rounded shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900 mb-4">NOOS Methodology</h3>
+              <div className="space-y-4 text-sm text-slate-600">
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded">
+                  <h4 className="font-semibold text-slate-900 mb-2">Definition</h4>
                   <p>NOOS (Never Out Of Stock) identifies styles that should always be available based on consistent demand and high availability performance.</p>
                 </div>
                 
-                <div className="p-4 bg-neutral-50 border border-neutral-100">
-                  <h4 className="font-medium text-neutral-900 mb-2">Qualification Criteria</h4>
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded">
+                  <h4 className="font-semibold text-slate-900 mb-2">Qualification Criteria</h4>
                   <ul className="list-disc list-inside space-y-1">
                     <li>Exposure days ≥ Minimum shelf life threshold (configurable)</li>
                     <li>Positive sales quantity during the analysis period</li>
@@ -234,8 +310,8 @@ const GapAnalysis = () => {
                   </ul>
                 </div>
 
-                <div className="p-4 bg-neutral-50 border border-neutral-100">
-                  <h4 className="font-medium text-neutral-900 mb-2">Key Metrics</h4>
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded">
+                  <h4 className="font-semibold text-slate-900 mb-2">Key Metrics</h4>
                   <ul className="list-disc list-inside space-y-1">
                     <li><strong>Exposure Days:</strong> Days with positive inventory</li>
                     <li><strong>Availability %:</strong> (Exposure Days / Total Days) × 100</li>
@@ -248,9 +324,9 @@ const GapAnalysis = () => {
 
           {/* Data Table - Merchandiser/CXO */}
           {(persona === "merchandiser" || persona === "cxo") && (
-            <div className="bg-white border border-neutral-200">
-              <div className="p-4 border-b border-neutral-100">
-                <h3 className="font-medium text-neutral-900">NOOS Candidate Details</h3>
+            <div className="bg-white border border-slate-200 rounded shadow-sm">
+              <div className="p-4 border-b border-slate-100">
+                <h3 className="font-semibold text-slate-900">NOOS Candidate Details</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="data-table w-full">
@@ -268,14 +344,14 @@ const GapAnalysis = () => {
                   <tbody>
                     {noosData.data?.slice(0, 25).map((row, i) => (
                       <tr key={i}>
-                        <td className="font-medium text-neutral-900">{row.store_code}</td>
+                        <td className="font-medium text-slate-900">{row.store_code}</td>
                         <td>{row.style}</td>
                         <td>{row.exposure_days}</td>
                         <td>{row.availability_pct?.toFixed(1)}%</td>
                         <td>{formatNumber(row.quantity)}</td>
                         <td>{formatCurrency(row.revenue)}</td>
                         <td>
-                          <span className={`badge ${row.noos_candidate ? 'badge-healthy' : 'bg-neutral-100 text-neutral-500'}`}>
+                          <span className={`badge ${row.noos_candidate ? 'badge-healthy' : 'bg-slate-100 text-slate-500'}`}>
                             {row.noos_candidate ? "Yes" : "No"}
                           </span>
                         </td>
@@ -304,19 +380,19 @@ const GapAnalysis = () => {
             </div>
             <div className="metric-card">
               <span className="metric-label">Optimal</span>
-              <span className="metric-value text-emerald-600">{sizeGapData.summary?.optimal || 0}</span>
+              <span className="metric-value text-green-600">{sizeGapData.summary?.optimal || 0}</span>
             </div>
             <div className="metric-card">
               <span className="metric-label">Total Gap</span>
               <span className="metric-value">{formatNumber(sizeGapData.summary?.total_gap)}</span>
-              <span className="text-sm text-neutral-500">units</span>
+              <span className="text-sm text-slate-500">units</span>
             </div>
           </div>
 
           {/* Data Table */}
-          <div className="bg-white border border-neutral-200">
-            <div className="p-4 border-b border-neutral-100">
-              <h3 className="font-medium text-neutral-900">Size Gap Details</h3>
+          <div className="bg-white border border-slate-200 rounded shadow-sm">
+            <div className="p-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900">Size Gap Details</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="data-table w-full">
@@ -333,11 +409,11 @@ const GapAnalysis = () => {
                 <tbody>
                   {sizeGapData.data?.slice(0, 25).map((row, i) => (
                     <tr key={i}>
-                      <td className="font-medium text-neutral-900">{row.style}</td>
+                      <td className="font-medium text-slate-900">{row.style}</td>
                       <td>{row.size}</td>
                       <td>{formatNumber(row.current_qty)}</td>
                       <td>{formatNumber(row.ideal_qty)}</td>
-                      <td className={row.gap > 0 ? 'text-amber-600' : row.gap < 0 ? 'text-red-600' : 'text-emerald-600'}>
+                      <td className={row.gap > 0 ? 'text-amber-600' : row.gap < 0 ? 'text-red-600' : 'text-green-600'}>
                         {row.gap > 0 ? '+' : ''}{formatNumber(row.gap)}
                       </td>
                       <td>
@@ -360,9 +436,9 @@ const GapAnalysis = () => {
 
       {/* Empty State */}
       {!loading && !error && ((activeTab === "noos" && !noosData?.data?.length) || (activeTab === "size-gap" && !sizeGapData?.data?.length)) && (
-        <div className="bg-neutral-50 border border-neutral-200 p-12 text-center">
-          <p className="text-neutral-500 mb-2">No data available</p>
-          <p className="text-sm text-neutral-400">
+        <div className="bg-slate-50 border border-slate-200 p-12 text-center rounded">
+          <p className="text-slate-500 mb-2">No data available</p>
+          <p className="text-sm text-slate-400">
             Upload the required files to see gap analysis
           </p>
         </div>

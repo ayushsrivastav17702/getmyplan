@@ -1,19 +1,60 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download } from "lucide-react";
+import FilterPanel from "../components/FilterPanel";
 
 const BIDashboards = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeView, setActiveView] = useState("overview");
+  const [filterOptions, setFilterOptions] = useState({});
+  const [filters, setFilters] = useState({
+    startDate: "",
+    endDate: "",
+    categories: [],
+    channels: [],
+    regions: []
+  });
 
-  const fetchData = async () => {
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/analytics/filter-options`);
+      setFilterOptions(response.data);
+      if (response.data.dateRange?.min) {
+        setFilters(prev => ({
+          ...prev,
+          startDate: response.data.dateRange.min.split('T')[0],
+          endDate: response.data.dateRange.max.split('T')[0]
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching filter options:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, [fetchFilterOptions]);
+
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append('start_date', filters.startDate);
+    if (filters.endDate) params.append('end_date', filters.endDate);
+    if (filters.categories?.length) params.append('categories', filters.categories.join(','));
+    if (filters.channels?.length) params.append('channels', filters.channels.join(','));
+    if (filters.regions?.length) params.append('regions', filters.regions.join(','));
+    return params.toString();
+  };
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const queryParams = buildQueryParams();
+    
     try {
-      const response = await axios.get(`${API}/analytics/bi-dashboard`);
+      const response = await axios.get(`${API}/analytics/bi-dashboard?${queryParams}`);
       if (response.data.error) {
         setError(response.data.error);
       } else {
@@ -24,12 +65,29 @@ const BIDashboards = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleApplyFilters = () => {
+    fetchData();
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      startDate: filterOptions.dateRange?.min?.split('T')[0] || "",
+      endDate: filterOptions.dateRange?.max?.split('T')[0] || "",
+      categories: [],
+      channels: [],
+      regions: []
+    });
+  };
 
   const formatCurrency = (value) => {
     if (!value) return "₹0";
@@ -80,12 +138,12 @@ const BIDashboards = () => {
   return (
     <div className="animate-fade-in-up" data-testid="bi-dashboards-page">
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-4xl font-light tracking-tight text-neutral-900 mb-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">
             BI Dashboards
           </h1>
-          <p className="text-neutral-500">
+          <p className="text-slate-500">
             Business intelligence metrics and performance trends
           </p>
         </div>
@@ -95,7 +153,7 @@ const BIDashboards = () => {
             data-testid="refresh-bi-btn"
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
+            className="btn-secondary flex items-center gap-2"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -103,13 +161,23 @@ const BIDashboards = () => {
           <button
             data-testid="export-bi-btn"
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-neutral-900 text-white hover:bg-neutral-800 transition-colors"
+            className="btn-primary flex items-center gap-2"
           >
             <Download size={16} />
             Export
           </button>
         </div>
       </div>
+
+      {/* Filter Panel */}
+      <FilterPanel
+        filters={filters}
+        filterOptions={filterOptions}
+        onFilterChange={handleFilterChange}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+        pageType="common"
+      />
 
       {/* View Selector */}
       <div className="tabs">
@@ -127,7 +195,7 @@ const BIDashboards = () => {
 
       {/* Error State */}
       {error && (
-        <div className="bg-amber-50 border border-amber-200 p-6 mb-6">
+        <div className="bg-amber-50 border border-amber-200 p-6 mb-6 rounded">
           <p className="text-amber-800">{error}</p>
           <p className="text-sm text-amber-600 mt-1">
             Please upload the required data files from the Data Upload page.
@@ -170,9 +238,9 @@ const BIDashboards = () => {
 
               {/* Monthly Trends Table */}
               {dashboardData.monthly_trends?.length > 0 && (
-                <div className="bg-white border border-neutral-200 mb-6">
-                  <div className="p-4 border-b border-neutral-100">
-                    <h3 className="font-medium text-neutral-900">Monthly Trends</h3>
+                <div className="bg-white border border-slate-200 mb-6 rounded shadow-sm">
+                  <div className="p-4 border-b border-slate-100">
+                    <h3 className="font-semibold text-slate-900">Monthly Trends</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="data-table w-full">
@@ -187,7 +255,7 @@ const BIDashboards = () => {
                       <tbody>
                         {dashboardData.monthly_trends.map((row, i) => (
                           <tr key={i}>
-                            <td className="font-medium text-neutral-900">{row.month}</td>
+                            <td className="font-medium text-slate-900">{row.month}</td>
                             <td>{formatNumber(row.quantity)}</td>
                             <td>{formatCurrency(row.revenue)}</td>
                             <td>{formatCurrency(row.asp)}</td>
@@ -203,9 +271,9 @@ const BIDashboards = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Top Stores */}
                 {dashboardData.by_store?.length > 0 && (
-                  <div className="bg-white border border-neutral-200">
-                    <div className="p-4 border-b border-neutral-100">
-                      <h3 className="font-medium text-neutral-900">Top 10 Stores by Revenue</h3>
+                  <div className="bg-white border border-slate-200 rounded shadow-sm">
+                    <div className="p-4 border-b border-slate-100">
+                      <h3 className="font-semibold text-slate-900">Top 10 Stores by Revenue</h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="data-table w-full">
@@ -219,7 +287,7 @@ const BIDashboards = () => {
                         <tbody>
                           {dashboardData.by_store.slice(0, 10).map((row, i) => (
                             <tr key={i}>
-                              <td className="font-medium text-neutral-900">{row.store_code}</td>
+                              <td className="font-medium text-slate-900">{row.store_code}</td>
                               <td>{formatCurrency(row.revenue)}</td>
                               <td>{formatNumber(row.quantity)}</td>
                             </tr>
@@ -232,9 +300,9 @@ const BIDashboards = () => {
 
                 {/* Top Styles */}
                 {dashboardData.by_style?.length > 0 && (
-                  <div className="bg-white border border-neutral-200">
-                    <div className="p-4 border-b border-neutral-100">
-                      <h3 className="font-medium text-neutral-900">Top 10 Styles by Revenue</h3>
+                  <div className="bg-white border border-slate-200 rounded shadow-sm">
+                    <div className="p-4 border-b border-slate-100">
+                      <h3 className="font-semibold text-slate-900">Top 10 Styles by Revenue</h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="data-table w-full">
@@ -248,7 +316,7 @@ const BIDashboards = () => {
                         <tbody>
                           {dashboardData.by_style.slice(0, 10).map((row, i) => (
                             <tr key={i}>
-                              <td className="font-medium text-neutral-900">{row.style}</td>
+                              <td className="font-medium text-slate-900">{row.style}</td>
                               <td>{formatCurrency(row.revenue)}</td>
                               <td>{formatNumber(row.quantity)}</td>
                             </tr>
@@ -265,10 +333,10 @@ const BIDashboards = () => {
           {/* Stores View */}
           {activeView === "stores" && (
             <div data-testid="bi-stores-section">
-              <div className="bg-white border border-neutral-200">
-                <div className="p-4 border-b border-neutral-100 flex items-center justify-between">
-                  <h3 className="font-medium text-neutral-900">Store Performance</h3>
-                  <span className="text-sm text-neutral-500">
+              <div className="bg-white border border-slate-200 rounded shadow-sm">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900">Store Performance</h3>
+                  <span className="text-sm text-slate-500">
                     {dashboardData.by_store?.length || 0} stores
                   </span>
                 </div>
@@ -285,7 +353,7 @@ const BIDashboards = () => {
                     <tbody>
                       {dashboardData.by_store?.map((row, i) => (
                         <tr key={i}>
-                          <td className="font-medium text-neutral-900">{row.store_code}</td>
+                          <td className="font-medium text-slate-900">{row.store_code}</td>
                           <td>{formatNumber(row.quantity)}</td>
                           <td>{formatCurrency(row.revenue)}</td>
                           <td>{formatCurrency(row.quantity > 0 ? row.revenue / row.quantity : 0)}</td>
@@ -301,10 +369,10 @@ const BIDashboards = () => {
           {/* Styles View */}
           {activeView === "styles" && (
             <div data-testid="bi-styles-section">
-              <div className="bg-white border border-neutral-200">
-                <div className="p-4 border-b border-neutral-100 flex items-center justify-between">
-                  <h3 className="font-medium text-neutral-900">Style Performance</h3>
-                  <span className="text-sm text-neutral-500">
+              <div className="bg-white border border-slate-200 rounded shadow-sm">
+                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900">Style Performance</h3>
+                  <span className="text-sm text-slate-500">
                     {dashboardData.by_style?.length || 0} styles
                   </span>
                 </div>
@@ -321,7 +389,7 @@ const BIDashboards = () => {
                     <tbody>
                       {dashboardData.by_style?.map((row, i) => (
                         <tr key={i}>
-                          <td className="font-medium text-neutral-900">{row.style}</td>
+                          <td className="font-medium text-slate-900">{row.style}</td>
                           <td>{formatNumber(row.quantity)}</td>
                           <td>{formatCurrency(row.revenue)}</td>
                           <td>{formatCurrency(row.quantity > 0 ? row.revenue / row.quantity : 0)}</td>
@@ -337,9 +405,9 @@ const BIDashboards = () => {
           {/* Trends View */}
           {activeView === "trends" && (
             <div data-testid="bi-trends-section">
-              <div className="bg-white border border-neutral-200">
-                <div className="p-4 border-b border-neutral-100">
-                  <h3 className="font-medium text-neutral-900">Monthly Performance Trends</h3>
+              <div className="bg-white border border-slate-200 rounded shadow-sm">
+                <div className="p-4 border-b border-slate-100">
+                  <h3 className="font-semibold text-slate-900">Monthly Performance Trends</h3>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="data-table w-full">
@@ -354,7 +422,7 @@ const BIDashboards = () => {
                     <tbody>
                       {dashboardData.monthly_trends?.map((row, i) => (
                         <tr key={i}>
-                          <td className="font-medium text-neutral-900">{row.month}</td>
+                          <td className="font-medium text-slate-900">{row.month}</td>
                           <td>{formatNumber(row.quantity)}</td>
                           <td>{formatCurrency(row.revenue)}</td>
                           <td>{formatCurrency(row.asp)}</td>
@@ -371,9 +439,9 @@ const BIDashboards = () => {
 
       {/* Empty State */}
       {!loading && !error && !dashboardData?.totals && (
-        <div className="bg-neutral-50 border border-neutral-200 p-12 text-center">
-          <p className="text-neutral-500 mb-2">No data available</p>
-          <p className="text-sm text-neutral-400">
+        <div className="bg-slate-50 border border-slate-200 p-12 text-center rounded">
+          <p className="text-slate-500 mb-2">No data available</p>
+          <p className="text-sm text-slate-400">
             Upload sales data to see BI dashboards
           </p>
         </div>

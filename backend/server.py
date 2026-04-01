@@ -263,6 +263,98 @@ async def get_config():
 
 # ==================== ANALYTICS ====================
 
+@api_router.get("/analytics/filter-options")
+async def get_filter_options():
+    """Get available filter options from uploaded data"""
+    options = {
+        "categories": [],
+        "channels": [],
+        "regions": [],
+        "dateRange": {"min": None, "max": None}
+    }
+    
+    # Get categories from style master
+    style_df = await get_cached_data('style_master')
+    if style_df is not None and 'category' in style_df.columns:
+        options['categories'] = sorted(style_df['category'].dropna().unique().tolist())
+    
+    # Get channels and regions from store master
+    store_df = await get_cached_data('store_master')
+    if store_df is not None:
+        if 'channel' in store_df.columns:
+            options['channels'] = sorted(store_df['channel'].dropna().unique().tolist())
+        if 'region' in store_df.columns:
+            options['regions'] = sorted(store_df['region'].dropna().unique().tolist())
+    
+    # Get channels from daily sales as fallback
+    sales_df = await get_cached_data('daily_sales')
+    if sales_df is not None:
+        if 'channel' in sales_df.columns and not options['channels']:
+            options['channels'] = sorted(sales_df['channel'].dropna().unique().tolist())
+        if 'day' in sales_df.columns:
+            sales_df['day'] = pd.to_datetime(sales_df['day'])
+            options['dateRange'] = {
+                'min': sales_df['day'].min().isoformat() if not pd.isna(sales_df['day'].min()) else None,
+                'max': sales_df['day'].max().isoformat() if not pd.isna(sales_df['day'].max()) else None
+            }
+    
+    return options
+
+
+def apply_date_filter(df: pd.DataFrame, start_date: str = None, end_date: str = None, date_col: str = 'day') -> pd.DataFrame:
+    """Apply date range filter to dataframe"""
+    if date_col not in df.columns:
+        return df
+    
+    df[date_col] = pd.to_datetime(df[date_col])
+    
+    if start_date:
+        df = df[df[date_col] >= pd.to_datetime(start_date)]
+    if end_date:
+        df = df[df[date_col] <= pd.to_datetime(end_date)]
+    
+    return df
+
+
+def apply_category_filter(df: pd.DataFrame, categories: List[str], style_df: pd.DataFrame = None) -> pd.DataFrame:
+    """Apply category filter - requires joining with style master"""
+    if not categories or style_df is None:
+        return df
+    
+    if 'category' in df.columns:
+        return df[df['category'].isin(categories)]
+    
+    # If we have style column, join with style master
+    if 'style' in df.columns and 'style_code' in style_df.columns:
+        filtered_styles = style_df[style_df['category'].isin(categories)]['style_code'].tolist()
+        return df[df['style'].isin(filtered_styles)]
+    
+    return df
+
+
+def apply_channel_filter(df: pd.DataFrame, channels: List[str]) -> pd.DataFrame:
+    """Apply channel filter"""
+    if not channels or 'channel' not in df.columns:
+        return df
+    return df[df['channel'].isin(channels)]
+
+
+def apply_region_filter(df: pd.DataFrame, regions: List[str], store_df: pd.DataFrame = None) -> pd.DataFrame:
+    """Apply region filter - may require joining with store master"""
+    if not regions:
+        return df
+    
+    if 'region' in df.columns:
+        return df[df['region'].isin(regions)]
+    
+    # If we have store_code, join with store master
+    if store_df is not None and 'store_code' in df.columns and 'region' in store_df.columns:
+        filtered_stores = store_df[store_df['region'].isin(regions)]['store_code'].tolist()
+        return df[df['store_code'].isin(filtered_stores)]
+    
+    return df
+
+
 @api_router.get("/analytics/overview")
 async def get_analytics_overview():
     """Get quick overview stats from uploaded data"""
@@ -310,16 +402,37 @@ async def get_analytics_overview():
 
 
 @api_router.get("/analytics/ros")
-async def get_ros_analysis():
-    """Calculate Rate of Sale analysis"""
+async def get_ros_analysis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+    min_size: int = None,
+    min_size_percent: int = None
+):
+    """Calculate Rate of Sale analysis with filters"""
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
     
     if sales_df is None or sku_df is None:
         return {"error": "Required data not uploaded", "data": []}
     
     try:
+        # Apply filters
+        sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
+        
+        if channels:
+            channel_list = channels.split(',')
+            sales_df = apply_channel_filter(sales_df, channel_list)
+        
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_df = apply_region_filter(sales_df, region_list, store_df)
+        
         # Convert dates
         sales_df['day'] = pd.to_datetime(sales_df['day'])
         
@@ -328,6 +441,14 @@ async def get_ros_analysis():
             sku_df[['ean', 'style', 'size']], 
             left_on='sku', right_on='ean', how='left'
         )
+        
+        # Apply category filter after merge
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            sales_with_sku = apply_category_filter(sales_with_sku, category_list, style_df)
+        
+        if len(sales_with_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": [], "summary": {}}
         
         # Calculate ROS by style
         ros_by_style = sales_with_sku.groupby('style').agg({
@@ -346,6 +467,14 @@ async def get_ros_analysis():
         ros_by_style['status'] = ros_by_style['ros'].apply(
             lambda x: 'healthy' if x >= median_ros else 'broken'
         )
+        
+        # Apply min_size_percent filter for healthy classification
+        if min_size_percent and min_size_percent > 0:
+            # Recalculate healthy based on threshold
+            threshold = ros_by_style['ros'].quantile(min_size_percent / 100)
+            ros_by_style['status'] = ros_by_style['ros'].apply(
+                lambda x: 'healthy' if x >= threshold else 'broken'
+            )
         
         # Calculate sales loss for broken styles
         ros_by_style['potential_sales'] = ros_by_style.apply(
@@ -371,21 +500,52 @@ async def get_ros_analysis():
 
 
 @api_router.get("/analytics/size-gap")
-async def get_size_gap_analysis():
-    """Calculate size set gap analysis"""
+async def get_size_gap_analysis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+    understock_threshold: int = -5,
+    overstock_threshold: int = 5
+):
+    """Calculate size set gap analysis with filters"""
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
     
     if sales_df is None or sku_df is None or inventory_df is None:
         return {"error": "Required data not uploaded", "data": []}
     
     try:
+        # Apply filters to sales data
+        sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
+        
+        if channels:
+            channel_list = channels.split(',')
+            sales_df = apply_channel_filter(sales_df, channel_list)
+            inventory_df = apply_channel_filter(inventory_df, channel_list)
+        
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_df = apply_region_filter(sales_df, region_list, store_df)
+            inventory_df = apply_region_filter(inventory_df, region_list, store_df)
+        
         # Merge sales with SKU data
         sales_with_sku = sales_df.merge(
             sku_df[['ean', 'style', 'size']], 
             left_on='sku', right_on='ean', how='left'
         )
+        
+        # Apply category filter
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            sales_with_sku = apply_category_filter(sales_with_sku, category_list, style_df)
+        
+        if len(sales_with_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": [], "summary": {}}
         
         # Calculate size distribution from sales
         size_dist = sales_with_sku.groupby(['style', 'size'])['quantity'].sum().reset_index()
@@ -395,8 +555,10 @@ async def get_size_gap_analysis():
         size_dist = size_dist.merge(total_by_style, on='style')
         size_dist['sales_ratio'] = (size_dist['quantity'] / size_dist['total_sales']).round(4)
         
-        # Get current inventory
+        # Get current inventory (apply date filter)
         inventory_df['day'] = pd.to_datetime(inventory_df['day'])
+        if end_date:
+            inventory_df = inventory_df[inventory_df['day'] <= pd.to_datetime(end_date)]
         latest_date = inventory_df['day'].max()
         current_inv = inventory_df[inventory_df['day'] == latest_date].copy()
         
@@ -423,8 +585,9 @@ async def get_size_gap_analysis():
         gap_df['ideal_qty'] = (gap_df['total_inv'] * gap_df['sales_ratio']).round(0)
         gap_df['gap'] = (gap_df['current_qty'] - gap_df['ideal_qty']).round(0)
         
+        # Apply threshold-based classification
         gap_df['status'] = gap_df['gap'].apply(
-            lambda x: 'Overstock' if x > 5 else 'Understock' if x < -5 else 'Optimal'
+            lambda x: 'Overstock' if x >= overstock_threshold else 'Understock' if x <= understock_threshold else 'Optimal'
         )
         
         status_counts = gap_df['status'].value_counts().to_dict()
@@ -444,16 +607,40 @@ async def get_size_gap_analysis():
 
 
 @api_router.get("/analytics/noos")
-async def get_noos_analysis():
-    """Calculate NOOS (Never Out of Stock) analysis"""
+async def get_noos_analysis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None
+):
+    """Calculate NOOS (Never Out of Stock) analysis with filters"""
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
     
     if sales_df is None or inventory_df is None or sku_df is None:
         return {"error": "Required data not uploaded", "data": []}
     
     try:
+        # Apply date filters
+        sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
+        inventory_df = apply_date_filter(inventory_df, start_date, end_date, 'day')
+        
+        # Apply channel filters
+        if channels:
+            channel_list = channels.split(',')
+            sales_df = apply_channel_filter(sales_df, channel_list)
+            inventory_df = apply_channel_filter(inventory_df, channel_list)
+        
+        # Apply region filters
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_df = apply_region_filter(sales_df, region_list, store_df)
+            inventory_df = apply_region_filter(inventory_df, region_list, store_df)
+        
         sales_df['day'] = pd.to_datetime(sales_df['day'])
         inventory_df['day'] = pd.to_datetime(inventory_df['day'])
         
@@ -462,18 +649,31 @@ async def get_noos_analysis():
             sku_df[['ean', 'style']], on='ean', how='left'
         )
         
+        # Apply category filter
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            inv_with_sku = apply_category_filter(inv_with_sku, category_list, style_df)
+        
+        if len(inv_with_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": [], "summary": {}}
+        
         # Calculate exposure days (days with positive inventory)
         exposure = inv_with_sku[inv_with_sku['quantity'] > 0].groupby(['store_code', 'style'])['day'].nunique().reset_index()
         exposure.columns = ['store_code', 'style', 'exposure_days']
         
         # Total possible days
         total_days = inventory_df['day'].nunique()
-        exposure['availability_pct'] = (exposure['exposure_days'] / total_days * 100).round(1)
+        exposure['availability_pct'] = (exposure['exposure_days'] / total_days * 100).round(1) if total_days > 0 else 0
         
         # Merge with sales
         sales_with_sku = sales_df.merge(
             sku_df[['ean', 'style']], left_on='sku', right_on='ean', how='left'
         )
+        
+        # Apply category filter to sales
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            sales_with_sku = apply_category_filter(sales_with_sku, category_list, style_df)
         
         style_sales = sales_with_sku.groupby(['store_code', 'style']).agg({
             'quantity': 'sum',
@@ -498,7 +698,7 @@ async def get_noos_analysis():
             "summary": {
                 "total_combinations": len(noos_df),
                 "noos_candidates": noos_candidates,
-                "avg_availability": float(noos_df['availability_pct'].mean()),
+                "avg_availability": float(noos_df['availability_pct'].mean()) if len(noos_df) > 0 else 0,
                 "total_revenue": float(noos_df['revenue'].sum())
             },
             "data": noos_df.to_dict('records')
@@ -509,16 +709,37 @@ async def get_noos_analysis():
 
 
 @api_router.get("/analytics/bi-dashboard")
-async def get_bi_dashboard():
-    """Get BI dashboard data"""
+async def get_bi_dashboard(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None
+):
+    """Get BI dashboard data with filters"""
     sales_df = await get_cached_data('daily_sales')
     sku_df = await get_cached_data('sku_ean_master')
     store_df = await get_cached_data('store_master')
+    style_df = await get_cached_data('style_master')
     
     if sales_df is None:
         return {"error": "Sales data not uploaded", "data": {}}
     
     try:
+        # Apply filters
+        sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
+        
+        if channels:
+            channel_list = channels.split(',')
+            sales_df = apply_channel_filter(sales_df, channel_list)
+        
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_df = apply_region_filter(sales_df, region_list, store_df)
+        
+        if len(sales_df) == 0:
+            return {"error": "No data matches the selected filters", "data": {}, "totals": {}}
+        
         sales_df['day'] = pd.to_datetime(sales_df['day'])
         sales_df['month'] = sales_df['day'].dt.to_period('M').astype(str)
         
@@ -550,6 +771,12 @@ async def get_bi_dashboard():
             sales_with_sku = sales_df.merge(
                 sku_df[['ean', 'style']], left_on='sku', right_on='ean', how='left'
             )
+            
+            # Apply category filter
+            if categories and style_df is not None:
+                category_list = categories.split(',')
+                sales_with_sku = apply_category_filter(sales_with_sku, category_list, style_df)
+            
             by_style = sales_with_sku.groupby('style').agg({
                 'quantity': 'sum',
                 'revenue': 'sum'

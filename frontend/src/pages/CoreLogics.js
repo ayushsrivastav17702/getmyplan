@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import FilterPanel from "../components/FilterPanel";
 
 const CoreLogics = () => {
   const [activeTab, setActiveTab] = useState("ros");
@@ -9,13 +10,58 @@ const CoreLogics = () => {
   const [storeStyleData, setStoreStyleData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [filterOptions, setFilterOptions] = useState({});
+  const [filters, setFilters] = useState({
+    startDate: "",
+    endDate: "",
+    categories: [],
+    channels: [],
+    regions: [],
+    minSize: 0,
+    minSizePercent: 0
+  });
 
-  const fetchData = async () => {
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/analytics/filter-options`);
+      setFilterOptions(response.data);
+      // Set default dates if available
+      if (response.data.dateRange?.min) {
+        setFilters(prev => ({
+          ...prev,
+          startDate: response.data.dateRange.min.split('T')[0],
+          endDate: response.data.dateRange.max.split('T')[0]
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching filter options:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, [fetchFilterOptions]);
+
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append('start_date', filters.startDate);
+    if (filters.endDate) params.append('end_date', filters.endDate);
+    if (filters.categories?.length) params.append('categories', filters.categories.join(','));
+    if (filters.channels?.length) params.append('channels', filters.channels.join(','));
+    if (filters.regions?.length) params.append('regions', filters.regions.join(','));
+    if (filters.minSize > 0) params.append('min_size', filters.minSize);
+    if (filters.minSizePercent > 0) params.append('min_size_percent', filters.minSizePercent);
+    return params.toString();
+  };
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const queryParams = buildQueryParams();
+    
     try {
       if (activeTab === "ros") {
-        const response = await axios.get(`${API}/analytics/ros`);
+        const response = await axios.get(`${API}/analytics/ros?${queryParams}`);
         if (response.data.error) {
           setError(response.data.error);
         } else {
@@ -34,12 +80,31 @@ const CoreLogics = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, filters]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleApplyFilters = () => {
+    fetchData();
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      startDate: filterOptions.dateRange?.min?.split('T')[0] || "",
+      endDate: filterOptions.dateRange?.max?.split('T')[0] || "",
+      categories: [],
+      channels: [],
+      regions: [],
+      minSize: 0,
+      minSizePercent: 0
+    });
+  };
 
   const tabs = [
     { key: "ros", label: "TrueROS Analysis" },
@@ -80,12 +145,12 @@ const CoreLogics = () => {
   return (
     <div className="animate-fade-in-up" data-testid="core-logics-page">
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-4xl font-light tracking-tight text-neutral-900 mb-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">
             Increff Core Logics
           </h1>
-          <p className="text-neutral-500">
+          <p className="text-slate-500">
             Advanced analytics powered by Increff algorithms
           </p>
         </div>
@@ -95,7 +160,7 @@ const CoreLogics = () => {
             data-testid="refresh-btn"
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
+            className="btn-secondary flex items-center gap-2"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -103,13 +168,23 @@ const CoreLogics = () => {
           <button
             data-testid="export-btn"
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-neutral-900 text-white hover:bg-neutral-800 transition-colors"
+            className="btn-primary flex items-center gap-2"
           >
             <Download size={16} />
             Export CSV
           </button>
         </div>
       </div>
+
+      {/* Filter Panel */}
+      <FilterPanel
+        filters={filters}
+        filterOptions={filterOptions}
+        onFilterChange={handleFilterChange}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+        pageType="core-logics"
+      />
 
       {/* Tabs */}
       <div className="tabs">
@@ -127,7 +202,7 @@ const CoreLogics = () => {
 
       {/* Error State */}
       {error && (
-        <div className="bg-amber-50 border border-amber-200 p-6 mb-6">
+        <div className="bg-amber-50 border border-amber-200 p-6 mb-6 rounded">
           <p className="text-amber-800">{error}</p>
           <p className="text-sm text-amber-600 mt-1">
             Please upload the required data files from the Data Upload page.
@@ -153,15 +228,15 @@ const CoreLogics = () => {
             </div>
             <div className="metric-card">
               <span className="metric-label">Healthy Styles</span>
-              <span className="metric-value text-emerald-600">{rosData.summary?.healthy_count || 0}</span>
-              <span className="text-sm text-neutral-500">
+              <span className="metric-value text-green-600">{rosData.summary?.healthy_count || 0}</span>
+              <span className="text-sm text-slate-500">
                 Avg ROS: {rosData.summary?.avg_healthy_ros?.toFixed(2) || 0}
               </span>
             </div>
             <div className="metric-card">
               <span className="metric-label">Broken Styles</span>
               <span className="metric-value text-red-600">{rosData.summary?.broken_count || 0}</span>
-              <span className="text-sm text-neutral-500">
+              <span className="text-sm text-slate-500">
                 Avg ROS: {rosData.summary?.avg_broken_ros?.toFixed(2) || 0}
               </span>
             </div>
@@ -170,14 +245,14 @@ const CoreLogics = () => {
               <span className="metric-value text-amber-600">
                 {formatNumber(rosData.summary?.total_sales_loss || 0)}
               </span>
-              <span className="text-sm text-neutral-500">units</span>
+              <span className="text-sm text-slate-500">units</span>
             </div>
           </div>
 
           {/* Data Table */}
-          <div className="bg-white border border-neutral-200">
-            <div className="p-4 border-b border-neutral-100">
-              <h3 className="font-medium text-neutral-900">Style Details</h3>
+          <div className="bg-white border border-slate-200 rounded shadow-sm">
+            <div className="p-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900">Style Details</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="data-table w-full">
@@ -195,7 +270,7 @@ const CoreLogics = () => {
                 <tbody>
                   {rosData.data?.slice(0, 25).map((row, i) => (
                     <tr key={i}>
-                      <td className="font-medium text-neutral-900">{row.style}</td>
+                      <td className="font-medium text-slate-900">{row.style}</td>
                       <td>{formatNumber(row.total_quantity)}</td>
                       <td>{formatCurrency(row.total_revenue)}</td>
                       <td>{row.live_days}</td>
@@ -235,9 +310,9 @@ const CoreLogics = () => {
           </div>
 
           {/* Data Table */}
-          <div className="bg-white border border-neutral-200">
-            <div className="p-4 border-b border-neutral-100">
-              <h3 className="font-medium text-neutral-900">Store-Style Performance</h3>
+          <div className="bg-white border border-slate-200 rounded shadow-sm">
+            <div className="p-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900">Store-Style Performance</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="data-table w-full">
@@ -256,7 +331,7 @@ const CoreLogics = () => {
                 <tbody>
                   {storeStyleData.data?.slice(0, 25).map((row, i) => (
                     <tr key={i}>
-                      <td className="font-medium text-neutral-900">{row.store_code}</td>
+                      <td className="font-medium text-slate-900">{row.store_code}</td>
                       <td>{row.style}</td>
                       <td>{formatNumber(row.quantity)}</td>
                       <td>{formatCurrency(row.revenue)}</td>
@@ -265,9 +340,9 @@ const CoreLogics = () => {
                       <td>
                         <span className="inline-flex items-center gap-1">
                           {row.store_rank_for_style <= 3 ? (
-                            <TrendingUp size={14} className="text-emerald-500" />
+                            <TrendingUp size={14} className="text-green-500" />
                           ) : row.store_rank_for_style <= 10 ? (
-                            <Minus size={14} className="text-neutral-400" />
+                            <Minus size={14} className="text-slate-400" />
                           ) : (
                             <TrendingDown size={14} className="text-red-400" />
                           )}
@@ -286,9 +361,9 @@ const CoreLogics = () => {
 
       {/* Empty State */}
       {!loading && !error && ((activeTab === "ros" && !rosData?.data?.length) || (activeTab === "store-style" && !storeStyleData?.data?.length)) && (
-        <div className="bg-neutral-50 border border-neutral-200 p-12 text-center">
-          <p className="text-neutral-500 mb-2">No data available</p>
-          <p className="text-sm text-neutral-400">
+        <div className="bg-slate-50 border border-slate-200 p-12 text-center rounded">
+          <p className="text-slate-500 mb-2">No data available</p>
+          <p className="text-sm text-slate-400">
             Upload the required files to see analytics
           </p>
         </div>

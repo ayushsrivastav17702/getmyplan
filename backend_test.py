@@ -86,6 +86,23 @@ class FashionRetailAPITester:
         
         return get_success and post_success
 
+    def test_filter_options(self):
+        """Test filter options endpoint"""
+        success, response_data = self.run_test("Filter Options", "GET", "analytics/filter-options", 200)
+        if success and response_data:
+            # Verify response structure
+            expected_keys = ['categories', 'channels', 'regions', 'dateRange']
+            for key in expected_keys:
+                if key not in response_data:
+                    print(f"   ⚠️  Missing key '{key}' in filter options response")
+                    return False
+            print(f"   ✅ Filter options structure valid")
+            print(f"   📊 Categories: {len(response_data.get('categories', []))}")
+            print(f"   📊 Channels: {len(response_data.get('channels', []))}")
+            print(f"   📊 Regions: {len(response_data.get('regions', []))}")
+            print(f"   📊 Date Range: {response_data.get('dateRange', {})}")
+        return success
+
     def test_analytics_overview(self):
         """Test analytics overview endpoint"""
         return self.run_test("Analytics Overview", "GET", "analytics/overview", 200)
@@ -94,17 +111,37 @@ class FashionRetailAPITester:
         """Test ROS analysis endpoint"""
         return self.run_test("ROS Analysis", "GET", "analytics/ros", 200)
 
+    def test_ros_analysis_with_filters(self):
+        """Test ROS analysis with filter parameters"""
+        filter_params = "start_date=2024-01-01&end_date=2024-12-31&min_size_percent=50"
+        return self.run_test("ROS Analysis with Filters", "GET", f"analytics/ros?{filter_params}", 200)
+
     def test_size_gap_analysis(self):
         """Test size gap analysis endpoint"""
         return self.run_test("Size Gap Analysis", "GET", "analytics/size-gap", 200)
+
+    def test_size_gap_with_thresholds(self):
+        """Test size gap analysis with threshold filters"""
+        filter_params = "understock_threshold=-10&overstock_threshold=10"
+        return self.run_test("Size Gap with Thresholds", "GET", f"analytics/size-gap?{filter_params}", 200)
 
     def test_noos_analysis(self):
         """Test NOOS analysis endpoint"""
         return self.run_test("NOOS Analysis", "GET", "analytics/noos", 200)
 
+    def test_noos_analysis_with_filters(self):
+        """Test NOOS analysis with filter parameters"""
+        filter_params = "start_date=2024-01-01&categories=Apparel&channels=Online"
+        return self.run_test("NOOS Analysis with Filters", "GET", f"analytics/noos?{filter_params}", 200)
+
     def test_bi_dashboard(self):
         """Test BI dashboard endpoint"""
         return self.run_test("BI Dashboard", "GET", "analytics/bi-dashboard", 200)
+
+    def test_bi_dashboard_with_filters(self):
+        """Test BI dashboard with filter parameters"""
+        filter_params = "start_date=2024-01-01&end_date=2024-12-31&regions=North,South"
+        return self.run_test("BI Dashboard with Filters", "GET", f"analytics/bi-dashboard?{filter_params}", 200)
 
     def test_chat_endpoint(self):
         """Test chat endpoint"""
@@ -157,12 +194,19 @@ class FashionRetailAPITester:
         self.test_upload_status()
         self.test_config_endpoints()
         
+        # Filter options test
+        self.test_filter_options()
+        
         # Analytics tests
         self.test_analytics_overview()
         self.test_ros_analysis()
+        self.test_ros_analysis_with_filters()
         self.test_size_gap_analysis()
+        self.test_size_gap_with_thresholds()
         self.test_noos_analysis()
+        self.test_noos_analysis_with_filters()
         self.test_bi_dashboard()
+        self.test_bi_dashboard_with_filters()
         
         # Chat test
         self.test_chat_endpoint()

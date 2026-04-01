@@ -49,7 +49,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
       <button
         data-testid="mobile-menu-toggle"
         onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white border border-neutral-200"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white border border-slate-200 rounded shadow-sm"
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
@@ -57,37 +57,37 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
-        w-64 bg-white border-r border-neutral-200 
+        w-64 bg-white border-r border-slate-200 
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-neutral-200">
-          <h1 className="text-xl font-light tracking-tight text-neutral-900">
-            <span className="font-normal">Increff</span> Analytics
+        <div className="h-16 flex items-center px-6 border-b border-slate-200 bg-[#0176D3]">
+          <h1 className="text-xl font-semibold tracking-tight text-white">
+            Increff Analytics
           </h1>
         </div>
 
         {/* Upload Status */}
-        <div className="px-6 py-4 border-b border-neutral-200">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium uppercase tracking-widest text-neutral-400">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Upload Status
             </span>
-            <span className={`text-xs font-medium ${allUploaded ? 'text-emerald-600' : 'text-amber-600'}`}>
+            <span className={`text-xs font-bold ${allUploaded ? 'text-green-600' : 'text-amber-600'}`}>
               {uploaded}/{total}
             </span>
           </div>
-          <div className="w-full h-1 bg-neutral-100 overflow-hidden">
+          <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
             <div 
-              className={`h-full transition-all duration-500 ${allUploaded ? 'bg-emerald-500' : 'bg-[#C4A47C]'}`}
+              className={`h-full transition-all duration-500 rounded-full ${allUploaded ? 'bg-green-500' : 'bg-[#0176D3]'}`}
               style={{ width: `${(uploaded / total) * 100}%` }}
             />
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1">
+        <nav className="p-3 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -99,10 +99,10 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
                 data-testid={`nav-${item.path.replace('/', '') || 'home'}`}
                 onClick={() => setIsOpen(false)}
                 className={`
-                  flex items-center gap-3 px-4 py-3 text-sm transition-all duration-200
+                  flex items-center gap-3 px-4 py-2.5 text-sm rounded transition-all duration-200
                   ${isActive 
-                    ? 'bg-neutral-900 text-white' 
-                    : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}
+                    ? 'bg-[#0176D3] text-white shadow-sm' 
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}
                 `}
               >
                 <Icon size={18} strokeWidth={1.5} />
@@ -114,9 +114,9 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         </nav>
 
         {/* File Status List */}
-        <div className="px-6 py-4 border-t border-neutral-200 mt-auto">
-          <span className="text-xs font-medium uppercase tracking-widest text-neutral-400 mb-3 block">
-            Files
+        <div className="px-6 py-4 border-t border-slate-100 mt-auto">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 block">
+            Data Files
           </span>
           <div className="space-y-2">
             {['style_master', 'sku_ean_master', 'store_master', 'warehouse_master', 'daily_sales', 'store_inventory', 'warehouse_inventory'].map((file) => {
@@ -126,11 +126,11 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
               return (
                 <div key={file} className="flex items-center gap-2 text-xs">
                   {isUploaded ? (
-                    <Check size={12} className="text-emerald-500" />
+                    <Check size={12} className="text-green-500" />
                   ) : (
-                    <AlertCircle size={12} className="text-neutral-300" />
+                    <AlertCircle size={12} className="text-slate-300" />
                   )}
-                  <span className={isUploaded ? 'text-neutral-700' : 'text-neutral-400'}>
+                  <span className={isUploaded ? 'text-slate-700' : 'text-slate-400'}>
                     {file.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                   </span>
                 </div>
@@ -170,7 +170,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="flex min-h-screen bg-[#FAFAFA]">
+      <div className="flex min-h-screen bg-[#F8F9FA]">
         <Sidebar 
           uploadStatus={uploadStatus} 
           isOpen={sidebarOpen}
@@ -178,7 +178,7 @@ function App() {
         />
         
         <main className="flex-1 min-h-screen">
-          <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-12 py-8">
+          <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
             <Routes>
               <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
               <Route path="/upload" element={<DataUpload onUploadComplete={fetchUploadStatus} />} />
