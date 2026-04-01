@@ -1,34 +1,287 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
+.App {
     min-height: 100vh;
+}
+
+/* Page header styles */
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-header h1 {
+    font-family: 'Cabinet Grotesk', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: #0A0A0A;
+    margin-bottom: 0.5rem;
+}
+
+.page-header p {
+    font-size: 1rem;
+    color: #52525B;
+}
+
+/* Card styles */
+.card {
+    background: white;
+    border: 1px solid #E5E7EB;
+    padding: 1.5rem;
+}
+
+.card-header {
+    margin-bottom: 1rem;
+}
+
+.card-title {
+    font-family: 'Cabinet Grotesk', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 400;
+    color: #0A0A0A;
+}
+
+/* Metric cards */
+.metric-card {
+    background: white;
+    border: 1px solid #E5E7EB;
+    padding: 1.5rem 2rem;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
+    gap: 0.5rem;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #A1A1AA;
+}
+
+.metric-value {
+    font-family: 'Cabinet Grotesk', sans-serif;
+    font-size: 3rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: #0A0A0A;
+    line-height: 1;
+}
+
+.metric-change {
+    font-size: 0.875rem;
+    color: #52525B;
+}
+
+.metric-change.positive {
+    color: #10B981;
+}
+
+.metric-change.negative {
+    color: #EF4444;
+}
+
+/* Button styles */
+.btn-primary {
+    background-color: #18181B;
     color: white;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-.App-link {
-    color: #61dafb;
+.btn-primary:hover {
+    background-color: #27272A;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
+.btn-secondary {
+    background: transparent;
+    color: #18181B;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    border: 1px solid #E5E7EB;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    border-color: #18181B;
+}
+
+.btn-accent {
+    background-color: #C4A47C;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-accent:hover {
+    background-color: #A68A68;
+}
+
+/* Table styles */
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #A1A1AA;
+    border-bottom: 2px solid #18181B;
+}
+
+td {
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: #52525B;
+    border-bottom: 1px solid #F4F4F5;
+}
+
+tr:hover {
+    background-color: #FAFAFA;
+}
+
+/* Input styles */
+.input {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    border: 1px solid #E5E7EB;
+    background: white;
+    transition: all 0.2s;
+}
+
+.input:focus {
+    outline: none;
+    border-color: #18181B;
+    box-shadow: 0 0 0 1px #18181B;
+}
+
+.input::placeholder {
+    color: #A1A1AA;
+}
+
+/* Select styles */
+.select {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    border: 1px solid #E5E7EB;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.select:focus {
+    outline: none;
+    border-color: #18181B;
+}
+
+/* Badge styles */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #E5E7EB;
+    margin-bottom: 1.5rem;
+}
+
+.tab {
+    padding: 1rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #A1A1AA;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.tab:hover {
+    color: #52525B;
+}
+
+.tab.active {
+    color: #18181B;
+    border-bottom-color: #18181B;
+}
+
+/* Loading spinner */
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #E5E7EB;
+    border-top-color: #18181B;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+/* Toast notifications */
+.toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    padding: 1rem 1.5rem;
+    background: #18181B;
+    color: white;
+    font-size: 0.875rem;
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+    background: #10B981;
+}
+
+.toast.error {
+    background: #EF4444;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
     }
 }
