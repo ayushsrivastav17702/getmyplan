@@ -1,0 +1,159 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 4: Swiss & High-Contrast (Blended with High-End Fashion Editorial)",
+  "typography": {
+    "fonts": [
+      {
+        "family": "Cabinet Grotesk",
+        "usage": "Headings, numbers, and primary metrics",
+        "weights": ["300", "400", "700"]
+      },
+      {
+        "family": "Satoshi",
+        "usage": "Body, labels, data tables, UI controls",
+        "weights": ["400", "500", "600"]
+      }
+    ],
+    "headings": {
+      "h1": "text-4xl sm:text-5xl font-light tracking-tight text-neutral-900",
+      "h2": "text-2xl sm:text-3xl font-normal tracking-tight text-neutral-900",
+      "h3": "text-xl sm:text-2xl font-normal text-neutral-800",
+      "metric": "text-5xl sm:text-6xl font-light tracking-tighter text-neutral-900"
+    },
+    "body": {
+      "base": "text-base font-normal text-neutral-600 leading-relaxed",
+      "small": "text-sm text-neutral-500",
+      "label": "text-xs font-medium uppercase tracking-[0.15em] text-neutral-400"
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#FAFAFA",
+      "tertiary": "#F4F4F5"
+    },
+    "text": {
+      "primary": "#0A0A0A",
+      "secondary": "#52525B",
+      "tertiary": "#A1A1AA"
+    },
+    "border": {
+      "default": "#E5E7EB",
+      "focus": "#18181B"
+    },
+    "accent": {
+      "primary": "#C4A47C",
+      "primary_hover": "#A68A68",
+      "secondary": "#18181B",
+      "danger": "#EF4444",
+      "success": "#10B981",
+      "warning": "#F59E0B"
+    }
+  },
+  "spacing_and_layout": {
+    "container": "mx-auto w-full max-w-[1600px] px-6 lg:px-12",
+    "grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "card": "p-6 md:p-8 bg-white border border-neutral-200 rounded-none",
+    "sidebar": "w-64 border-r border-neutral-200 bg-white min-h-screen"
+  },
+  "surfaces_and_effects": {
+    "glass": "bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm",
+    "shadows": {
+      "sm": "shadow-[0_2px_4px_rgba(0,0,0,0.02)]",
+      "md": "shadow-[0_8px_32px_rgba(0,0,0,0.04)]",
+      "hover": "shadow-[0_12px_48px_rgba(0,0,0,0.08)]"
+    },
+    "radius": {
+      "none": "rounded-none",
+      "sm": "rounded-sm",
+      "md": "rounded"
+    }
+  },
+  "components": {
+    "button": {
+      "primary": "bg-neutral-900 text-white hover:bg-neutral-800 rounded-none px-6 py-3 text-sm tracking-wide transition-all duration-300",
+      "secondary": "bg-transparent text-neutral-900 border border-neutral-200 hover:border-neutral-900 rounded-none px-6 py-3 text-sm tracking-wide transition-all duration-300",
+      "accent": "bg-[#C4A47C] text-white hover:bg-[#A68A68] rounded-none px-6 py-3 text-sm tracking-wide transition-all duration-300"
+    },
+    "card": "bg-white border border-neutral-200 rounded-none p-6 flex flex-col gap-4",
+    "input": "bg-white border border-neutral-200 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 rounded-none px-4 py-2 text-neutral-900 transition-all placeholder:text-neutral-400",
+    "table": "w-full text-left border-collapse",
+    "table_header": "border-b-2 border-neutral-900 pb-2 text-xs uppercase tracking-[0.1em] text-neutral-500",
+    "table_row": "border-b border-neutral-100 hover:bg-neutral-50 transition-colors"
+  },
+  "pages": [
+    {
+      "name": "Getting Started",
+      "description": "Dashboard overview with upload status.",
+      "layout": "Grid of KPI cards and an elegant timeline or status tracker."
+    },
+    {
+      "name": "Data Upload",
+      "description": "Upload 7 CSV files.",
+      "layout": "Large dropzone with 'Tracing Beam' effect on hover. Muted minimal upload list."
+    },
+    {
+      "name": "Configuration",
+      "description": "Set analysis parameters.",
+      "layout": "Form layout with fine line dividers and luxury e-commerce style toggles."
+    },
+    {
+      "name": "Increff Core Logics",
+      "description": "Advanced analytics.",
+      "layout": "Dense data tables, high contrast text, minimal padding for scanability."
+    },
+    {
+      "name": "Gap Analysis",
+      "description": "NOOS, ROS, Size Set Gap analysis.",
+      "layout": "Monochromatic heatmap visualization (White to Gold/Black), sparklines."
+    },
+    {
+      "name": "BI Dashboards",
+      "description": "Revenue, quantity, ASP, discount trends.",
+      "layout": "Bar/Line charts with Recharts. Neutral grid lines."
+    },
+    {
+      "name": "FAQ Chatbot",
+      "description": "AI-powered Q&A.",
+      "layout": "Glassmorphism floating window with avatar."
+    }
+  ],
+  "media": {
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1520635343069-34072f52080f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwyfHxmYXNoaW9uJTIwdGVjaCUyMGRhdGF8ZW58MHx8fHwxNzc1MDcxNjkzfDA&ixlib=rb-4.1.0&q=85",
+        "category": "hero",
+        "description": "Minimalist red coat on white mannequin - use for empty state or welcome screen graphic"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1632421377986-0b1f70773812?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHx3aGl0ZSUyMHNpbGslMjBmYWJyaWMlMjB0ZXh0dXJlfGVufDB8fHx8MTc3NTA3MTY5M3ww&ixlib=rb-4.1.0&q=85",
+        "category": "background",
+        "description": "White silk fabric texture - use as a subtle overlay background for the Getting Started hero section"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1759142946360-b08c9f77bc75?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwbGluZSUyMGFydHxlbnwwfHx8fDE3NzUwNzE2OTN8MA&ixlib=rb-4.1.0&q=85",
+        "category": "avatar",
+        "description": "Abstract outline of a person - use as the AI Chatbot Avatar"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "style": "stroke-width: 1.5, size: 20px"
+    }
+  },
+  "motion_and_interactions": {
+    "hover": "Subtle -translate-y-[2px] with increased shadow",
+    "page_transition": "Fade in with slight upward motion (framer-motion, y: 10, opacity: 0)",
+    "chart_animation": "Slow draw on load"
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the selected fonts: Cabinet Grotesk for Headings and Satoshi for Body. Do not use Inter or generic defaults.",
+    "Use pure sharp corners (rounded-none) for cards, buttons, and inputs to emulate high-end fashion editorial layouts.",
+    "Ensure the layout mimics a high-performance F-pattern enterprise dashboard but styled with 'Jewel & Luxury' spacing constraints. Pad cards generously (p-6 to p-8).",
+    "Replace standard rainbow heatmaps or bright charts with monochromatic or dual-tone charts using the primary accent #C4A47C and neutral grays.",
+    "Do NOT use HTML inputs. Use Shadcn components for Select, Tabs, Tables, etc. Customize Shadcn rounded corners to be completely square.",
+    "Add 'data-testid' to all buttons, navigation links, form inputs, and key UI interactive elements.",
+    "For the file dropzone, utilize a dashed border with a subtle hover transition to a solid #0A0A0A border.",
+    "For charts, use Recharts with strict monochromatic or brand accent colors. Avoid default colors."
+  ]
+}

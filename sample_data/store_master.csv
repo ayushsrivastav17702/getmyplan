@@ -1,0 +1,11 @@
+channel,store,store_code,city,region,etl_new,area,class,cluster,is_online,open_date
+Retail,Store S001,S001,CityName,North,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S002,S002,CityName,West,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S003,S003,CityName,West,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S004,S004,CityName,West,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S005,S005,CityName,West,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S006,S006,CityName,East,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S007,S007,CityName,South,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S008,S008,CityName,North,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S009,S009,CityName,West,Yes,1000,A,Cluster1,No,2020-01-01
+Retail,Store S010,S010,CityName,West,Yes,1000,A,Cluster1,No,2020-01-01
