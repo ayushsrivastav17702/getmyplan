@@ -44,6 +44,19 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **GAP-29–35**: Dashboard — 3 tabs (ROS Gap, Size Set, NOOS), KPI summary cards on all tabs, drill-down panels, chart interactivity, combined export of all gaps
 - Testing: **100% (Iteration 23, 35/35 PASS)**
 
+### Phase 22 — Stock-Out Analysis Module (Feb 2026)
+- **SO-01–35**: Period trends (WTD/MTD/QTD/YTD), heatmaps, moving averages, predictive analysis, reorder recommendations
+- Testing: **100% (Iteration 24, 35/35 PASS)**
+
+### Phase 23 — Replenishment Planner Module (Apr 2026)
+- **REP-01–08**: Reorder Point Calculation — RP = (Avg Daily Sales × Lead Time) + Safety Stock, zero lead time, zero safety stock, high variability (z-score 1.65), seasonal dynamic safety (1.5x), new style category average fallback, manual override, trigger replenishment flag
+- **REP-09–15**: Order Quantity — Order Qty = (Cover Days × Avg Sales) - Current Stock, MOQ rounding, pack size constraints, warehouse stock availability check, ROS-based multi-store allocation, A-class store priority
+- **REP-16–21**: IST Inter-Store Transfer — overstocked (DOH > 30d), understocked (DOH < 7d), transfer qty = min(surplus, need), same-region prioritization, multiple source stores, approval workflow
+- **REP-22–27**: Replenishment Run — algorithm generates orders, pre/post comparison, stock-out reduction %, fill rate improvement, DOH improvement, warehouse stock exhaustion alerts
+- **REP-28–32**: Orders Dashboard — pending orders list, approve/reject, bulk approve, CSV export, auto-replenishment schedule (daily/weekly)
+- New modular route file: `/backend/routes/replenishment.py`
+- Testing: **100% (Iteration 25, 32/32 PASS)**
+
 ## Test Coverage Summary
 
 | Module | Total | PASS | PARTIAL | GAP | % |
@@ -53,7 +66,9 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | Configuration | 32 | 32 | 0 | 0 | **100%** |
 | Core Logic | 35 | 35 | 0 | 0 | **100%** |
 | Gap Analysis | 35 | 35 | 0 | 0 | **100%** |
-| **Total** | **172** | **161** | **5** | **6** | **94%** |
+| Stock-Out Analysis | 35 | 35 | 0 | 0 | **100%** |
+| Replenishment Planner | 32 | 32 | 0 | 0 | **100%** |
+| **Total** | **239** | **228** | **5** | **6** | **95%** |
 
 ## Remaining Known Gaps
 - DASH-15: Revenue trend line chart (P1)
@@ -75,6 +90,6 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### P2
 - PDF export (DASH-35)
-- Modularize server.py (~3900+ lines) — started with /backend/routes/core_logic.py
+- Modularize server.py (~4200 lines) — started with /backend/routes/core_logic.py and /backend/routes/replenishment.py
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
