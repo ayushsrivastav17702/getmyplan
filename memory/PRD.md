@@ -1,7 +1,7 @@
 # Fashion Retail Gap Analysis Platform - PRD
 
 ## Original Problem Statement
-Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, Data Quality & SLA Dashboard, PRD-based ROS Gap Analysis, Stock-Out Analysis, and Replenishment Planner.
+Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, Data Quality & SLA Dashboard, PRD-based ROS Gap Analysis, Stock-Out Analysis, Replenishment Planner, and DOH Analysis.
 
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme)
@@ -11,16 +11,17 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 - **Charts**: Chart.js + react-chartjs-2
 - **SFTP**: paramiko + apscheduler (demo mode when unconfigured)
 
-## Pages & Routes (12 total)
+## Pages & Routes (13 total)
 | Route | Page | Description |
 |-------|------|-------------|
 | / | Getting Started | App overview |
 | /upload | Data Upload | Master vs Daily file upload with history |
 | /config | Configuration | Analysis config |
 | /core-logics | Core Logics | TrueROS + Store-Style with charts |
-| /gap-analysis | Gap Analysis | NOOS + Size Gap + ROS Gap with charts |
+| /gap-analysis | Gap Analysis | NOOS + Size Gap + ROS Gap (3 tabs) |
 | /stock-out | Stock-Out Analysis | PRD stock-out formulas, risk analysis |
 | /replenishment | Replenishment Planner | PO suggestions, lead time/safety config |
+| /doh | DOH Analysis | Days on Hand, classification, trend |
 | /bi-dashboards | BI Dashboards | Revenue, units, store/style analytics |
 | /warehouse | Warehouse | Inventory, velocity, fulfillment |
 | /sftp-monitor | SFTP Monitor | Data pipeline monitoring |
@@ -51,31 +52,35 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 - [x] Store Upload Tracker, SLA Monitor, Data Quality Scorecard
 
 ### Phase 8 — ROS Gap Analysis
-- [x] `/api/analytics/ros-gap` with PRD formulas (Raw ROS, Healthy Size Set, Sales Loss, NOOS)
-- [x] PRD Formula Cards, KPI Cards, Charts, Tables, Persona views
+- [x] `/api/analytics/ros-gap` with PRD formulas
 - [x] Testing: 100% pass (Iteration 8)
 
 ### Phase 9 — Stock-Out Analysis
-- [x] `/api/analytics/stock-out` with PRD formulas (SOH=0 AND ROS>0, Sales Loss, Severity)
-- [x] KPI Cards, Trend chart, Top SKUs/Stores tables, High-Risk SKUs, Recommendations
+- [x] `/api/analytics/stock-out` with PRD formulas
 - [x] Testing: 100% pass (Iteration 9)
 
-### Phase 10 — Replenishment Planner (Feb 2026)
-- [x] **Backend endpoint** `/api/analytics/replenishment` computing:
-  - Reorder Qty = (ROS x Lead Time) + Safety Stock - SOH
-  - Safety Stock = ROS x Safety Days
-  - Days to Stock-Out = SOH / ROS
-  - PO Value = Reorder Qty x ASP
-- [x] **Configurable sliders**: Lead Time (1-60 days), Safety Days (0-30 days) with Recalculate
-- [x] **PRD Formula Cards** — 4 cards with config panel
-- [x] **KPI Cards** — Total PO Value, SKUs Needing Reorder, Urgent Count, Plan Configuration
-- [x] **Charts** — Priority Distribution (Doughnut), PO Value by Store (Bar), Top Styles (Bar)
-- [x] **Priority Breakdown Table** — Stock-Out/Critical/High/Medium/Low counts and values
-- [x] **Replenishment Detail Table** — SKU, Style, Size, Store, SOH, ROS, Days Left, Safety Stock, Reorder Qty, PO Value, Priority
-- [x] **Store-wise PO Summary** — Store, SKUs to Reorder, Total Units, PO Value, Urgent Items
-- [x] **CSV Export** — Downloads PO plan with lead time/safety config in filename
+### Phase 10 — Replenishment Planner
+- [x] `/api/analytics/replenishment` with configurable sliders
+- [x] Testing: 100% pass (Iteration 10)
+
+### Phase 11 — DOH Analysis (Feb 2026)
+- [x] **Backend endpoint** `/api/analytics/doh` computing PRD formulas from real CSV data:
+  - DOH(store,sku) = Inventory / Daily Raw ROS
+  - Channel DOH = Sum(DOH x Inventory) / Sum(Inventory)
+  - Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
+- [x] **Configurable Ideal DOH slider** (1-60 days) with dynamic optimal range display
+- [x] **PRD Formula Cards** — 3 cards + config panel
+- [x] **KPI Cards** — Overall DOH, Optimal count, At Risk count, Stocked Out count
+- [x] **DOH Trend & Stock-Outs** — Weekly line chart with dual-axis
+- [x] **DOH Status Distribution** — Doughnut chart with legend
+- [x] **Recommendations** — Context-aware action items based on store status
+- [x] **Store/Category View Toggle** — Switch between store-level and category-level analysis
+- [x] **DOH Bar Chart** — Current DOH vs Ideal DOH per store/category
+- [x] **Summary Table** — Store/Category, Inventory, DOH, Ideal DOH, SKUs, Status
+- [x] **Detail Table** — Store-SKU level data sorted by most urgent (lowest DOH)
+- [x] **CSV Export** — Downloads full detail with ideal DOH in filename
 - [x] **FilterPanel + Navigation** — Full filter integration, new sidebar item
-- [x] **Testing** — 100% pass rate (Iteration 10: 17 backend + all frontend tests)
+- [x] **Testing** — 100% pass rate (Iteration 11: 19 backend + all frontend tests)
 
 ## Prioritized Backlog
 ### P1
