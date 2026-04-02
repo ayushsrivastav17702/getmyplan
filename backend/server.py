@@ -17,6 +17,7 @@ import asyncio
 import chardet
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from sftp import sftp_service, sftp_scheduler
+from routes.core_logic import router as core_logic_router, init_core_logic
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -109,6 +110,8 @@ class AnalysisConfig(BaseModel):
     topseller_x_factor: float = 2.0   # Topseller revenue multiplier
     lead_time_days: int = 14          # Lead time for replenishment
     safety_days: int = 7              # Safety stock days
+    true_ros_recent_weight: float = 0.7   # TrueROS recent period weight
+    true_ros_historical_weight: float = 0.3  # TrueROS historical period weight
     selected_seasons: List[str] = []
 
 class ChatMessage(BaseModel):
@@ -3676,6 +3679,7 @@ async def get_quality_scorecard():
 
 
 # Include the router in the main app
+api_router.include_router(core_logic_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -3748,6 +3752,7 @@ async def startup():
     await ensure_shared_indexes()
     await _ensure_default_tenant()
     await seed_rbac()
+    init_core_logic(client)
     logger.info("Multi-tenant startup complete")
 
 
