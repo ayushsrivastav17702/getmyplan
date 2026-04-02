@@ -3,6 +3,7 @@ import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
+import { LineChart, BarChart, AreaChart, DoughnutChart } from "../components/Charts";
 
 const BIDashboards = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -69,6 +70,7 @@ const BIDashboards = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFilterChange = (field, value) => {
@@ -176,7 +178,7 @@ const BIDashboards = () => {
         onFilterChange={handleFilterChange}
         onApply={handleApplyFilters}
         onReset={handleResetFilters}
-        pageType="common"
+        pageType="bi-dashboards"
       />
 
       {/* View Selector */}
@@ -236,103 +238,143 @@ const BIDashboards = () => {
                 </div>
               </div>
 
-              {/* Monthly Trends Table */}
-              {dashboardData.monthly_trends?.length > 0 && (
-                <div className="bg-white border border-slate-200 mb-6 rounded shadow-sm">
-                  <div className="p-4 border-b border-slate-100">
-                    <h3 className="font-semibold text-slate-900">Monthly Trends</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="data-table w-full">
-                      <thead>
-                        <tr>
-                          <th>Month</th>
-                          <th>Quantity</th>
-                          <th>Revenue</th>
-                          <th>ASP</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dashboardData.monthly_trends.map((row, i) => (
-                          <tr key={i}>
-                            <td className="font-medium text-slate-900">{row.month}</td>
-                            <td>{formatNumber(row.quantity)}</td>
-                            <td>{formatCurrency(row.revenue)}</td>
-                            <td>{formatCurrency(row.asp)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Top Stores & Styles Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Top Stores */}
-                {dashboardData.by_store?.length > 0 && (
-                  <div className="bg-white border border-slate-200 rounded shadow-sm">
-                    <div className="p-4 border-b border-slate-100">
-                      <h3 className="font-semibold text-slate-900">Top 10 Stores by Revenue</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="data-table w-full">
-                        <thead>
-                          <tr>
-                            <th>Store</th>
-                            <th>Revenue</th>
-                            <th>Qty</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dashboardData.by_store.slice(0, 10).map((row, i) => (
-                            <tr key={i}>
-                              <td className="font-medium text-slate-900">{row.store_code}</td>
-                              <td>{formatCurrency(row.revenue)}</td>
-                              <td>{formatNumber(row.quantity)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+              {/* Charts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                {/* Revenue Trend Chart */}
+                {dashboardData.monthly_trends?.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                    <h3 className="font-semibold text-slate-900 mb-4">Revenue Trend</h3>
+                    <AreaChart
+                      labels={dashboardData.monthly_trends.map(d => d.month)}
+                      datasets={[{
+                        label: 'Revenue',
+                        data: dashboardData.monthly_trends.map(d => d.revenue),
+                        color: '#0176D3'
+                      }]}
+                      height={280}
+                      formatValue={formatCurrency}
+                      showLegend={false}
+                    />
                   </div>
                 )}
 
-                {/* Top Styles */}
+                {/* Units Sold Chart */}
+                {dashboardData.monthly_trends?.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                    <h3 className="font-semibold text-slate-900 mb-4">Units Sold</h3>
+                    <BarChart
+                      labels={dashboardData.monthly_trends.map(d => d.month)}
+                      datasets={[{
+                        label: 'Quantity',
+                        data: dashboardData.monthly_trends.map(d => d.quantity),
+                        color: '#2E844A'
+                      }]}
+                      height={280}
+                      formatValue={formatNumber}
+                      showLegend={false}
+                    />
+                  </div>
+                )}
+
+                {/* Top Stores Chart */}
+                {dashboardData.by_store?.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                    <h3 className="font-semibold text-slate-900 mb-4">Top 10 Stores by Revenue</h3>
+                    <BarChart
+                      labels={dashboardData.by_store.slice(0, 10).map(d => d.store_code)}
+                      datasets={[{
+                        label: 'Revenue',
+                        data: dashboardData.by_store.slice(0, 10).map(d => d.revenue),
+                        color: '#0176D3'
+                      }]}
+                      horizontal={true}
+                      height={300}
+                      formatValue={formatCurrency}
+                      showLegend={false}
+                    />
+                  </div>
+                )}
+
+                {/* Top Styles Chart */}
                 {dashboardData.by_style?.length > 0 && (
-                  <div className="bg-white border border-slate-200 rounded shadow-sm">
-                    <div className="p-4 border-b border-slate-100">
-                      <h3 className="font-semibold text-slate-900">Top 10 Styles by Revenue</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="data-table w-full">
-                        <thead>
-                          <tr>
-                            <th>Style</th>
-                            <th>Revenue</th>
-                            <th>Qty</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dashboardData.by_style.slice(0, 10).map((row, i) => (
-                            <tr key={i}>
-                              <td className="font-medium text-slate-900">{row.style}</td>
-                              <td>{formatCurrency(row.revenue)}</td>
-                              <td>{formatNumber(row.quantity)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                  <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                    <h3 className="font-semibold text-slate-900 mb-4">Top 10 Styles by Revenue</h3>
+                    <BarChart
+                      labels={dashboardData.by_style.slice(0, 10).map(d => d.style)}
+                      datasets={[{
+                        label: 'Revenue',
+                        data: dashboardData.by_style.slice(0, 10).map(d => d.revenue),
+                        color: '#DD7A01'
+                      }]}
+                      horizontal={true}
+                      height={300}
+                      formatValue={formatCurrency}
+                      showLegend={false}
+                    />
                   </div>
                 )}
               </div>
+
+              {/* Region Distribution */}
+              {dashboardData.by_region?.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                  <h3 className="font-semibold text-slate-900 mb-4">Revenue by Region</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <DoughnutChart
+                      labels={dashboardData.by_region.map(d => d.region)}
+                      data={dashboardData.by_region.map(d => d.revenue)}
+                      height={280}
+                      formatValue={formatCurrency}
+                    />
+                    <div className="overflow-x-auto">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            <th>Region</th>
+                            <th>Revenue</th>
+                            <th>Quantity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashboardData.by_region.map((row, i) => (
+                            <tr key={i}>
+                              <td className="font-medium text-slate-900">{row.region}</td>
+                              <td>{formatCurrency(row.revenue)}</td>
+                              <td>{formatNumber(row.quantity)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Stores View */}
           {activeView === "stores" && (
             <div data-testid="bi-stores-section">
+              {/* Store Performance Chart */}
+              {dashboardData.by_store?.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded shadow-sm p-6 mb-6">
+                  <h3 className="font-semibold text-slate-900 mb-4">Store Performance Comparison</h3>
+                  <BarChart
+                    labels={dashboardData.by_store.slice(0, 15).map(d => d.store_code)}
+                    datasets={[
+                      {
+                        label: 'Revenue',
+                        data: dashboardData.by_store.slice(0, 15).map(d => d.revenue),
+                        color: '#0176D3'
+                      }
+                    ]}
+                    height={350}
+                    formatValue={formatCurrency}
+                  />
+                </div>
+              )}
+
+              {/* Store Table */}
               <div className="bg-white border border-slate-200 rounded shadow-sm">
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                   <h3 className="font-semibold text-slate-900">Store Performance</h3>
@@ -369,6 +411,26 @@ const BIDashboards = () => {
           {/* Styles View */}
           {activeView === "styles" && (
             <div data-testid="bi-styles-section">
+              {/* Style Performance Chart */}
+              {dashboardData.by_style?.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded shadow-sm p-6 mb-6">
+                  <h3 className="font-semibold text-slate-900 mb-4">Style Performance</h3>
+                  <BarChart
+                    labels={dashboardData.by_style.slice(0, 15).map(d => d.style)}
+                    datasets={[
+                      {
+                        label: 'Revenue',
+                        data: dashboardData.by_style.slice(0, 15).map(d => d.revenue),
+                        color: '#DD7A01'
+                      }
+                    ]}
+                    height={350}
+                    formatValue={formatCurrency}
+                  />
+                </div>
+              )}
+
+              {/* Style Table */}
               <div className="bg-white border border-slate-200 rounded shadow-sm">
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                   <h3 className="font-semibold text-slate-900">Style Performance</h3>
@@ -405,33 +467,76 @@ const BIDashboards = () => {
           {/* Trends View */}
           {activeView === "trends" && (
             <div data-testid="bi-trends-section">
-              <div className="bg-white border border-slate-200 rounded shadow-sm">
-                <div className="p-4 border-b border-slate-100">
-                  <h3 className="font-semibold text-slate-900">Monthly Performance Trends</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="data-table w-full">
-                    <thead>
-                      <tr>
-                        <th>Month</th>
-                        <th>Quantity</th>
-                        <th>Revenue</th>
-                        <th>ASP</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dashboardData.monthly_trends?.map((row, i) => (
-                        <tr key={i}>
-                          <td className="font-medium text-slate-900">{row.month}</td>
-                          <td>{formatNumber(row.quantity)}</td>
-                          <td>{formatCurrency(row.revenue)}</td>
-                          <td>{formatCurrency(row.asp)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {dashboardData.monthly_trends?.length > 0 && (
+                <>
+                  {/* Revenue vs Quantity Dual Axis */}
+                  <div className="bg-white border border-slate-200 rounded shadow-sm p-6 mb-6">
+                    <h3 className="font-semibold text-slate-900 mb-4">Revenue & Quantity Trends</h3>
+                    <LineChart
+                      labels={dashboardData.monthly_trends.map(d => d.month)}
+                      datasets={[
+                        {
+                          label: 'Revenue',
+                          data: dashboardData.monthly_trends.map(d => d.revenue),
+                          color: '#0176D3'
+                        },
+                        {
+                          label: 'Quantity (scaled)',
+                          data: dashboardData.monthly_trends.map(d => d.quantity * 100),
+                          color: '#2E844A'
+                        }
+                      ]}
+                      height={350}
+                      formatValue={formatCurrency}
+                    />
+                  </div>
+
+                  {/* ASP Trend */}
+                  <div className="bg-white border border-slate-200 rounded shadow-sm p-6 mb-6">
+                    <h3 className="font-semibold text-slate-900 mb-4">Average Selling Price (ASP) Trend</h3>
+                    <AreaChart
+                      labels={dashboardData.monthly_trends.map(d => d.month)}
+                      datasets={[{
+                        label: 'ASP',
+                        data: dashboardData.monthly_trends.map(d => d.asp),
+                        color: '#706E6B'
+                      }]}
+                      height={280}
+                      formatValue={formatCurrency}
+                      showLegend={false}
+                    />
+                  </div>
+
+                  {/* Trends Table */}
+                  <div className="bg-white border border-slate-200 rounded shadow-sm">
+                    <div className="p-4 border-b border-slate-100">
+                      <h3 className="font-semibold text-slate-900">Monthly Trends Data</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            <th>Month</th>
+                            <th>Quantity</th>
+                            <th>Revenue</th>
+                            <th>ASP</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashboardData.monthly_trends?.map((row, i) => (
+                            <tr key={i}>
+                              <td className="font-medium text-slate-900">{row.month}</td>
+                              <td>{formatNumber(row.quantity)}</td>
+                              <td>{formatCurrency(row.revenue)}</td>
+                              <td>{formatCurrency(row.asp)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>
