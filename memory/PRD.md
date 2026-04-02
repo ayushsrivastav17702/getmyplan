@@ -22,23 +22,27 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### Phase 17 — Executive Dashboard P0 (Feb 2026)
 - 401 Interceptor, KPI cards (Revenue, Units, MRP Realisation), WoW/YoY, date presets, validation, auto-refresh
-- Testing: 100% (Iterations 17-18, 29/35 PASS, 3 known P1/P2 GAPs)
+- Testing: 100% (Iterations 17-18)
 
 ### Phase 18 — Data Upload Validation (Feb 2026)
 - File size limit, data type validation, null check, dedup, future date rejection, negative qty rejection, encoding detection, concurrent upload lock
-- Testing: 100% (Iteration 20, 30/35 PASS, 3 known SFTP/browser GAPs)
+- Testing: 100% (Iteration 20)
 
 ### Phase 19 — Configuration Module (Feb 2026)
 - CONF-01–32: Analysis parameters, module toggles, store classes, category hierarchies, custom roles, permission overrides
-- Testing: **100% (Iteration 21, 32/32 PASS)**
+- Testing: **100% (Iteration 21)**
 
 ### Phase 20 — Core Logic Module (Feb 2026)
-- **CORE-01–08**: ROS Calculation — configurable period, exclude returns, exclude promo spikes, per-store independence, closed day exclusion
-- **CORE-09–14**: Healthy Size Set — per-store-style size availability vs PSA threshold, style-specific total sizes
-- **CORE-15–21**: TrueROS — weighted recent/historical ROS with configurable weights, promo exclusion, weekend/weekday weighting
-- **CORE-22–27**: Attribute Grouping — group by color/size/fit/nested multi-attribute, null→Unknown handling
-- **CORE-28–35**: Store-Style Ranking — sort by revenue/ROS/DOH, tie-breaking, pagination, Top/Bottom N, CSV export, filter-before-rank
-- Testing: **100% (Iteration 22, 35/35 PASS)**
+- CORE-01–35: ROS Calculation, Healthy Size Set, TrueROS, Attribute Grouping, Store-Style Ranking
+- New modular route file: `/backend/routes/core_logic.py`
+- Testing: **100% (Iteration 22)**
+
+### Phase 21 — Gap Analysis Module (Feb 2026)
+- **GAP-01–10**: ROS Gap Analysis — gap = healthy_ros - raw_ros, brand/store filters, sort by gap_size, weekly trend
+- **GAP-11–19**: Size Set Gap — healthy size sets (PSA threshold), sales loss estimation, store comparison, category/gender breakdown, weekly trend
+- **GAP-20–28**: NOOS Analysis — candidate identification (avail>=80% + sales>=80%), new-style exclusion (<30 days), seasonal exclusion, low-stock alerts, recovery plans, bulk NOOS export
+- **GAP-29–35**: Dashboard — 3 tabs (ROS Gap, Size Set, NOOS), KPI summary cards on all tabs, drill-down panels, chart interactivity, combined export of all gaps
+- Testing: **100% (Iteration 23, 35/35 PASS)**
 
 ## Test Coverage Summary
 
@@ -48,7 +52,8 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | Data Upload | 35 | 30 | 4 | 3 | 86% |
 | Configuration | 32 | 32 | 0 | 0 | **100%** |
 | Core Logic | 35 | 35 | 0 | 0 | **100%** |
-| **Total** | **137** | **126** | **5** | **6** | **92%** |
+| Gap Analysis | 35 | 35 | 0 | 0 | **100%** |
+| **Total** | **172** | **161** | **5** | **6** | **94%** |
 
 ## Remaining Known Gaps
 - DASH-15: Revenue trend line chart (P1)
@@ -60,17 +65,16 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 ## Prioritized Backlog
 
 ### P0
-- [ ] Tenant Admin Panel formal testing
+- None critical outstanding
 
 ### P1
 - Revenue trend line chart (DASH-15)
 - Offline detection UI (DASH-25)
 - Real SFTP integration
 - PDF report generation
-- Email alerts for SLA/SFTP
 
 ### P2
 - PDF export (DASH-35)
-- Modularize server.py (~3700+ lines) — started with /backend/routes/core_logic.py
+- Modularize server.py (~3900+ lines) — started with /backend/routes/core_logic.py
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
