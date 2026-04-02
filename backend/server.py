@@ -11,8 +11,10 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 import numpy as np
+import random
 import io
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from sftp import sftp_service, sftp_scheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1292,6 +1294,232 @@ async def get_chat_history(session_id: str):
         {"_id": 0}
     ).sort("timestamp", 1).to_list(100)
     return history
+
+
+# ==================== SFTP ADMIN ====================
+
+class SFTPConfigModel(BaseModel):
+    host: str = ""
+    port: int = 22
+    username: str = ""
+    password: Optional[str] = None
+    key_path: Optional[str] = None
+    key_passphrase: Optional[str] = None
+    base_path: str = "/incoming"
+    processed_path: str = "/processed"
+    failed_path: str = "/failed"
+    poll_interval_minutes: int = 30
+    max_retries: int = 3
+    alert_emails: str = ""
+
+
+@api_router.get("/admin/sftp/status")
+async def get_sftp_status():
+    """Get SFTP connection and scheduler status"""
+    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    if config_doc:
+        sftp_service.load_config(config_doc)
+    return {
+        "demo_mode": sftp_service.demo_mode,
+        "host": sftp_service.host or "Not configured",
+        "scheduler": sftp_scheduler.status,
+        "connection": sftp_service.test_connection(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@api_router.get("/admin/sftp/config")
+async def get_sftp_config():
+    """Get SFTP configuration"""
+    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    return config_doc or {}
+
+
+@api_router.post("/admin/sftp/config")
+async def save_sftp_config(config: SFTPConfigModel):
+    """Save SFTP configuration"""
+    doc = config.model_dump()
+    await db.sftp_config.update_one({"_id": "main"}, {"$set": doc}, upsert=True)
+    sftp_service.load_config(doc)
+    return {"message": "SFTP configuration saved"}
+
+
+@api_router.post("/admin/sftp/test-connection")
+async def test_sftp_connection():
+    """Test SFTP server connectivity"""
+    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    if config_doc:
+        sftp_service.load_config(config_doc)
+    return sftp_service.test_connection()
+
+
+@api_router.post("/admin/sftp/trigger")
+async def trigger_sftp_processing():
+    """Manually trigger one SFTP processing cycle"""
+    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    if config_doc:
+        sftp_service.load_config(config_doc)
+
+    if sftp_service.demo_mode:
+        records = sftp_service.generate_demo_cycle()
+        for r in records:
+            await db.sftp_logs.insert_one(r)
+        return {
+            "message": f"Demo cycle: processed {len(records)} files",
+            "total": len(records),
+            "success": sum(1 for r in records if r['status'] == 'success'),
+            "failed": sum(1 for r in records if r['status'] != 'success'),
+        }
+    else:
+        return {"message": "Real SFTP processing not yet implemented"}
+
+
+@api_router.post("/admin/sftp/scheduler/start")
+async def start_sftp_scheduler():
+    """Start the SFTP polling scheduler"""
+    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    interval = 30
+    if config_doc:
+        sftp_service.load_config(config_doc)
+        interval = config_doc.get('poll_interval_minutes', 30)
+    sftp_scheduler.configure(db, sftp_service)
+    sftp_scheduler.start(interval_minutes=interval)
+    return {"message": "Scheduler started", "interval_minutes": interval}
+
+
+@api_router.post("/admin/sftp/scheduler/stop")
+async def stop_sftp_scheduler():
+    """Stop the SFTP polling scheduler"""
+    sftp_scheduler.stop()
+    return {"message": "Scheduler stopped"}
+
+
+@api_router.get("/admin/sftp/logs")
+async def get_sftp_logs(
+    days: int = 7,
+    status: Optional[str] = None,
+    file_type: Optional[str] = None,
+    limit: int = 200,
+):
+    """Get SFTP processing logs"""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    query: Dict[str, Any] = {"processed_at": {"$gte": cutoff}}
+    if status:
+        query["status"] = status
+    if file_type:
+        query["file_type"] = file_type
+
+    logs = await db.sftp_logs.find(query, {"_id": 0}).sort("processed_at", -1).to_list(limit)
+    return logs
+
+
+@api_router.get("/admin/sftp/stats")
+async def get_sftp_stats():
+    """Get SFTP processing statistics for the dashboard"""
+    now = datetime.now(timezone.utc)
+    week_ago = (now - timedelta(days=7)).isoformat()
+    prev_week_start = (now - timedelta(days=14)).isoformat()
+
+    # Current week logs
+    logs = await db.sftp_logs.find(
+        {"processed_at": {"$gte": week_ago}}, {"_id": 0}
+    ).to_list(2000)
+
+    # Previous week logs for comparison
+    prev_logs = await db.sftp_logs.find(
+        {"processed_at": {"$gte": prev_week_start, "$lt": week_ago}}, {"_id": 0}
+    ).to_list(2000)
+
+    total = len(logs)
+    success = sum(1 for l in logs if l.get('status') == 'success')
+    failed = total - success
+    total_rows = sum(l.get('rows_processed', 0) for l in logs)
+
+    prev_total = len(prev_logs)
+    prev_success = sum(1 for l in prev_logs if l.get('status') == 'success')
+    curr_rate = (success / total * 100) if total > 0 else 0
+    prev_rate = (prev_success / prev_total * 100) if prev_total > 0 else 0
+
+    # Group by type
+    by_type = {}
+    for l in logs:
+        ft = l.get('file_type', 'unknown')
+        if ft not in by_type:
+            by_type[ft] = {'total': 0, 'success': 0, 'failed': 0, 'rows': 0, 'errors': 0}
+        by_type[ft]['total'] += 1
+        if l.get('status') == 'success':
+            by_type[ft]['success'] += 1
+        else:
+            by_type[ft]['failed'] += 1
+        by_type[ft]['rows'] += l.get('rows_processed', 0)
+        if l.get('error_message'):
+            by_type[ft]['errors'] += 1
+
+    # Group by day for trend
+    by_day = {}
+    for l in logs:
+        day = l.get('processed_at', '')[:10]
+        if day not in by_day:
+            by_day[day] = {'date': day, 'total': 0, 'success': 0, 'failed': 0, 'rows': 0}
+        by_day[day]['total'] += 1
+        if l.get('status') == 'success':
+            by_day[day]['success'] += 1
+        else:
+            by_day[day]['failed'] += 1
+        by_day[day]['rows'] += l.get('rows_processed', 0)
+
+    # Store SLA — which stores have uploaded today
+    today = now.strftime('%Y-%m-%d')
+    today_logs = [l for l in logs if l.get('processed_at', '').startswith(today)]
+    stores_uploaded = set(l.get('store_code') for l in today_logs if l.get('store_code'))
+
+    return {
+        "total": total,
+        "success": success,
+        "failed": failed,
+        "total_rows": total_rows,
+        "success_rate": round(curr_rate, 1),
+        "success_rate_change": round(curr_rate - prev_rate, 1),
+        "by_type": by_type,
+        "trend": sorted(by_day.values(), key=lambda x: x['date']),
+        "stores_uploaded_today": sorted(list(stores_uploaded)),
+        "stores_total": 10,
+    }
+
+
+@api_router.post("/admin/sftp/seed-demo")
+async def seed_demo_data():
+    """Seed SFTP logs with 7 days of demo data"""
+    records = sftp_service.generate_demo_history(days=7)
+    if records:
+        await db.sftp_logs.delete_many({})
+        for r in records:
+            await db.sftp_logs.insert_one(r)
+    return {"message": f"Seeded {len(records)} demo records", "count": len(records)}
+
+
+@api_router.post("/admin/sftp/retry-failed")
+async def retry_failed_files():
+    """Retry recently failed files"""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    failed = await db.sftp_logs.find(
+        {"status": "error", "processed_at": {"$gte": cutoff}}, {"_id": 0}
+    ).to_list(100)
+
+    retried = 0
+    for log in failed:
+        # In demo mode, just flip status to success with some probability
+        if sftp_service.demo_mode and random.random() < 0.7:
+            await db.sftp_logs.insert_one({
+                **log,
+                'status': 'success',
+                'rows_processed': random.randint(500, 3000),
+                'error_message': None,
+                'processed_at': datetime.now(timezone.utc).isoformat(),
+            })
+            retried += 1
+
+    return {"message": f"Retried {retried}/{len(failed)} failed files", "retried": retried}
 
 
 # Include the router in the main app
