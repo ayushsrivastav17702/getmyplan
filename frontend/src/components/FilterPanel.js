@@ -22,6 +22,7 @@ const FilterPanel = ({
   const [teamPresets, setTeamPresets] = useState([]);
   const [personalPresets, setPersonalPresets] = useState([]);
   const [allTags, setAllTags] = useState([]);
+  const [dateError, setDateError] = useState("");
   const [newPreset, setNewPreset] = useState({
     name: "",
     description: "",
@@ -596,6 +597,61 @@ const FilterPanel = ({
             className="overflow-hidden"
           >
             <div className="filter-panel">
+              {/* Quick Date Presets */}
+              <div className="mb-4 pb-4 border-b border-slate-100">
+                <label className="filter-label mb-2 block">
+                  <Calendar size={12} className="inline mr-1" /> Quick Date Range
+                </label>
+                <div className="flex flex-wrap gap-2" data-testid="date-presets">
+                  {[
+                    { label: 'Last 7 Days', days: 7 },
+                    { label: 'Last 30 Days', days: 30 },
+                    { label: 'Last 90 Days', days: 90 },
+                    { label: 'This Month', type: 'month' },
+                    { label: 'Last Month', type: 'lastMonth' },
+                    { label: 'This Quarter', type: 'quarter' },
+                    { label: 'YTD', type: 'year' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      data-testid={`date-preset-${preset.label.replace(/\s+/g, '-').toLowerCase()}`}
+                      onClick={() => {
+                        const today = new Date();
+                        let start = new Date();
+                        let end = new Date(today);
+                        if (preset.days) {
+                          start.setDate(start.getDate() - preset.days);
+                        } else if (preset.type === 'month') {
+                          start = new Date(today.getFullYear(), today.getMonth(), 1);
+                        } else if (preset.type === 'lastMonth') {
+                          start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                          end = new Date(today.getFullYear(), today.getMonth(), 0);
+                        } else if (preset.type === 'quarter') {
+                          const q = Math.floor(today.getMonth() / 3);
+                          start = new Date(today.getFullYear(), q * 3, 1);
+                        } else if (preset.type === 'year') {
+                          start = new Date(today.getFullYear(), 0, 1);
+                        }
+                        const fmt = (d) => d.toISOString().split('T')[0];
+                        onFilterChange("startDate", fmt(start));
+                        onFilterChange("endDate", fmt(end));
+                        setDateError("");
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 rounded-full border border-slate-200 hover:border-blue-200 transition-colors"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date Validation Error */}
+              {dateError && (
+                <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg" data-testid="date-error">
+                  {dateError}
+                </div>
+              )}
+
               {/* Filter Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                 {/* Date Range - Start */}
@@ -608,8 +664,15 @@ const FilterPanel = ({
                     type="date"
                     data-testid="filter-start-date"
                     value={filters.startDate || ""}
-                    onChange={(e) => onFilterChange("startDate", e.target.value)}
-                    className="filter-input"
+                    onChange={(e) => {
+                      onFilterChange("startDate", e.target.value);
+                      if (filters.endDate && e.target.value > filters.endDate) {
+                        setDateError("Start date cannot be after end date");
+                      } else {
+                        setDateError("");
+                      }
+                    }}
+                    className={`filter-input ${dateError ? 'border-red-300' : ''}`}
                   />
                 </div>
 
@@ -623,8 +686,15 @@ const FilterPanel = ({
                     type="date"
                     data-testid="filter-end-date"
                     value={filters.endDate || ""}
-                    onChange={(e) => onFilterChange("endDate", e.target.value)}
-                    className="filter-input"
+                    onChange={(e) => {
+                      onFilterChange("endDate", e.target.value);
+                      if (filters.startDate && e.target.value < filters.startDate) {
+                        setDateError("End date cannot be before start date");
+                      } else {
+                        setDateError("");
+                      }
+                    }}
+                    className={`filter-input ${dateError ? 'border-red-300' : ''}`}
                   />
                 </div>
 
@@ -820,6 +890,11 @@ const FilterPanel = ({
                 <button
                   data-testid="filter-apply-btn"
                   onClick={() => {
+                    if (filters.startDate && filters.endDate && filters.endDate < filters.startDate) {
+                      setDateError("End date cannot be before start date");
+                      return;
+                    }
+                    setDateError("");
                     onApply();
                     setIsOpen(false);
                   }}

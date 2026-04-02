@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 const LoginPage = () => {
-  const { login } = useAuth();
+  const { login, sessionExpired, clearSessionExpired } = useAuth();
   const [mode, setMode] = useState("login"); // login | register | selectTenant
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +17,14 @@ const LoginPage = () => {
   const [tenants, setTenants] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Show session expired message
+  useEffect(() => {
+    if (sessionExpired) {
+      setError("Session expired. Please log in again.");
+      clearSessionExpired();
+    }
+  }, [sessionExpired, clearSessionExpired]);
 
   // Registration fields
   const [regCompany, setRegCompany] = useState("");

@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { useNavigate } from "react-router-dom";
 import {
-  RefreshCw, AlertTriangle, TrendingDown, ShieldCheck,
+  RefreshCw, AlertTriangle, TrendingDown, TrendingUp, ShieldCheck,
   XCircle, Clock, Layout, Package, ShoppingCart, ArrowRight,
-  ChevronRight, Activity
+  ChevronRight, Activity, IndianRupee, Percent, ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
 import { DoughnutChart } from "../components/Charts";
@@ -13,6 +13,7 @@ import { DoughnutChart } from "../components/Charts";
 const ExecutiveDashboard = () => {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [kpis, setKpis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [filterOptions, setFilterOptions] = useState({});
@@ -20,6 +21,12 @@ const ExecutiveDashboard = () => {
     startDate: "", endDate: "",
     categories: [], channels: [], regions: [],
   });
+
+  // Auto-refresh state
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  const autoRefreshRef = useRef(null);
+  const countdownRef = useRef(null);
 
   const fetchFilterOptions = useCallback(async () => {
     try {
@@ -54,9 +61,13 @@ const ExecutiveDashboard = () => {
     setError(null);
     try {
       const queryParams = buildQueryParams();
-      const resp = await axios.get(`${API}/analytics/executive-dashboard?${queryParams}`);
-      if (resp.data.error) setError(resp.data.error);
-      else setData(resp.data);
+      const [dashResp, kpiResp] = await Promise.all([
+        axios.get(`${API}/analytics/executive-dashboard?${queryParams}`),
+        axios.get(`${API}/analytics/executive-kpis?${queryParams}`),
+      ]);
+      if (dashResp.data.error) setError(dashResp.data.error);
+      else setData(dashResp.data);
+      setKpis(kpiResp.data);
     } catch (err) {
       setError("Failed to fetch dashboard data.");
     } finally {
@@ -65,6 +76,28 @@ const ExecutiveDashboard = () => {
   }, [filters]);
 
   useEffect(() => { fetchData(); }, []);
+
+  // Auto-refresh logic
+  useEffect(() => {
+    if (autoRefresh) {
+      setCountdown(30);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            return 30;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      autoRefreshRef.current = setInterval(() => {
+        fetchData();
+      }, 30000);
+    }
+    return () => {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [autoRefresh, fetchData]);
 
   const handleFilterChange = (field, value) => setFilters(prev => ({ ...prev, [field]: value }));
   const handleApplyFilters = () => fetchData();
@@ -77,7 +110,8 @@ const ExecutiveDashboard = () => {
   };
 
   const fmtCur = (v) => {
-    if (!v) return "\u20B90";
+    if (v === null || v === undefined) return "N/A";
+    if (v < 0) return "-" + fmtCur(-v);
     if (v >= 10000000) return `\u20B9${(v / 10000000).toFixed(1)}Cr`;
     if (v >= 100000) return `\u20B9${(v / 100000).toFixed(1)}L`;
     if (v >= 1000) return `\u20B9${(v / 1000).toFixed(0)}K`;
@@ -98,11 +132,6 @@ const ExecutiveDashboard = () => {
     if (s >= 40) return 'text-amber-600';
     return 'text-red-600';
   };
-  const getScoreBg = (s) => {
-    if (s >= 70) return 'from-green-500 to-emerald-400';
-    if (s >= 40) return 'from-amber-500 to-yellow-400';
-    return 'from-red-500 to-rose-400';
-  };
 
   return (
     <div className="animate-fade-in-up" data-testid="executive-dashboard-page">
@@ -116,10 +145,25 @@ const ExecutiveDashboard = () => {
             Unified view of all merchandising analytics modules
           </p>
         </div>
-        <button data-testid="refresh-exec-btn" onClick={fetchData} disabled={loading}
-          className="btn-secondary flex items-center gap-2">
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Auto-refresh Toggle */}
+          <button
+            data-testid="auto-refresh-toggle"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              autoRefresh
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            <RefreshCw size={14} className={autoRefresh ? 'animate-spin' : ''} />
+            {autoRefresh ? `Auto ${countdown}s` : 'Auto-refresh'}
+          </button>
+          <button data-testid="refresh-exec-btn" onClick={fetchData} disabled={loading}
+            className="btn-secondary flex items-center gap-2">
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filter Panel */}
@@ -149,7 +193,140 @@ const ExecutiveDashboard = () => {
 
       {data && !loading && !error && (
         <>
-          {/* Health Score + Alert Summary */}
+          {/* ── Revenue & Margin KPI Row ── */}
+          {kpis && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="kpi-cards">
+              {/* Total Revenue */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" data-testid="kpi-revenue">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50">
+                    <IndianRupee size={20} className="text-blue-500" />
+                  </div>
+                  <span className="text-2xl font-bold text-slate-900">{fmtCur(kpis.revenue)}</span>
+                </div>
+                <p className="text-sm text-slate-500">Total Revenue</p>
+                {kpis.has_data && kpis.wow?.revenue_change !== 0 && (
+                  <div className="mt-2 flex items-center gap-1">
+                    {kpis.wow.revenue_change >= 0 ? (
+                      <ArrowUpRight size={14} className="text-green-500" />
+                    ) : (
+                      <ArrowDownRight size={14} className="text-red-500" />
+                    )}
+                    <span className={`text-xs font-medium ${kpis.wow.revenue_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {kpis.wow.revenue_change >= 0 ? '+' : ''}{kpis.wow.revenue_change}% WoW
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Units Sold */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" data-testid="kpi-units">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50">
+                    <ShoppingCart size={20} className="text-emerald-500" />
+                  </div>
+                  <span className="text-2xl font-bold text-slate-900">{fmtNum(kpis.units_sold)}</span>
+                </div>
+                <p className="text-sm text-slate-500">Units Sold</p>
+                {kpis.has_data && kpis.wow?.units_change !== 0 && (
+                  <div className="mt-2 flex items-center gap-1">
+                    {kpis.wow.units_change >= 0 ? (
+                      <ArrowUpRight size={14} className="text-green-500" />
+                    ) : (
+                      <ArrowDownRight size={14} className="text-red-500" />
+                    )}
+                    <span className={`text-xs font-medium ${kpis.wow.units_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {kpis.wow.units_change >= 0 ? '+' : ''}{kpis.wow.units_change}% WoW
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* MRP Realisation (Margin proxy) */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" data-testid="kpi-margin">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50">
+                    <Percent size={20} className="text-purple-500" />
+                  </div>
+                  <span className="text-2xl font-bold text-slate-900">
+                    {kpis.mrp_realisation_pct !== null ? `${kpis.mrp_realisation_pct}%` : 'N/A'}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500">MRP Realisation</p>
+                <p className="text-[11px] text-slate-400 mt-1">Revenue vs MRP value</p>
+              </div>
+
+              {/* Health Score */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" data-testid="kpi-health">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-50">
+                    <Activity size={20} className="text-amber-500" />
+                  </div>
+                  <span className={`text-2xl font-bold ${getScoreColor(healthScore)}`}>{healthScore}</span>
+                </div>
+                <p className="text-sm text-slate-500">Health Score</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {healthScore >= 70 ? 'Healthy' : healthScore >= 40 ? 'Needs attention' : 'Critical'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── WoW & YoY Comparison Row ── */}
+          {kpis?.has_data && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8" data-testid="comparison-cards">
+              {/* Week-over-Week */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" data-testid="wow-card">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Week-over-Week</h3>
+                  <Clock size={14} className="text-slate-400" />
+                </div>
+                <div className="flex items-baseline justify-between mb-4">
+                  <div>
+                    <p className={`text-2xl font-bold ${kpis.wow?.revenue_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {kpis.wow?.revenue_change >= 0 ? '+' : ''}{kpis.wow?.revenue_change || 0}%
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">Revenue change</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-slate-700">This week: {fmtCur(kpis.wow?.current_revenue)}</p>
+                    <p className="text-sm text-slate-400">Last week: {fmtCur(kpis.wow?.previous_revenue)}</p>
+                  </div>
+                </div>
+                <div className="pt-3 border-t border-slate-100 flex justify-between text-sm">
+                  <span className="text-slate-500">Units</span>
+                  <span className={kpis.wow?.units_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {kpis.wow?.units_change >= 0 ? '+' : ''}{kpis.wow?.units_change || 0}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Year-over-Year */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm" data-testid="yoy-card">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Year-over-Year</h3>
+                  <Clock size={14} className="text-slate-400" />
+                </div>
+                <div className="flex items-baseline justify-between mb-4">
+                  <div>
+                    <p className={`text-2xl font-bold ${kpis.yoy?.revenue_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {kpis.yoy?.revenue_change >= 0 ? '+' : ''}{kpis.yoy?.revenue_change || 0}%
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">Revenue change</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-slate-700">This period: {fmtCur(kpis.yoy?.current_revenue)}</p>
+                    <p className="text-sm text-slate-400">Last year: {fmtCur(kpis.yoy?.previous_revenue)}</p>
+                  </div>
+                </div>
+                {kpis.yoy?.previous_revenue === 0 && (
+                  <p className="text-xs text-slate-400 italic">No data from same period last year</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Health Score Circle + Alert Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             {/* Health Score */}
             <div className="bg-white border border-slate-200 rounded shadow-sm p-6 flex flex-col items-center justify-center" data-testid="health-score-card">
@@ -353,7 +530,7 @@ const ExecutiveDashboard = () => {
       )}
 
       {!loading && !error && !data && (
-        <div className="bg-slate-50 border border-slate-200 p-12 text-center rounded">
+        <div className="bg-slate-50 border border-slate-200 p-12 text-center rounded" data-testid="no-data-message">
           <p className="text-slate-500 mb-2">No data available</p>
           <p className="text-sm text-slate-400">Upload required files to see the executive dashboard</p>
         </div>

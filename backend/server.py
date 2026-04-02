@@ -878,6 +878,128 @@ async def get_stock_out_analysis(
         return {"error": str(e), "data": {}}
 
 
+@api_router.get("/analytics/executive-kpis")
+async def get_executive_kpis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+):
+    """Revenue, Margin, WoW, and YoY KPIs for the executive dashboard."""
+    sales_df = await get_cached_data('daily_sales')
+    sku_df = await get_cached_data('sku_ean_master')
+
+    if sales_df is None or len(sales_df) == 0:
+        return {
+            "revenue": 0, "units_sold": 0, "margin_pct": None,
+            "mrp_realisation_pct": None,
+            "wow": {"revenue_change": 0, "units_change": 0,
+                    "current_revenue": 0, "previous_revenue": 0,
+                    "current_units": 0, "previous_units": 0},
+            "yoy": {"revenue_change": 0, "current_revenue": 0, "previous_revenue": 0},
+            "has_data": False,
+        }
+
+    sales_df['day'] = pd.to_datetime(sales_df['day'], errors='coerce')
+    sales_df['revenue'] = pd.to_numeric(sales_df['revenue'], errors='coerce').fillna(0)
+    sales_df['quantity'] = pd.to_numeric(sales_df['quantity'], errors='coerce').fillna(0)
+
+    # Apply filters
+    if start_date:
+        sales_df = sales_df[sales_df['day'] >= pd.to_datetime(start_date)]
+    if end_date:
+        sales_df = sales_df[sales_df['day'] <= pd.to_datetime(end_date)]
+    if categories and sku_df is not None:
+        cat_list = [c.strip() for c in categories.split(',')]
+        style_df = await get_cached_data('style_master')
+        if style_df is not None and 'category' in style_df.columns:
+            valid_styles = style_df[style_df['category'].isin(cat_list)]['style_code'].unique()
+            if 'sku' in sales_df.columns and 'style' in sku_df.columns and 'ean' in sku_df.columns:
+                valid_skus = sku_df[sku_df['style'].isin(valid_styles)]['ean'].unique()
+                sales_df = sales_df[sales_df['sku'].isin(valid_skus)]
+    if channels:
+        ch_list = [c.strip() for c in channels.split(',')]
+        if 'channel' in sales_df.columns:
+            sales_df = sales_df[sales_df['channel'].isin(ch_list)]
+    if regions:
+        rg_list = [r.strip() for r in regions.split(',')]
+        store_df = await get_cached_data('store_master')
+        if store_df is not None and 'region' in store_df.columns and 'store_code' in store_df.columns:
+            valid_stores = store_df[store_df['region'].isin(rg_list)]['store_code'].unique()
+            if 'store_code' in sales_df.columns:
+                sales_df = sales_df[sales_df['store_code'].isin(valid_stores)]
+
+    total_revenue = float(sales_df['revenue'].sum())
+    total_units = int(sales_df['quantity'].sum())
+
+    # MRP Realisation % (proxy for margin)
+    mrp_realisation = None
+    if sku_df is not None and 'mrp' in sku_df.columns and 'ean' in sku_df.columns:
+        sku_df['mrp'] = pd.to_numeric(sku_df['mrp'], errors='coerce').fillna(0)
+        merged = sales_df.merge(sku_df[['ean', 'mrp']].drop_duplicates('ean'),
+                                left_on='sku', right_on='ean', how='left')
+        merged['mrp_value'] = merged['quantity'] * merged['mrp']
+        total_mrp = merged['mrp_value'].sum()
+        if total_mrp > 0:
+            mrp_realisation = round(float(total_revenue / total_mrp * 100), 1)
+
+    # WoW: split by midpoint of date range
+    max_date = sales_df['day'].max()
+    min_date = sales_df['day'].min()
+    date_range_days = (max_date - min_date).days if pd.notna(max_date) and pd.notna(min_date) else 0
+
+    if date_range_days >= 7:
+        cutoff = max_date - pd.Timedelta(days=7)
+        current_week = sales_df[sales_df['day'] > cutoff]
+        prev_week = sales_df[(sales_df['day'] > cutoff - pd.Timedelta(days=7)) & (sales_df['day'] <= cutoff)]
+        cur_rev = float(current_week['revenue'].sum())
+        prev_rev = float(prev_week['revenue'].sum())
+        cur_units = int(current_week['quantity'].sum())
+        prev_units = int(prev_week['quantity'].sum())
+        wow = {
+            "revenue_change": round(((cur_rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else 0, 1),
+            "units_change": round(((cur_units - prev_units) / prev_units * 100) if prev_units > 0 else 0, 1),
+            "current_revenue": cur_rev,
+            "previous_revenue": prev_rev,
+            "current_units": cur_units,
+            "previous_units": prev_units,
+        }
+    else:
+        wow = {"revenue_change": 0, "units_change": 0,
+               "current_revenue": total_revenue, "previous_revenue": 0,
+               "current_units": total_units, "previous_units": 0}
+
+    # YoY: compare same date range one year prior (if data exists)
+    yoy = {"revenue_change": 0, "current_revenue": total_revenue, "previous_revenue": 0}
+    if date_range_days >= 1 and pd.notna(min_date):
+        yoy_start = min_date - pd.DateOffset(years=1)
+        yoy_end = max_date - pd.DateOffset(years=1)
+        # Reload unfiltered sales for yoy lookup
+        all_sales = await get_cached_data('daily_sales')
+        if all_sales is not None:
+            all_sales['day'] = pd.to_datetime(all_sales['day'], errors='coerce')
+            all_sales['revenue'] = pd.to_numeric(all_sales['revenue'], errors='coerce').fillna(0)
+            prev_year = all_sales[(all_sales['day'] >= yoy_start) & (all_sales['day'] <= yoy_end)]
+            prev_year_rev = float(prev_year['revenue'].sum())
+            if prev_year_rev > 0:
+                yoy = {
+                    "revenue_change": round((total_revenue - prev_year_rev) / prev_year_rev * 100, 1),
+                    "current_revenue": total_revenue,
+                    "previous_revenue": prev_year_rev,
+                }
+
+    return {
+        "revenue": total_revenue,
+        "units_sold": total_units,
+        "margin_pct": mrp_realisation,
+        "mrp_realisation_pct": mrp_realisation,
+        "wow": wow,
+        "yoy": yoy,
+        "has_data": True,
+    }
+
+
 @api_router.get("/analytics/executive-dashboard")
 async def get_executive_dashboard(
     start_date: str = None,
@@ -1256,7 +1378,7 @@ async def get_planogram_fill_rate(
             recommendations.append({
                 "priority": "medium",
                 "title": f"Moderate risk in {len(moderate_stores)} stores",
-                "description": f"These stores have fill rate between 80-90%. Review planogram compliance and replenishment cycle.",
+                "description": "These stores have fill rate between 80-90%. Review planogram compliance and replenishment cycle.",
                 "stores": [s['store_code'] for s in moderate_stores[:5]]
             })
         if critical_total > 0:
@@ -1557,7 +1679,7 @@ async def get_doh_analysis(
             recommendations.append({
                 "priority": "medium",
                 "title": f"DOH above {upper:.0f} days in {overstocked_stores} stores",
-                "description": f"These stores have DOH above 120% of ideal. Consider reducing order quantities or inter-store transfers."
+                "description": "These stores have DOH above 120% of ideal. Consider reducing order quantities or inter-store transfers."
             })
 
         return {

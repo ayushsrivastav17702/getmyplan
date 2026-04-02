@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { API } from "../App";
 
@@ -13,6 +13,38 @@ export const AuthProvider = ({ children }) => {
   const [tenantInfo, setTenantInfo] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const interceptorId = useRef(null);
+
+  // Setup 401 response interceptor
+  useEffect(() => {
+    interceptorId.current = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          // Don't intercept login requests themselves
+          const url = error.config?.url || "";
+          if (!url.includes("/auth/login")) {
+            setSessionExpired(true);
+            setUser(null);
+            setToken(null);
+            setTenantId(null);
+            setTenantInfo(null);
+            setPermissions([]);
+            delete axios.defaults.headers.common["Authorization"];
+            delete axios.defaults.headers.common["X-Tenant-ID"];
+            localStorage.removeItem("merch_auth");
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      if (interceptorId.current !== null) {
+        axios.interceptors.response.eject(interceptorId.current);
+      }
+    };
+  }, []);
 
   // Restore session from localStorage
   useEffect(() => {
@@ -34,7 +66,10 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  const clearSessionExpired = useCallback(() => setSessionExpired(false), []);
+
   const login = useCallback(async (email, password, selectedTenantId) => {
+    setSessionExpired(false);
     const resp = await axios.post(`${API}/auth/login`, { email, password }, {
       headers: { "X-Tenant-ID": selectedTenantId },
     });
@@ -101,8 +136,8 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, token, tenantId, tenantInfo, permissions,
-      loading, isAuthenticated,
-      login, logout, hasPermission, hasRole,
+      loading, isAuthenticated, sessionExpired,
+      login, logout, hasPermission, hasRole, clearSessionExpired,
     }}>
       {children}
     </AuthContext.Provider>
