@@ -1210,6 +1210,221 @@ async def get_stock_out_analysis(
         # ================================================
         stores_impacted = int(stockouts['store_code'].nunique())
 
+        # ================================================
+        # 12. Weekly & Monthly aggregation (SO-06, SO-07)
+        # ================================================
+        weekly_trend = []
+        monthly_trend = []
+        try:
+            inv_with_ros_copy = inv_with_ros.copy()
+            inv_with_ros_copy['week'] = inv_with_ros_copy['day'].dt.isocalendar().week.astype(int)
+            inv_with_ros_copy['month'] = inv_with_ros_copy['day'].dt.month
+            inv_with_ros_copy['is_stockout_bool'] = inv_with_ros_copy['is_stockout'].astype(bool)
+
+            wk = inv_with_ros_copy.groupby('week').agg(
+                stockout_count=('is_stockout_bool', 'sum'),
+                total_skus=('ean', 'count'),
+            ).reset_index()
+            wk['stockout_rate'] = (wk['stockout_count'] / wk['total_skus'].clip(lower=1) * 100).round(1)
+            weekly_trend = wk.sort_values('week').to_dict('records')
+
+            mo = inv_with_ros_copy.groupby('month').agg(
+                stockout_count=('is_stockout_bool', 'sum'),
+                total_skus=('ean', 'count'),
+            ).reset_index()
+            mo['stockout_rate'] = (mo['stockout_count'] / mo['total_skus'].clip(lower=1) * 100).round(1)
+            monthly_trend = mo.sort_values('month').to_dict('records')
+        except Exception:
+            pass
+
+        # ================================================
+        # 13. Period trends: WTD, MTD, QTD, YTD (SO-16..19)
+        # ================================================
+        period_trends = {}
+        try:
+            ref_date = latest_date
+            day_col = inv_with_ros['day']
+            for label, start in [
+                ('wtd', ref_date - pd.Timedelta(days=ref_date.weekday())),
+                ('mtd', ref_date.replace(day=1)),
+                ('qtd', ref_date - pd.offsets.QuarterBegin(startingMonth=1)),
+                ('ytd', ref_date.replace(month=1, day=1)),
+            ]:
+                mask = (day_col >= pd.Timestamp(start)) & (day_col <= ref_date)
+                subset = inv_with_ros[mask]
+                if len(subset) > 0:
+                    grp = subset.groupby('day')['is_stockout'].sum().reset_index()
+                    grp.columns = ['date', 'stockout_count']
+                    grp['date'] = grp['date'].dt.strftime('%Y-%m-%d')
+                    period_trends[label] = grp.sort_values('date').to_dict('records')
+                else:
+                    period_trends[label] = []
+        except Exception:
+            pass
+
+        # ================================================
+        # 14. Previous period comparison (SO-20)
+        # ================================================
+        prev_period_trend = []
+        try:
+            period_days = (sales_df['day'].max() - sales_df['day'].min()).days + 1
+            prev_start = sales_df['day'].min() - pd.Timedelta(days=period_days)
+            prev_end = sales_df['day'].min() - pd.Timedelta(days=1)
+            prev_inv = inventory_df[(inventory_df['day'] >= prev_start) & (inventory_df['day'] <= prev_end)]
+            if len(prev_inv) > 0:
+                prev_merged = prev_inv.merge(
+                    ros_df[['store_code', 'sku', 'ros']].drop_duplicates(),
+                    left_on=['store_code', 'ean'], right_on=['store_code', 'sku'], how='left'
+                )
+                prev_merged['ros'] = prev_merged['ros'].fillna(0)
+                prev_merged['is_stockout'] = (prev_merged['quantity'] == 0) & (prev_merged['ros'] > 0)
+                pt = prev_merged.groupby('day')['is_stockout'].sum().reset_index()
+                pt.columns = ['date', 'stockout_count']
+                pt['date'] = pt['date'].dt.strftime('%Y-%m-%d')
+                prev_period_trend = pt.sort_values('date').to_dict('records')
+        except Exception:
+            pass
+
+        # ================================================
+        # 15. 7-day moving average (SO-22)
+        # ================================================
+        moving_avg = []
+        try:
+            dt = daily_trend.copy()
+            if isinstance(dt, pd.DataFrame) and len(dt) > 0:
+                dt_sorted = dt.sort_values('date')
+                dt_sorted['ma7'] = dt_sorted['stockout_count'].rolling(7, min_periods=1).mean().round(1)
+                moving_avg = dt_sorted[['date', 'ma7']].to_dict('records')
+        except Exception:
+            pass
+
+        # ================================================
+        # 16. Projected trend (SO-21)
+        # ================================================
+        projected_trend = []
+        try:
+            if len(daily_trend) >= 7:
+                recent_avg = daily_trend.tail(7)['stockout_count'].mean()
+                last_date = pd.to_datetime(daily_trend['date'].iloc[-1])
+                for i in range(1, 8):
+                    future = last_date + pd.Timedelta(days=i)
+                    projected_trend.append({
+                        'date': future.strftime('%Y-%m-%d'),
+                        'projected_count': round(recent_avg * (1 - 0.05 * i), 1),
+                    })
+        except Exception:
+            pass
+
+        # ================================================
+        # 17. Store heatmap (SO-23)
+        # ================================================
+        store_heatmap = []
+        try:
+            store_so = merged.groupby('store_code').agg(
+                total=('sku', 'count'),
+                stockouts=('is_stockout', 'sum'),
+                total_loss=('asp', lambda x: 0),
+            ).reset_index()
+            so_loss = stockouts.groupby('store_code')['daily_sales_loss'].sum().reset_index()
+            so_loss.columns = ['store_code', 'total_loss']
+            store_so = store_so.drop(columns=['total_loss']).merge(so_loss, on='store_code', how='left')
+            store_so['total_loss'] = store_so['total_loss'].fillna(0)
+            store_so['stockout_pct'] = (store_so['stockouts'] / store_so['total'].clip(lower=1) * 100).round(1)
+            store_so['severity'] = pd.cut(
+                store_so['stockout_pct'],
+                bins=[-1, 5, 15, 30, float('inf')],
+                labels=['low', 'medium', 'high', 'critical']
+            ).astype(str)
+            store_heatmap = store_so.sort_values('stockout_pct', ascending=False).fillna(0).to_dict('records')
+        except Exception:
+            pass
+
+        # ================================================
+        # 18. Category heatmap (SO-24)
+        # ================================================
+        category_heatmap = []
+        try:
+            if style_df is not None and 'category' in style_df.columns and 'style' in sku_df.columns:
+                sku_cat = sku_df.merge(
+                    style_df[['style_code', 'category']].rename(columns={'style_code': 'style'}),
+                    on='style', how='left'
+                )
+                merged_cat = merged.merge(sku_cat[['ean', 'category']], left_on='sku', right_on='ean', how='left', suffixes=('', '_cat'))
+                cat_so = merged_cat.groupby('category').agg(
+                    total=('sku', 'count'),
+                    stockouts=('is_stockout', 'sum'),
+                ).reset_index()
+                cat_loss = merged_cat[merged_cat['is_stockout']].groupby('category').apply(
+                    lambda g: ((g['ros'] - g['soh']) * g['asp']).clip(lower=0).sum()
+                ).reset_index()
+                cat_loss.columns = ['category', 'total_loss']
+                cat_so = cat_so.merge(cat_loss, on='category', how='left')
+                cat_so['total_loss'] = cat_so['total_loss'].fillna(0).round(2)
+                cat_so['stockout_pct'] = (cat_so['stockouts'] / cat_so['total'].clip(lower=1) * 100).round(1)
+                cat_so['severity'] = pd.cut(
+                    cat_so['stockout_pct'],
+                    bins=[-1, 5, 15, 30, float('inf')],
+                    labels=['low', 'medium', 'high', 'critical']
+                ).astype(str)
+                category_heatmap = cat_so.sort_values('stockout_pct', ascending=False).fillna(0).to_dict('records')
+        except Exception:
+            pass
+
+        # ================================================
+        # 19. Reorder recommendations (SO-33)
+        # ================================================
+        reorder_recs = []
+        try:
+            safety_days = (_cfg or {}).get("safety_days", 7) if '_cfg' not in dir() else 7
+            cfg_doc = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
+            safety_days = (cfg_doc or {}).get("safety_days", 7)
+            lead_time = 14  # default lead time
+            candidates = merged[(merged['ros'] > 0)].copy()
+            candidates['days_to_stockout'] = np.where(
+                candidates['ros'] > 0,
+                (candidates['soh'] / candidates['ros']).round(1),
+                999
+            )
+            candidates['reorder_qty'] = np.where(
+                candidates['days_to_stockout'] < (lead_time + safety_days),
+                ((candidates['ros'] * (lead_time + safety_days)) - candidates['soh']).clip(lower=0).round(0),
+                0
+            )
+            needs_reorder = candidates[candidates['reorder_qty'] > 0].sort_values('days_to_stockout')
+            if 'style' in sku_df.columns:
+                sku_style_map3 = sku_df.groupby('ean')['style'].first()
+                needs_reorder['style'] = needs_reorder['sku'].map(sku_style_map3).fillna('Unknown')
+            else:
+                needs_reorder['style'] = 'Unknown'
+            reorder_recs = needs_reorder[['sku', 'store_code', 'style', 'ros', 'soh', 'asp',
+                'days_to_stockout', 'reorder_qty']].head(20).fillna(0).to_dict('records')
+        except Exception:
+            pass
+
+        # ================================================
+        # 20. Alternative SKU suggestions (SO-32)
+        # ================================================
+        alt_suggestions = []
+        try:
+            if 'style' in sku_df.columns and 'size' in sku_df.columns:
+                so_skus = stockouts[['sku', 'store_code', 'style']].head(10)
+                for _, row in so_skus.iterrows():
+                    style = row.get('style', '')
+                    if style and style != 'Unknown':
+                        same_style_skus = sku_df[sku_df['style'] == style]['ean'].tolist()
+                        store_inv = merged[(merged['store_code'] == row['store_code']) &
+                                          (merged['sku'].isin(same_style_skus)) &
+                                          (merged['soh'] > 0)]
+                        alts = store_inv[['sku', 'soh', 'ros']].head(3).to_dict('records')
+                        if alts:
+                            alt_suggestions.append({
+                                'stockout_sku': row['sku'],
+                                'store_code': row['store_code'],
+                                'alternatives': alts,
+                            })
+        except Exception:
+            pass
+
         return {
             "summary": {
                 "total_stockouts": total_stockouts,
@@ -1223,7 +1438,17 @@ async def get_stock_out_analysis(
             "top_stores": top_stores.round(2).fillna(0).to_dict('records'),
             "category_impact": category_impact,
             "daily_trend": daily_trend.to_dict('records'),
+            "weekly_trend": weekly_trend,
+            "monthly_trend": monthly_trend,
+            "period_trends": period_trends,
+            "prev_period_trend": prev_period_trend,
+            "moving_avg": moving_avg,
+            "projected_trend": projected_trend,
             "high_risk_skus": high_risk_list,
+            "store_heatmap": store_heatmap,
+            "category_heatmap": category_heatmap,
+            "reorder_recommendations": reorder_recs,
+            "alternative_suggestions": alt_suggestions,
         }
     except Exception as e:
         logger.error(f"Stock-out analysis error: {str(e)}")
