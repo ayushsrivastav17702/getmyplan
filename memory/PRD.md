@@ -33,29 +33,31 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Testing: **100% (Iteration 21)**
 
 ### Phase 20 — Core Logic Module (Feb 2026)
-- CORE-01–35: ROS Calculation, Healthy Size Set, TrueROS, Attribute Grouping, Store-Style Ranking
+- CORE-01–35: ROS, Healthy Size Set, TrueROS, Attribute Grouping, Store-Style Ranking
 - New modular route file: `/backend/routes/core_logic.py`
 - Testing: **100% (Iteration 22)**
 
 ### Phase 21 — Gap Analysis Module (Feb 2026)
-- **GAP-01–10**: ROS Gap Analysis — gap = healthy_ros - raw_ros, brand/store filters, sort by gap_size, weekly trend
-- **GAP-11–19**: Size Set Gap — healthy size sets (PSA threshold), sales loss estimation, store comparison, category/gender breakdown, weekly trend
-- **GAP-20–28**: NOOS Analysis — candidate identification (avail>=80% + sales>=80%), new-style exclusion (<30 days), seasonal exclusion, low-stock alerts, recovery plans, bulk NOOS export
-- **GAP-29–35**: Dashboard — 3 tabs (ROS Gap, Size Set, NOOS), KPI summary cards on all tabs, drill-down panels, chart interactivity, combined export of all gaps
+- GAP-01–35: ROS Gap, Size Set Gap, NOOS Analysis, Dashboard
 - Testing: **100% (Iteration 23, 35/35 PASS)**
 
 ### Phase 22 — Stock-Out Analysis Module (Feb 2026)
-- **SO-01–35**: Period trends (WTD/MTD/QTD/YTD), heatmaps, moving averages, predictive analysis, reorder recommendations
+- SO-01–35: Period trends, heatmaps, moving averages, predictive analysis, reorder recommendations
 - Testing: **100% (Iteration 24, 35/35 PASS)**
 
 ### Phase 23 — Replenishment Planner Module (Apr 2026)
-- **REP-01–08**: Reorder Point Calculation — RP = (Avg Daily Sales × Lead Time) + Safety Stock, zero lead time, zero safety stock, high variability (z-score 1.65), seasonal dynamic safety (1.5x), new style category average fallback, manual override, trigger replenishment flag
-- **REP-09–15**: Order Quantity — Order Qty = (Cover Days × Avg Sales) - Current Stock, MOQ rounding, pack size constraints, warehouse stock availability check, ROS-based multi-store allocation, A-class store priority
-- **REP-16–21**: IST Inter-Store Transfer — overstocked (DOH > 30d), understocked (DOH < 7d), transfer qty = min(surplus, need), same-region prioritization, multiple source stores, approval workflow
-- **REP-22–27**: Replenishment Run — algorithm generates orders, pre/post comparison, stock-out reduction %, fill rate improvement, DOH improvement, warehouse stock exhaustion alerts
-- **REP-28–32**: Orders Dashboard — pending orders list, approve/reject, bulk approve, CSV export, auto-replenishment schedule (daily/weekly)
+- REP-01–32: Reorder Point Calculation, Order Quantity, IST Inter-Store Transfer, Replenishment Run, Orders Dashboard
 - New modular route file: `/backend/routes/replenishment.py`
 - Testing: **100% (Iteration 25, 32/32 PASS)**
+
+### Phase 24 — DOH Analysis Module (Apr 2026)
+- **DOH-01–08**: DOH Calculation — store-SKU DOH = Inventory/ROS, zero inv (STOCKED_OUT), zero ROS (NO_SALES/9999), weighted avg DOH, channel-level DOH aggregation, category-level DOH, WH stock toggle (include_wh), store-only mode
+- **DOH-09–15**: Classification — Optimal (±20% ideal), Overstocked (>120%), Understocked (<80%), Stocked Out, ideal_doh=9d default, category-specific ideal DOH (CRUD), topseller additional cover (multiplier)
+- **DOH-16–21**: Heatmap — store grid color-coded by status, category grid, click drill-down with status % and detail, region filter, store class filter, heatmap export
+- **DOH-22–27**: DOH vs Stock-Out Correlation — negative correlation (high DOH -> low stock-outs), trendline visualization, Pearson correlation coefficient, optimal DOH range identification via bucket analysis, store-level correlation
+- **DOH-28–35**: Recommendations — low DOH (increase replenishment), high DOH (reduce orders), stocked out (expedite), bulk low DOH, category-wide issues, store-wide issues (>30% SO or >50% understocked), seasonal adjustment, DOH target setting suggestion
+- New modular route file: `/backend/routes/doh_analysis.py`
+- Testing: **100% (Iteration 26, 35/35 PASS)**
 
 ## Test Coverage Summary
 
@@ -68,7 +70,8 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | Gap Analysis | 35 | 35 | 0 | 0 | **100%** |
 | Stock-Out Analysis | 35 | 35 | 0 | 0 | **100%** |
 | Replenishment Planner | 32 | 32 | 0 | 0 | **100%** |
-| **Total** | **239** | **228** | **5** | **6** | **95%** |
+| DOH Analysis | 35 | 35 | 0 | 0 | **100%** |
+| **Total** | **274** | **263** | **5** | **6** | **96%** |
 
 ## Remaining Known Gaps
 - DASH-15: Revenue trend line chart (P1)
@@ -90,6 +93,6 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### P2
 - PDF export (DASH-35)
-- Modularize server.py (~4200 lines) — started with /backend/routes/core_logic.py and /backend/routes/replenishment.py
+- Modularize server.py (~4200 lines) — partially done with core_logic.py, replenishment.py, doh_analysis.py
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
