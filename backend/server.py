@@ -714,6 +714,224 @@ async def get_ros_analysis(
         return {"error": str(e), "data": []}
 
 
+@api_router.get("/analytics/ros-gap")
+async def get_ros_gap_analysis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None
+):
+    """PRD-based ROS Gap Analysis with Healthy Size Set, Sales Loss, and NOOS."""
+    sales_df = await get_cached_data('daily_sales')
+    inventory_df = await get_cached_data('store_inventory')
+    sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
+
+    if sales_df is None or inventory_df is None or sku_df is None:
+        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+
+    try:
+        # --- Apply filters ---
+        sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
+        inventory_df = apply_date_filter(inventory_df, start_date, end_date, 'day')
+
+        if channels:
+            channel_list = channels.split(',')
+            sales_df = apply_channel_filter(sales_df, channel_list)
+            inventory_df = apply_channel_filter(inventory_df, channel_list)
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_df = apply_region_filter(sales_df, region_list, store_df)
+            inventory_df = apply_region_filter(inventory_df, region_list, store_df)
+
+        sales_df['day'] = pd.to_datetime(sales_df['day'])
+        inventory_df['day'] = pd.to_datetime(inventory_df['day'])
+
+        # Merge with SKU master
+        sales_sku = sales_df.merge(sku_df[['ean', 'style', 'size']], left_on='sku', right_on='ean', how='left')
+        inv_sku = inventory_df.merge(sku_df[['ean', 'style', 'size']], on='ean', how='left')
+
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            sales_sku = apply_category_filter(sales_sku, category_list, style_df)
+            inv_sku = apply_category_filter(inv_sku, category_list, style_df)
+
+        if len(sales_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": {}}
+
+        # ====================================================
+        # 1. Healthy Size Set classification per store-style-day
+        # ====================================================
+        # Total unique sizes per style (from SKU master)
+        style_total_sizes = sku_df.groupby('style')['size'].nunique().reset_index()
+        style_total_sizes.columns = ['style', 'total_sizes']
+
+        # Sizes with stock > 0 per store-style-day
+        inv_pos = inv_sku[inv_sku['quantity'] > 0]
+        daily_size_avail = inv_pos.groupby(['store_code', 'style', 'day'])['size'].nunique().reset_index()
+        daily_size_avail.columns = ['store_code', 'style', 'day', 'available_sizes']
+        daily_size_avail = daily_size_avail.merge(style_total_sizes, on='style', how='left')
+        daily_size_avail['size_pct'] = (daily_size_avail['available_sizes'] / daily_size_avail['total_sizes'].clip(lower=1) * 100)
+        daily_size_avail['is_healthy'] = daily_size_avail['size_pct'] >= 75
+
+        # ====================================================
+        # 2. True Live Days & Raw ROS per store-style
+        # ====================================================
+        # True live days = days with positive inventory (any size)
+        true_live = inv_sku[inv_sku['quantity'] > 0].groupby(['store_code', 'style'])['day'].nunique().reset_index()
+        true_live.columns = ['store_code', 'style', 'true_live_days']
+
+        # Net sales qty per store-style
+        net_sales = sales_sku.groupby(['store_code', 'style']).agg(
+            net_sales_qty=('quantity', 'sum'),
+            revenue=('revenue', 'sum')
+        ).reset_index()
+
+        # Merge
+        ros_df = net_sales.merge(true_live, on=['store_code', 'style'], how='outer').fillna(0)
+        ros_df['raw_ros'] = np.where(
+            ros_df['true_live_days'] > 0,
+            (ros_df['net_sales_qty'] / ros_df['true_live_days']).round(3),
+            0
+        )
+
+        # ====================================================
+        # 3. Healthy / Broken day counts per store-style
+        # ====================================================
+        healthy_days = daily_size_avail[daily_size_avail['is_healthy']].groupby(['store_code', 'style'])['day'].nunique().reset_index()
+        healthy_days.columns = ['store_code', 'style', 'healthy_days']
+        broken_days = daily_size_avail[~daily_size_avail['is_healthy']].groupby(['store_code', 'style'])['day'].nunique().reset_index()
+        broken_days.columns = ['store_code', 'style', 'broken_days']
+
+        ros_df = ros_df.merge(healthy_days, on=['store_code', 'style'], how='left')
+        ros_df = ros_df.merge(broken_days, on=['store_code', 'style'], how='left')
+        ros_df['healthy_days'] = ros_df['healthy_days'].fillna(0).astype(int)
+        ros_df['broken_days'] = ros_df['broken_days'].fillna(0).astype(int)
+
+        # Healthy ROS = sales on healthy days / healthy days
+        # We need sales split by healthy vs broken days
+        sales_daily = sales_sku.groupby(['store_code', 'style', 'day'])['quantity'].sum().reset_index()
+        sales_daily.columns = ['store_code', 'style', 'day', 'day_qty']
+
+        # Tag each day as healthy or broken
+        day_health = daily_size_avail[['store_code', 'style', 'day', 'is_healthy']].drop_duplicates()
+        sales_tagged = sales_daily.merge(day_health, on=['store_code', 'style', 'day'], how='left')
+        sales_tagged['is_healthy'] = sales_tagged['is_healthy'].fillna(False)
+
+        healthy_sales = sales_tagged[sales_tagged['is_healthy']].groupby(['store_code', 'style'])['day_qty'].sum().reset_index()
+        healthy_sales.columns = ['store_code', 'style', 'healthy_sales']
+        broken_sales = sales_tagged[~sales_tagged['is_healthy']].groupby(['store_code', 'style'])['day_qty'].sum().reset_index()
+        broken_sales.columns = ['store_code', 'style', 'broken_sales']
+
+        ros_df = ros_df.merge(healthy_sales, on=['store_code', 'style'], how='left')
+        ros_df = ros_df.merge(broken_sales, on=['store_code', 'style'], how='left')
+        ros_df['healthy_sales'] = ros_df['healthy_sales'].fillna(0)
+        ros_df['broken_sales'] = ros_df['broken_sales'].fillna(0)
+
+        ros_df['healthy_ros'] = np.where(
+            ros_df['healthy_days'] > 0,
+            (ros_df['healthy_sales'] / ros_df['healthy_days']).round(3),
+            0
+        )
+
+        # ====================================================
+        # 4. Sales Loss = (Healthy ROS × Broken Days) - Actual Broken Sales
+        # ====================================================
+        ros_df['sales_loss'] = (
+            (ros_df['healthy_ros'] * ros_df['broken_days']) - ros_df['broken_sales']
+        ).clip(lower=0).round(1)
+
+        ros_df['ros_gap'] = (ros_df['healthy_ros'] - ros_df['raw_ros']).round(3)
+        ros_df['status'] = np.where(ros_df['healthy_days'] > ros_df['broken_days'], 'Healthy', 'Broken')
+
+        # ====================================================
+        # 5. NOOS: consistent sales >80% days AND consistent availability
+        # ====================================================
+        total_period_days = max(inventory_df['day'].nunique(), 1)
+        sales_day_count = sales_sku.groupby(['store_code', 'style'])['day'].nunique().reset_index()
+        sales_day_count.columns = ['store_code', 'style', 'sales_days']
+
+        inv_day_count = inv_sku[inv_sku['quantity'] > 0].groupby(['store_code', 'style'])['day'].nunique().reset_index()
+        inv_day_count.columns = ['store_code', 'style', 'inv_days']
+
+        noos_df = sales_day_count.merge(inv_day_count, on=['store_code', 'style'], how='outer').fillna(0)
+        noos_df['sales_consistency'] = (noos_df['sales_days'] / total_period_days * 100).round(1)
+        noos_df['inv_consistency'] = (noos_df['inv_days'] / total_period_days * 100).round(1)
+        noos_df['is_noos'] = (noos_df['sales_consistency'] >= 80) & (noos_df['inv_consistency'] >= 80)
+
+        # Aggregate NOOS by style
+        noos_styles = noos_df.groupby('style').agg(
+            store_count=('store_code', 'nunique'),
+            noos_store_count=('is_noos', 'sum'),
+            avg_sales_consistency=('sales_consistency', 'mean'),
+            avg_inv_consistency=('inv_consistency', 'mean')
+        ).reset_index()
+        noos_styles['noos_pct'] = (noos_styles['noos_store_count'] / noos_styles['store_count'].clip(lower=1) * 100).round(1)
+        noos_styles['is_noos'] = noos_styles['noos_pct'] >= 50  # NOOS if majority of stores qualify
+
+        # ====================================================
+        # 6. Aggregated views
+        # ====================================================
+        # Style-wise ROS Gap
+        style_ros = ros_df.groupby('style').agg(
+            healthy_ros=('healthy_ros', 'mean'),
+            raw_ros=('raw_ros', 'mean'),
+            total_sales_loss=('sales_loss', 'sum'),
+            healthy_days=('healthy_days', 'sum'),
+            broken_days=('broken_days', 'sum'),
+            store_count=('store_code', 'nunique'),
+            total_qty=('net_sales_qty', 'sum'),
+            total_revenue=('revenue', 'sum')
+        ).reset_index()
+        style_ros['ros_gap'] = (style_ros['healthy_ros'] - style_ros['raw_ros']).round(3)
+        style_ros['status'] = np.where(style_ros['healthy_days'] > style_ros['broken_days'], 'Healthy', 'Broken')
+        style_ros = style_ros.sort_values('total_sales_loss', ascending=False)
+
+        # Store-wise Size Set Health
+        store_health = ros_df.groupby('store_code').agg(
+            total_healthy=('healthy_days', 'sum'),
+            total_broken=('broken_days', 'sum'),
+            total_sales_loss=('sales_loss', 'sum'),
+            style_count=('style', 'nunique')
+        ).reset_index()
+        store_health['total_days'] = store_health['total_healthy'] + store_health['total_broken']
+        store_health['healthy_pct'] = np.where(
+            store_health['total_days'] > 0,
+            (store_health['total_healthy'] / store_health['total_days'] * 100).round(1),
+            0
+        )
+        store_health['broken_pct'] = (100 - store_health['healthy_pct']).round(1)
+        store_health = store_health.sort_values('total_sales_loss', ascending=False)
+
+        # Summary KPIs
+        avg_ros_gap = float(style_ros['ros_gap'].mean()) if len(style_ros) > 0 else 0
+        total_sales_loss = float(ros_df['sales_loss'].sum())
+        total_days_all = int(ros_df['healthy_days'].sum() + ros_df['broken_days'].sum())
+        healthy_coverage = round((ros_df['healthy_days'].sum() / max(total_days_all, 1)) * 100, 1)
+        noos_count = int(noos_styles['is_noos'].sum())
+
+        return {
+            "summary": {
+                "avg_ros_gap": round(avg_ros_gap, 3),
+                "total_sales_loss": round(total_sales_loss, 0),
+                "healthy_coverage_pct": healthy_coverage,
+                "total_styles": len(style_ros),
+                "healthy_styles": int((style_ros['status'] == 'Healthy').sum()),
+                "broken_styles": int((style_ros['status'] == 'Broken').sum()),
+                "noos_styles": noos_count,
+                "total_noos_candidates": len(noos_styles)
+            },
+            "style_ros_gap": style_ros.round(3).fillna(0).to_dict('records'),
+            "store_health": store_health.round(1).fillna(0).to_dict('records'),
+            "noos_styles": noos_styles.round(1).fillna(0).to_dict('records')
+        }
+    except Exception as e:
+        logger.error(f"ROS Gap analysis error: {str(e)}")
+        return {"error": str(e), "data": {}}
+
+
 @api_router.get("/analytics/size-gap")
 async def get_size_gap_analysis(
     start_date: str = None,
