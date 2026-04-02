@@ -29,15 +29,16 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Testing: 100% (Iteration 20, 30/35 PASS, 3 known SFTP/browser GAPs)
 
 ### Phase 19 — Configuration Module (Feb 2026)
-- **CONF-01–08**: 8 analysis parameters (PSA Benchmark, Cover Days, ROS Period, Ideal DOH, Topseller X Factor, Lead Time, Safety Days, Shelf Life) with full validation + persistence + analytics integration
-- **CONF-09–14**: Module toggles (NOOS, ROS, Size Gap, Lifecycle, Replenishment) that control Gap Analysis tabs + sidebar nav
-- **CONF-15–20**: Store Classification CRUD with priority ordering + filter integration
-- **CONF-21–26**: Category Hierarchy CRUD with parent-child nesting + delete protection
-- **CONF-27–29**: User role assign/change/remove
-- **CONF-30**: Custom role creation with configurable permissions
-- **CONF-31**: Role-based menu visibility verified
-- **CONF-32**: Per-user permission override (add/remove specific permissions)
+- CONF-01–32: Analysis parameters, module toggles, store classes, category hierarchies, custom roles, permission overrides
 - Testing: **100% (Iteration 21, 32/32 PASS)**
+
+### Phase 20 — Core Logic Module (Feb 2026)
+- **CORE-01–08**: ROS Calculation — configurable period, exclude returns, exclude promo spikes, per-store independence, closed day exclusion
+- **CORE-09–14**: Healthy Size Set — per-store-style size availability vs PSA threshold, style-specific total sizes
+- **CORE-15–21**: TrueROS — weighted recent/historical ROS with configurable weights, promo exclusion, weekend/weekday weighting
+- **CORE-22–27**: Attribute Grouping — group by color/size/fit/nested multi-attribute, null→Unknown handling
+- **CORE-28–35**: Store-Style Ranking — sort by revenue/ROS/DOH, tie-breaking, pagination, Top/Bottom N, CSV export, filter-before-rank
+- Testing: **100% (Iteration 22, 35/35 PASS)**
 
 ## Test Coverage Summary
 
@@ -46,7 +47,8 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | Executive Dashboard | 35 | 29 | 1 | 3 | 83% |
 | Data Upload | 35 | 30 | 4 | 3 | 86% |
 | Configuration | 32 | 32 | 0 | 0 | **100%** |
-| **Total** | **102** | **91** | **5** | **6** | **89%** |
+| Core Logic | 35 | 35 | 0 | 0 | **100%** |
+| **Total** | **137** | **126** | **5** | **6** | **92%** |
 
 ## Remaining Known Gaps
 - DASH-15: Revenue trend line chart (P1)
@@ -69,6 +71,6 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### P2
 - PDF export (DASH-35)
-- Modularize server.py (~3700+ lines)
+- Modularize server.py (~3700+ lines) — started with /backend/routes/core_logic.py
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
