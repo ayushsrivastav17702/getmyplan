@@ -75,6 +75,29 @@ class ChatResponse(BaseModel):
     session_id: str
 
 
+# ==================== FILTER PRESET MODELS ====================
+
+class FilterPresetCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    tags: List[str] = []
+    page_type: str  # "gap-analysis", "core-logics", "bi-dashboards"
+    filters: Dict[str, Any]
+    is_favorite: bool = False
+
+class FilterPreset(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str = ""
+    tags: List[str] = []
+    page_type: str
+    filters: Dict[str, Any]
+    is_favorite: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 # ==================== REQUIRED COLUMNS ====================
 
 REQUIRED_COLUMNS = {
@@ -259,6 +282,105 @@ async def get_config():
     if not config:
         return AnalysisConfig().model_dump()
     return config
+
+
+# ==================== FILTER PRESETS ====================
+
+@api_router.post("/presets", response_model=FilterPreset)
+async def create_preset(preset: FilterPresetCreate):
+    """Create a new team filter preset"""
+    preset_obj = FilterPreset(
+        name=preset.name,
+        description=preset.description,
+        tags=preset.tags,
+        page_type=preset.page_type,
+        filters=preset.filters,
+        is_favorite=preset.is_favorite
+    )
+    doc = preset_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    await db.filter_presets.insert_one(doc)
+    return preset_obj
+
+
+@api_router.get("/presets")
+async def get_presets(page_type: str = None):
+    """Get all team filter presets, optionally filtered by page type"""
+    query = {}
+    if page_type:
+        query['page_type'] = page_type
+    
+    presets = await db.filter_presets.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # Convert datetime strings back
+    for preset in presets:
+        if isinstance(preset.get('created_at'), str):
+            preset['created_at'] = datetime.fromisoformat(preset['created_at'])
+        if isinstance(preset.get('updated_at'), str):
+            preset['updated_at'] = datetime.fromisoformat(preset['updated_at'])
+    
+    return presets
+
+
+@api_router.get("/presets/{preset_id}")
+async def get_preset(preset_id: str):
+    """Get a specific preset by ID"""
+    preset = await db.filter_presets.find_one({"id": preset_id}, {"_id": 0})
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    return preset
+
+
+@api_router.put("/presets/{preset_id}")
+async def update_preset(preset_id: str, preset: FilterPresetCreate):
+    """Update an existing preset"""
+    existing = await db.filter_presets.find_one({"id": preset_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    
+    update_data = preset.model_dump()
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.filter_presets.update_one(
+        {"id": preset_id},
+        {"$set": update_data}
+    )
+    return {"message": "Preset updated", "id": preset_id}
+
+
+@api_router.patch("/presets/{preset_id}/favorite")
+async def toggle_preset_favorite(preset_id: str):
+    """Toggle favorite status of a preset"""
+    preset = await db.filter_presets.find_one({"id": preset_id})
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    
+    new_favorite = not preset.get('is_favorite', False)
+    await db.filter_presets.update_one(
+        {"id": preset_id},
+        {"$set": {"is_favorite": new_favorite, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Favorite toggled", "is_favorite": new_favorite}
+
+
+@api_router.delete("/presets/{preset_id}")
+async def delete_preset(preset_id: str):
+    """Delete a preset"""
+    result = await db.filter_presets.delete_one({"id": preset_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    return {"message": "Preset deleted"}
+
+
+@api_router.get("/presets/tags/all")
+async def get_all_tags():
+    """Get all unique tags used in presets"""
+    presets = await db.filter_presets.find({}, {"tags": 1, "_id": 0}).to_list(1000)
+    all_tags = set()
+    for preset in presets:
+        all_tags.update(preset.get('tags', []))
+    return sorted(list(all_tags))
 
 
 # ==================== ANALYTICS ====================

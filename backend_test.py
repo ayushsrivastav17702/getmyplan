@@ -11,6 +11,7 @@ class FashionRetailAPITester:
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
+        self.test_preset_id = None
 
     def run_test(self, name, method, endpoint, expected_status, data=None, files=None):
         """Run a single API test"""
@@ -29,6 +30,10 @@ class FashionRetailAPITester:
                     response = requests.post(url, files=files, timeout=30)
                 else:
                     response = requests.post(url, json=data, headers=headers, timeout=30)
+            elif method == 'PUT':
+                response = requests.put(url, json=data, headers=headers, timeout=30)
+            elif method == 'PATCH':
+                response = requests.patch(url, json=data, headers=headers, timeout=30)
             elif method == 'DELETE':
                 response = requests.delete(url, headers=headers, timeout=30)
 
@@ -183,6 +188,91 @@ class FashionRetailAPITester:
             print(f"❌ File upload test failed: {str(e)}")
             return False
 
+    # ==================== FILTER PRESET TESTS ====================
+    
+    def test_create_team_preset(self):
+        """Test creating a team preset"""
+        preset_data = {
+            "name": "Test Preset",
+            "description": "Test preset for API testing",
+            "tags": ["test", "api"],
+            "page_type": "gap-analysis",
+            "filters": {
+                "startDate": "2024-01-01",
+                "endDate": "2024-12-31",
+                "categories": ["Apparel"],
+                "understockThreshold": -10,
+                "overstockThreshold": 10
+            },
+            "is_favorite": False
+        }
+        success, response_data = self.run_test("Create Team Preset", "POST", "presets", 200, data=preset_data)
+        if success and response_data:
+            self.test_preset_id = response_data.get('id')
+            print(f"   ✅ Created preset with ID: {self.test_preset_id}")
+        return success
+
+    def test_get_presets(self):
+        """Test getting all presets"""
+        return self.run_test("Get All Presets", "GET", "presets", 200)
+
+    def test_get_presets_with_page_type_filter(self):
+        """Test getting presets filtered by page type"""
+        return self.run_test("Get Presets by Page Type", "GET", "presets?page_type=gap-analysis", 200)
+
+    def test_get_preset_by_id(self):
+        """Test getting a specific preset by ID"""
+        if hasattr(self, 'test_preset_id') and self.test_preset_id:
+            return self.run_test("Get Preset by ID", "GET", f"presets/{self.test_preset_id}", 200)
+        else:
+            print("⚠️  No preset ID available, skipping get preset by ID test")
+            return True
+
+    def test_toggle_preset_favorite(self):
+        """Test toggling preset favorite status"""
+        if hasattr(self, 'test_preset_id') and self.test_preset_id:
+            success, response_data = self.run_test("Toggle Preset Favorite", "PATCH", f"presets/{self.test_preset_id}/favorite", 200)
+            if success and response_data:
+                print(f"   ✅ Favorite status: {response_data.get('is_favorite')}")
+            return success
+        else:
+            print("⚠️  No preset ID available, skipping toggle favorite test")
+            return True
+
+    def test_update_preset(self):
+        """Test updating a preset"""
+        if hasattr(self, 'test_preset_id') and self.test_preset_id:
+            update_data = {
+                "name": "Updated Test Preset",
+                "description": "Updated description",
+                "tags": ["test", "api", "updated"],
+                "page_type": "gap-analysis",
+                "filters": {
+                    "startDate": "2024-02-01",
+                    "endDate": "2024-11-30",
+                    "categories": ["Apparel", "Footwear"],
+                    "understockThreshold": -15,
+                    "overstockThreshold": 15
+                },
+                "is_favorite": True
+            }
+            return self.run_test("Update Preset", "PUT", f"presets/{self.test_preset_id}", 200, data=update_data)
+        else:
+            print("⚠️  No preset ID available, skipping update preset test")
+            return True
+
+    def test_get_all_tags(self):
+        """Test getting all unique tags"""
+        return self.run_test("Get All Tags", "GET", "presets/tags/all", 200)
+
+    def test_delete_preset(self):
+        """Test deleting a preset"""
+        if hasattr(self, 'test_preset_id') and self.test_preset_id:
+            return self.run_test("Delete Preset", "DELETE", f"presets/{self.test_preset_id}", 200)
+        else:
+            print("⚠️  No preset ID available, skipping delete preset test")
+            return True
+
     def run_all_tests(self):
         """Run all backend API tests"""
         print("🚀 Starting Fashion Retail Gap Analysis API Tests")
@@ -213,6 +303,19 @@ class FashionRetailAPITester:
         
         # File upload test
         self.test_file_upload()
+
+        # Filter Preset tests
+        print("\n" + "=" * 40)
+        print("🔖 Testing Filter Preset Functionality")
+        print("=" * 40)
+        self.test_create_team_preset()
+        self.test_get_presets()
+        self.test_get_presets_with_page_type_filter()
+        self.test_get_preset_by_id()
+        self.test_toggle_preset_favorite()
+        self.test_update_preset()
+        self.test_get_all_tags()
+        self.test_delete_preset()
 
         # Print results
         print("\n" + "=" * 60)
