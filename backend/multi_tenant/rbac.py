@@ -133,11 +133,29 @@ def require_role(allowed_roles: List[str]):
 
 
 def require_permission(module: str, resource: str, action: str):
-    """FastAPI dependency — verifies the caller's role grants a specific permission."""
+    """FastAPI dependency — verifies the caller's role grants a specific permission.
+    Also checks per-user permission overrides from merch_shared.permission_overrides."""
     needed = f"{module}.{resource}.{action}"
 
     async def _dep(current_user: dict = Depends(get_current_user)):
-        perms = resolve_permissions(current_user["role"])
+        perms = set(resolve_permissions(current_user["role"]))
+        # Check custom role permissions from DB
+        shared = get_shared_db()
+        custom_rp = await shared.role_permissions.find_one({"role_name": current_user["role"]}, {"_id": 0})
+        if custom_rp and custom_rp.get("permissions"):
+            from .rbac import _matches, PERMISSIONS, _perm_key
+            for pat in custom_rp["permissions"]:
+                for p in PERMISSIONS:
+                    if _matches(pat, _perm_key(p)):
+                        perms.add(_perm_key(p))
+        # Check per-user overrides
+        overrides = await shared.permission_overrides.find_one({
+            "email": current_user["email"],
+            "tenant_id": current_user.get("tenant_id", "")
+        }, {"_id": 0})
+        if overrides:
+            perms.update(overrides.get("add_permissions", []))
+            perms -= set(overrides.get("remove_permissions", []))
         if needed not in perms:
             raise HTTPException(403, f"Permission denied: {needed}")
         return current_user

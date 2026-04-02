@@ -770,6 +770,32 @@ const FilterPanel = ({
                   )}
                 </div>
 
+                {/* Store Class (from config) */}
+                {filterOptions.storeClasses?.length > 0 && (
+                  <div>
+                    <label className="filter-label">Store Class</label>
+                    <select
+                      data-testid="filter-store-class"
+                      multiple
+                      value={filters.storeClasses || []}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions, option => option.value);
+                        onFilterChange("storeClasses", selected);
+                      }}
+                      className="filter-select h-auto min-h-[40px] max-h-[120px]"
+                    >
+                      {filterOptions.storeClasses.map((cls) => (
+                        <option key={cls.code} value={cls.code}>{cls.name} ({cls.code})</option>
+                      ))}
+                    </select>
+                    {filters.storeClasses?.length > 0 && (
+                      <span className="text-xs text-blue-600 mt-1 block">
+                        {filters.storeClasses.length} selected
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Gap Analysis specific filters */}
                 {pageType === "gap-analysis" && (
                   <>

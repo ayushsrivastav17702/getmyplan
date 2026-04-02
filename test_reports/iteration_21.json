@@ -1,0 +1,115 @@
+{
+  "summary": "Comprehensive Configuration Module testing completed for all 32 test cases (CONF-01 to CONF-32). Backend: 33/33 tests passed (100%). Frontend: All Configuration page UI elements verified working. Role-based menu visibility confirmed working correctly.",
+
+  "test_case_matrix": {
+    "PARAMETER_CONFIGURATION": {
+      "CONF-01": {"status": "PASS", "notes": "PSA Benchmark updated to 75, verified via GET /api/config"},
+      "CONF-02": {"status": "PASS", "notes": "Cover Days updated to 7, verified persisted"},
+      "CONF-03": {"status": "PASS", "notes": "ROS Period updated to 30, verified persisted"},
+      "CONF-04": {"status": "PASS", "notes": "Ideal DOH updated to 9, verified persisted"},
+      "CONF-05": {"status": "PASS", "notes": "Topseller X Factor updated to 2.0, verified persisted"},
+      "CONF-06": {"status": "PASS", "notes": "PSA Benchmark -10 rejected with 400 error 'must be between 0 and 100'"},
+      "CONF-07": {"status": "PASS", "notes": "PSA Benchmark 150 rejected with 400 error 'must be between 0 and 100'"},
+      "CONF-08": {"status": "PASS", "notes": "Cover Days 7.5 rejected with 422 (Pydantic integer validation). Frontend handles rounding before sending."}
+    },
+    "MODULE_TOGGLES": {
+      "CONF-09": {"status": "PASS", "notes": "NOOS toggle enabled, noos_enabled=true in config"},
+      "CONF-10": {"status": "PASS", "notes": "NOOS toggle disabled, noos_enabled=false. Gap Analysis NOOS tab hidden after page refresh"},
+      "CONF-11": {"status": "PASS", "notes": "Replenishment toggle enabled, replenishment_enabled=true. Replenishment nav visible in sidebar"},
+      "CONF-12": {"status": "PASS", "notes": "Replenishment toggle disabled, replenishment_enabled=false. Replenishment nav hidden in sidebar"},
+      "CONF-13": {"status": "PASS", "notes": "Size Gap toggle enabled, size_gap_enabled=true"},
+      "CONF-14": {"status": "PASS", "notes": "Size Gap toggle disabled, size_gap_enabled=false. Size Gap tab hidden after page refresh"}
+    },
+    "STORE_CLASSIFICATION": {
+      "CONF-15": {"status": "PASS", "notes": "Store class D 'Discount Store' priority 4 created via POST /api/config/store-classes"},
+      "CONF-16": {"status": "PASS", "notes": "Store class A renamed to 'Premium Flagship' via PUT /api/config/store-classes/A"},
+      "CONF-17": {"status": "PASS", "notes": "Store class D deleted successfully (no stores assigned)"},
+      "CONF-18": {"status": "PASS", "notes": "storeClasses array populated in /api/analytics/filter-options when classes exist"},
+      "CONF-19": {"status": "PASS", "notes": "Multiple store classes (A, B, C) available for multi-select filter"},
+      "CONF-20": {"status": "PASS", "notes": "Store classes sorted by priority (1, 2, 3) not alphabetically"}
+    },
+    "CATEGORY_HIERARCHY": {
+      "CONF-21": {"status": "PASS", "notes": "Category ACTIVE/Activewear created under APPAREL parent"},
+      "CONF-22": {"status": "PASS", "notes": "Category name updated to 'Active Sports' via PUT /api/config/categories/ACTIVE"},
+      "CONF-23": {"status": "PASS", "notes": "Unused category deleted successfully. Parent with children blocked with 400 error"},
+      "CONF-24": {"status": "PASS", "notes": "Category filter available in /api/analytics/filter-options"},
+      "CONF-25": {"status": "PASS", "notes": "Nested hierarchy verified: APPAREL (root) → MEN, ACTIVE (children)"},
+      "CONF-26": {"status": "PASS", "notes": "Category filter accepted in analytics endpoints (e.g., /api/analytics/executive-kpis?categories=APPAREL)"}
+    },
+    "USER_ROLE_CONFIGURATION": {
+      "CONF-27": {"status": "PASS", "notes": "Role assigned to user via PUT /api/users/{email}/role"},
+      "CONF-28": {"status": "PASS", "notes": "User role changed from merchandiser to admin and back"},
+      "CONF-29": {"status": "PASS", "notes": "Remove user endpoint works (DELETE /api/users/{email})"},
+      "CONF-30": {"status": "PASS", "notes": "Custom role 'regional_manager' created via POST /api/users/roles/create"},
+      "CONF-31": {"status": "PASS", "notes": "Role-based menu visibility verified: Store Manager (6 items) < Merchandiser (15 items) < Admin (17 items)"},
+      "CONF-32": {"status": "PASS", "notes": "Permission override applied via PUT /api/users/{email}/permissions. data.export.manage added to store@demo.com"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 32,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "GAP": 0,
+    "TOTAL": 32
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/config", "issue": "CONF-08: Decimal values for integer fields (cover_days) rejected with 422 by Pydantic. Frontend must round before sending.", "priority": "LOW"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Module toggle visibility", "issue": "Gap Analysis tabs and sidebar nav require page refresh to reflect module toggle changes. This is expected behavior but could be improved with real-time updates.", "affected_selectors": ["gap-tab-noos", "gap-tab-size-gap", "nav-replenishment"]}
+    ],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_configuration_module.py",
+    "/app/test_reports/pytest/pytest_results_iter21.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "All 32 Configuration module test cases PASS",
+    "Parameter validation working correctly: PSA Benchmark 0-100, Cover Days 1-90, ROS Period 7-365, Ideal DOH 1-90, Topseller X Factor 0.5-10",
+    "Module toggles correctly control Gap Analysis tab visibility and sidebar navigation",
+    "Store class CRUD working with priority-based sorting",
+    "Category hierarchy with parent-child relationships working correctly",
+    "User role management with custom role creation and permission overrides working",
+    "Role-based menu visibility correctly filters nav items based on user permissions"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_configuration_module.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 33/33 tests passed",
+    "frontend": "100% - All Configuration page UI elements verified"
+  },
+
+  "test_credentials": {
+    "admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin"},
+    "merchandiser": {"tenant_id": "demo", "email": "merch@demo.com", "password": "MerchPass123!", "role": "merchandiser"},
+    "store_manager": {"tenant_id": "demo", "email": "store@demo.com", "password": "StorePass123!", "role": "store_manager"}
+  },
+
+  "seed_data_creation": "Store classes A, B, C created. Categories APPAREL, MEN, ACTIVE created. Custom role 'regional_manager' created. Permission override for store@demo.com set.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "All 32 Configuration module test cases verified PASS. Config restored to defaults: pivotal_size_threshold=75, cover_days=7, ros_period=30, ideal_doh=9, topseller_x_factor=2.0, all modules enabled. Store classes: A (Premium Flagship, priority 1), B (Regular Store, priority 2), C (Outlet Store, priority 3). Categories: APPAREL (root), MEN (child), ACTIVE (child). Custom role 'regional_manager' exists. Permission override for store@demo.com includes data.export.manage. Role-based nav visibility: Store Manager sees 6 items, Merchandiser sees 15 items, Admin sees 17 items.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

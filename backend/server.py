@@ -91,14 +91,24 @@ class FileUploadResponse(BaseModel):
     encoding: Optional[str] = None
 
 class AnalysisConfig(BaseModel):
+    # Module toggles
     noos_enabled: bool = True
     ros_enabled: bool = True
     size_gap_enabled: bool = True
     lifecycle_enabled: bool = True
+    replenishment_enabled: bool = True
+    # Date range
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    # Parameters (CONF-01 to CONF-05)
     min_shelf_life_days: int = 30
-    pivotal_size_threshold: int = 75
+    pivotal_size_threshold: int = 75  # PSA Benchmark (0-100%)
+    cover_days: int = 7               # Cover days for replenishment
+    ros_period: int = 30              # ROS calculation period (days)
+    ideal_doh: int = 9                # Ideal Days on Hand
+    topseller_x_factor: float = 2.0   # Topseller revenue multiplier
+    lead_time_days: int = 14          # Lead time for replenishment
+    safety_days: int = 7              # Safety stock days
     selected_seasons: List[str] = []
 
 class ChatMessage(BaseModel):
@@ -528,13 +538,175 @@ async def get_template(file_type: str):
 
 @api_router.post("/config")
 async def save_config(config: AnalysisConfig):
-    """Save analysis configuration"""
+    """Save analysis configuration with validation."""
+    errors = []
+    if not (0 <= config.pivotal_size_threshold <= 100):
+        errors.append("PSA Benchmark (pivotal_size_threshold) must be between 0 and 100")
+    if config.cover_days < 1 or config.cover_days > 90:
+        errors.append("Cover Days must be between 1 and 90")
+    if config.ros_period < 7 or config.ros_period > 365:
+        errors.append("ROS Period must be between 7 and 365")
+    if config.ideal_doh < 1 or config.ideal_doh > 90:
+        errors.append("Ideal DOH must be between 1 and 90")
+    if config.topseller_x_factor < 0.5 or config.topseller_x_factor > 10:
+        errors.append("Topseller X Factor must be between 0.5 and 10")
+    if config.lead_time_days < 1 or config.lead_time_days > 90:
+        errors.append("Lead Time Days must be between 1 and 90")
+    if config.safety_days < 0 or config.safety_days > 30:
+        errors.append("Safety Days must be between 0 and 30")
+    if config.min_shelf_life_days < 1 or config.min_shelf_life_days > 365:
+        errors.append("Min Shelf Life Days must be between 1 and 365")
+    if errors:
+        raise HTTPException(status_code=400, detail={"errors": errors})
+
+    # Force integer on cover_days (CONF-08)
+    config.cover_days = int(config.cover_days)
+
     await get_db().analysis_config.update_one(
         {"_id": "main"},
         {"$set": config.model_dump()},
         upsert=True
     )
     return {"message": "Configuration saved"}
+
+
+# ==================== STORE CLASSIFICATION CRUD ====================
+
+@api_router.get("/config/store-classes")
+async def list_store_classes():
+    """List all store classes ordered by priority."""
+    classes = await get_db().store_classes.find({}, {"_id": 0}).sort("priority", 1).to_list(100)
+    return {"classes": classes}
+
+@api_router.post("/config/store-classes")
+async def create_store_class(body: Dict[str, Any]):
+    """Create a new store class."""
+    code = body.get("code", "").strip().upper()
+    name = body.get("name", "").strip()
+    priority = int(body.get("priority", 99))
+    if not code or not name:
+        raise HTTPException(400, "code and name are required")
+    existing = await get_db().store_classes.find_one({"code": code})
+    if existing:
+        raise HTTPException(400, f"Store class '{code}' already exists")
+    await get_db().store_classes.insert_one({
+        "code": code, "name": name, "priority": priority,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"message": f"Store class '{code}' created"}
+
+@api_router.put("/config/store-classes/{code}")
+async def update_store_class(code: str, body: Dict[str, Any]):
+    """Edit an existing store class."""
+    update_fields = {}
+    if "name" in body:
+        update_fields["name"] = body["name"].strip()
+    if "priority" in body:
+        update_fields["priority"] = int(body["priority"])
+    if not update_fields:
+        raise HTTPException(400, "Nothing to update")
+    result = await get_db().store_classes.update_one({"code": code.upper()}, {"$set": update_fields})
+    if result.matched_count == 0:
+        raise HTTPException(404, f"Store class '{code}' not found")
+    return {"message": f"Store class '{code}' updated"}
+
+@api_router.delete("/config/store-classes/{code}")
+async def delete_store_class(code: str):
+    """Delete a store class if no stores assigned."""
+    # Check if any store uses this class
+    stores_using = await get_db().store_class_assignments.count_documents({"class_code": code.upper()})
+    if stores_using > 0:
+        raise HTTPException(400, f"Cannot delete: {stores_using} stores assigned to class '{code}'")
+    result = await get_db().store_classes.delete_one({"code": code.upper()})
+    if result.deleted_count == 0:
+        raise HTTPException(404, f"Store class '{code}' not found")
+    return {"message": f"Store class '{code}' deleted"}
+
+@api_router.post("/config/store-classes/{code}/assign")
+async def assign_stores_to_class(code: str, body: Dict[str, Any]):
+    """Assign store codes to a class."""
+    store_codes = body.get("store_codes", [])
+    if not store_codes:
+        raise HTTPException(400, "store_codes list required")
+    cls = await get_db().store_classes.find_one({"code": code.upper()})
+    if not cls:
+        raise HTTPException(404, f"Store class '{code}' not found")
+    for sc in store_codes:
+        await get_db().store_class_assignments.update_one(
+            {"store_code": sc},
+            {"$set": {"store_code": sc, "class_code": code.upper(), "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+    return {"message": f"{len(store_codes)} stores assigned to class '{code}'"}
+
+@api_router.get("/config/store-classes/assignments")
+async def list_store_class_assignments():
+    """List all store-to-class assignments."""
+    assignments = await get_db().store_class_assignments.find({}, {"_id": 0}).to_list(5000)
+    return {"assignments": assignments}
+
+
+# ==================== CATEGORY HIERARCHY CRUD ====================
+
+@api_router.get("/config/categories")
+async def list_categories():
+    """List all categories with hierarchy."""
+    cats = await get_db().categories.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    return {"categories": cats}
+
+@api_router.post("/config/categories")
+async def create_category(body: Dict[str, Any]):
+    """Create a new category."""
+    code = body.get("code", "").strip().upper()
+    name = body.get("name", "").strip()
+    parent = body.get("parent", None)
+    if not code or not name:
+        raise HTTPException(400, "code and name are required")
+    existing = await get_db().categories.find_one({"code": code})
+    if existing:
+        raise HTTPException(400, f"Category '{code}' already exists")
+    if parent:
+        parent_doc = await get_db().categories.find_one({"code": parent.strip().upper()})
+        if not parent_doc:
+            raise HTTPException(400, f"Parent category '{parent}' not found")
+    await get_db().categories.insert_one({
+        "code": code, "name": name, "parent": parent.strip().upper() if parent else None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"message": f"Category '{name}' created"}
+
+@api_router.put("/config/categories/{code}")
+async def update_category(code: str, body: Dict[str, Any]):
+    """Edit a category."""
+    update_fields = {}
+    if "name" in body:
+        update_fields["name"] = body["name"].strip()
+    if "parent" in body:
+        update_fields["parent"] = body["parent"].strip().upper() if body["parent"] else None
+    if not update_fields:
+        raise HTTPException(400, "Nothing to update")
+    result = await get_db().categories.update_one({"code": code.upper()}, {"$set": update_fields})
+    if result.matched_count == 0:
+        raise HTTPException(404, f"Category '{code}' not found")
+    return {"message": f"Category '{code}' updated"}
+
+@api_router.delete("/config/categories/{code}")
+async def delete_category(code: str):
+    """Delete a category if no styles assigned and no children."""
+    # Check children
+    children = await get_db().categories.count_documents({"parent": code.upper()})
+    if children > 0:
+        raise HTTPException(400, f"Cannot delete: category has {children} child categories")
+    # Check if any style uses this category (from style_master uploaded data)
+    style_file = await get_db().uploaded_files.find_one({"file_type": "style_master"})
+    if style_file and "data" in style_file:
+        used = sum(1 for s in style_file["data"] if s.get("category", "").upper() == code.upper())
+        if used > 0:
+            raise HTTPException(400, f"Cannot delete: {used} styles assigned to category '{code}'")
+    result = await get_db().categories.delete_one({"code": code.upper()})
+    if result.deleted_count == 0:
+        raise HTTPException(404, f"Category '{code}' not found")
+    return {"message": f"Category '{code}' deleted"}
 
 
 @api_router.get("/config")
@@ -687,6 +859,7 @@ async def get_filter_options():
         "categories": [],
         "channels": [],
         "regions": [],
+        "storeClasses": [],
         "dateRange": {"min": None, "max": None}
     }
     
@@ -703,6 +876,10 @@ async def get_filter_options():
         if 'region' in store_df.columns:
             options['regions'] = sorted(store_df['region'].dropna().unique().tolist())
     
+    # Get store classes
+    store_classes = await get_db().store_classes.find({}, {"_id": 0}).sort("priority", 1).to_list(100)
+    options['storeClasses'] = [{"code": c["code"], "name": c["name"]} for c in store_classes]
+
     # Get channels from daily sales as fallback
     sales_df = await get_cached_data('daily_sales')
     if sales_df is not None:
@@ -1601,7 +1778,7 @@ async def get_doh_analysis(
     categories: str = None,
     channels: str = None,
     regions: str = None,
-    ideal_doh: int = 9
+    ideal_doh: int = None
 ):
     """
     DOH (Days on Hand) Analysis using PRD formulas.
@@ -1609,6 +1786,10 @@ async def get_doh_analysis(
     Overall Channel DOH = Sum(DOH x Inventory) / Sum(Inventory)
     Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
     """
+    # Read ideal_doh from config if not passed as query param
+    if ideal_doh is None:
+        cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
+        ideal_doh = (cfg or {}).get("ideal_doh", 9)
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
@@ -1884,8 +2065,8 @@ async def get_replenishment_plan(
     categories: str = None,
     channels: str = None,
     regions: str = None,
-    lead_time_days: int = 14,
-    safety_days: int = 7,
+    lead_time_days: int = None,
+    safety_days: int = None,
     min_ros: float = 0.1
 ):
     """
@@ -1895,6 +2076,13 @@ async def get_replenishment_plan(
     Projected Stock-Out Date = Current SOH / ROS
     PO Value = Reorder Qty x ASP
     """
+    # Read from config if not passed as query params
+    cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
+    cfg = cfg or {}
+    if lead_time_days is None:
+        lead_time_days = cfg.get("lead_time_days", 14)
+    if safety_days is None:
+        safety_days = cfg.get("safety_days", cfg.get("cover_days", 7))
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
@@ -2233,7 +2421,10 @@ async def get_ros_gap_analysis(
         daily_size_avail.columns = ['store_code', 'style', 'day', 'available_sizes']
         daily_size_avail = daily_size_avail.merge(style_total_sizes, on='style', how='left')
         daily_size_avail['size_pct'] = (daily_size_avail['available_sizes'] / daily_size_avail['total_sizes'].clip(lower=1) * 100)
-        daily_size_avail['is_healthy'] = daily_size_avail['size_pct'] >= 75
+        # Read PSA Benchmark from config
+        _cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
+        _psa_threshold = (_cfg or {}).get("pivotal_size_threshold", 75)
+        daily_size_avail['is_healthy'] = daily_size_avail['size_pct'] >= _psa_threshold
 
         # ====================================================
         # 2. True Live Days & Raw ROS per store-style

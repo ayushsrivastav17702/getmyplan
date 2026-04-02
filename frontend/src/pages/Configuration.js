@@ -1,271 +1,328 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API } from "../App";
-import { Save, RotateCcw } from "lucide-react";
+import {
+  Save, RefreshCw, Plus, Pencil, Trash2, ChevronDown, ChevronRight,
+  AlertCircle, CheckCircle, Store, Tag, Sliders, ToggleLeft
+} from "lucide-react";
 
 const Configuration = () => {
-  const [config, setConfig] = useState({
-    noos_enabled: true,
-    ros_enabled: true,
-    size_gap_enabled: true,
-    lifecycle_enabled: true,
-    start_date: "",
-    end_date: "",
-    min_shelf_life_days: 30,
-    pivotal_size_threshold: 75,
-    selected_seasons: [],
-  });
+  const [activeTab, setActiveTab] = useState("params");
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [storeClasses, setStoreClasses] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await axios.get(`${API}/config`);
-        setConfig(prev => ({ ...prev, ...response.data }));
-      } catch (error) {
-        console.error("Error fetching config:", error);
-      }
-    };
-    fetchConfig();
+    setLoading(true);
+    Promise.all([
+      axios.get(`${API}/config`),
+      axios.get(`${API}/config/store-classes`).catch(() => ({ data: { classes: [] } })),
+      axios.get(`${API}/config/categories`).catch(() => ({ data: { categories: [] } })),
+    ]).then(([cfgR, scR, catR]) => {
+      setConfig(cfgR.data);
+      setStoreClasses(scR.data.classes || []);
+      setCategories(catR.data.categories || []);
+    }).catch(() => setMsg({ type: "error", text: "Failed to load config" }))
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = async () => {
+  const flash = (text, type) => {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  const saveConfig = async () => {
     setSaving(true);
     try {
       await axios.post(`${API}/config`, config);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (error) {
-      console.error("Error saving config:", error);
-    } finally {
-      setSaving(false);
-    }
+      flash("Configuration saved", "success");
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      flash(d?.errors ? d.errors.join("; ") : (d || "Save failed"), "error");
+    } finally { setSaving(false); }
   };
 
-  const handleReset = () => {
-    setConfig({
-      noos_enabled: true,
-      ros_enabled: true,
-      size_gap_enabled: true,
-      lifecycle_enabled: true,
-      start_date: "",
-      end_date: "",
-      min_shelf_life_days: 30,
-      pivotal_size_threshold: 75,
-      selected_seasons: [],
-    });
-  };
+  const up = (k, v) => setConfig(p => ({ ...p, [k]: v }));
 
-  const toggleModule = (module) => {
-    setConfig(prev => ({ ...prev, [module]: !prev[module] }));
-  };
+  if (loading || !config) return <div className="flex items-center justify-center py-20"><div className="spinner" /></div>;
 
-  const modules = [
-    { 
-      key: "noos_enabled", 
-      name: "NOOS Analysis", 
-      description: "Never Out Of Stock - Identify core styles that should always be available" 
-    },
-    { 
-      key: "ros_enabled", 
-      name: "ROS Comparison", 
-      description: "Rate of Sale - Compare healthy vs broken size set performance" 
-    },
-    { 
-      key: "size_gap_enabled", 
-      name: "Size Set Gap", 
-      description: "Analyze size distribution and inventory balance" 
-    },
-    { 
-      key: "lifecycle_enabled", 
-      name: "Lifecycle Analysis", 
-      description: "Track product lifecycle and seasonal patterns" 
-    },
+  const tabs = [
+    { id: "params", label: "Parameters", Icon: Sliders },
+    { id: "modules", label: "Modules", Icon: ToggleLeft },
+    { id: "stores", label: "Store Classes", Icon: Store },
+    { id: "categories", label: "Categories", Icon: Tag },
   ];
 
   return (
     <div className="animate-fade-in-up" data-testid="configuration-page">
-      {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-4xl font-light tracking-tight text-neutral-900 mb-2">
-            Configuration
-          </h1>
-          <p className="text-neutral-500">
-            Configure analysis parameters and enable/disable modules
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Configuration</h1>
+          <p className="text-slate-500">Manage analysis parameters, modules, store classes, and categories</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <button
-            data-testid="reset-config-btn"
-            onClick={handleReset}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
-          >
-            <RotateCcw size={16} />
-            Reset
-          </button>
-          <button
-            data-testid="save-config-btn"
-            onClick={handleSave}
-            disabled={saving}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-medium transition-all ${
-              saved 
-                ? 'bg-emerald-500 text-white' 
-                : 'bg-neutral-900 text-white hover:bg-neutral-800'
-            }`}
-          >
-            {saving ? (
-              <div className="spinner w-4 h-4 border-white" />
-            ) : (
-              <Save size={16} />
-            )}
-            {saved ? "Saved!" : "Save Configuration"}
-          </button>
-        </div>
+        <button onClick={saveConfig} disabled={saving} data-testid="save-config-btn" className="btn-primary flex items-center gap-2">
+          {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Changes
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Analysis Modules */}
-        <div className="bg-white border border-neutral-200 p-6">
-          <h2 className="text-lg font-medium text-neutral-900 mb-6">
-            Analysis Modules
-          </h2>
-          <div className="space-y-4">
-            {modules.map((module) => (
-              <div 
-                key={module.key}
-                data-testid={`module-toggle-${module.key}`}
-                className={`p-4 border cursor-pointer transition-all ${
-                  config[module.key] 
-                    ? 'border-neutral-900 bg-neutral-50' 
-                    : 'border-neutral-200 hover:border-neutral-300'
-                }`}
-                onClick={() => toggleModule(module.key)}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-medium text-neutral-900">{module.name}</h3>
-                  <div className={`w-10 h-6 rounded-full p-1 transition-colors ${
-                    config[module.key] ? 'bg-neutral-900' : 'bg-neutral-200'
-                  }`}>
-                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                      config[module.key] ? 'translate-x-4' : 'translate-x-0'
-                    }`} />
-                  </div>
-                </div>
-                <p className="text-sm text-neutral-500">{module.description}</p>
-              </div>
-            ))}
-          </div>
+      {msg && (
+        <div className={`mb-4 px-4 py-3 rounded-lg flex items-center gap-2 text-sm border ${msg.type === "success" ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"}`} data-testid={msg.type === "success" ? "config-success" : "config-error"}>
+          {msg.type === "success" ? <CheckCircle size={16} /> : <AlertCircle size={16} />} {msg.text}
         </div>
+      )}
 
-        {/* Parameters */}
-        <div className="space-y-6">
-          {/* Date Range */}
-          <div className="bg-white border border-neutral-200 p-6">
-            <h2 className="text-lg font-medium text-neutral-900 mb-6">
-              Analysis Period
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-widest text-neutral-400 mb-2">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  data-testid="start-date-input"
-                  value={config.start_date || ""}
-                  onChange={(e) => setConfig(prev => ({ ...prev, start_date: e.target.value }))}
-                  className="input"
-                />
+      <div className="flex gap-1 mb-6 border-b border-slate-200">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)} data-testid={`tab-${t.id}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === t.id ? "border-[#0176D3] text-[#0176D3]" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            <t.Icon size={16} /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "params" && <ParamsTab config={config} up={up} />}
+      {activeTab === "modules" && <ModulesTab config={config} up={up} />}
+      {activeTab === "stores" && <StoreClassesTab classes={storeClasses} setClasses={setStoreClasses} flash={flash} />}
+      {activeTab === "categories" && <CategoriesTab categories={categories} setCategories={setCategories} flash={flash} />}
+    </div>
+  );
+};
+
+const PF = ({ testId, label, desc, value, onChange, min, max, step, unit, integer }) => {
+  const handleChange = (raw) => {
+    const num = parseFloat(raw);
+    if (isNaN(num)) return;
+    onChange(integer ? Math.round(num) : num);
+  };
+  const err = (() => {
+    if (value < min) return `Min ${min}`;
+    if (value > max) return `Max ${max}`;
+    if (integer && String(value).includes(".")) return "Whole number";
+    return null;
+  })();
+
+  return (
+    <div data-testid={testId}>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-sm font-medium text-slate-700">{label}</label>
+        <span className="text-xs text-slate-400">{min}–{max} {unit}</span>
+      </div>
+      <p className="text-xs text-slate-400 mb-2">{desc}</p>
+      <div className="flex items-center gap-3">
+        <input type="range" min={min} max={max} step={step} value={value} onChange={e => handleChange(e.target.value)} className="flex-1 accent-[#0176D3]" />
+        <input type="number" min={min} max={max} step={step} value={value} onChange={e => handleChange(e.target.value)}
+          data-testid={`${testId}-input`} className={`w-20 filter-input text-center font-semibold ${err ? "border-red-300" : ""}`} />
+        <span className="text-xs text-slate-500 w-8">{unit}</span>
+      </div>
+      {err && <p className="text-xs text-red-500 mt-1" data-testid={`${testId}-error`}>{err}</p>}
+    </div>
+  );
+};
+
+const ParamsTab = ({ config, up }) => (
+  <div className="bg-white border border-slate-200 rounded-lg shadow-sm" data-testid="params-panel">
+    <div className="p-4 border-b border-slate-100">
+      <h2 className="font-semibold text-slate-900">Analysis Parameters</h2>
+      <p className="text-xs text-slate-500 mt-1">These values drive all analytics calculations</p>
+    </div>
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <PF testId="param-psa-benchmark" label="PSA Benchmark (%)" desc="Pivotal Size Availability threshold" value={config.pivotal_size_threshold} onChange={v => up("pivotal_size_threshold", v)} min={0} max={100} step={1} unit="%" integer />
+      <PF testId="param-cover-days" label="Cover Days" desc="Days of cover for replenishment safety stock" value={config.cover_days} onChange={v => up("cover_days", v)} min={1} max={90} step={1} unit="days" integer />
+      <PF testId="param-ros-period" label="ROS Period" desc="Days used for Rate of Sale calculation" value={config.ros_period} onChange={v => up("ros_period", v)} min={7} max={365} step={1} unit="days" integer />
+      <PF testId="param-ideal-doh" label="Ideal DOH" desc="Ideal Days on Hand threshold" value={config.ideal_doh} onChange={v => up("ideal_doh", v)} min={1} max={90} step={1} unit="days" integer />
+      <PF testId="param-topseller-x" label="Topseller X Factor" desc="Revenue multiplier to classify topsellers" value={config.topseller_x_factor} onChange={v => up("topseller_x_factor", v)} min={0.5} max={10} step={0.1} unit="x" />
+      <PF testId="param-lead-time" label="Lead Time Days" desc="Supplier lead time for replenishment" value={config.lead_time_days} onChange={v => up("lead_time_days", v)} min={1} max={90} step={1} unit="days" integer />
+      <PF testId="param-safety-days" label="Safety Stock Days" desc="Extra buffer days for safety stock" value={config.safety_days} onChange={v => up("safety_days", v)} min={0} max={30} step={1} unit="days" integer />
+      <PF testId="param-shelf-life" label="Min Shelf Life Days" desc="Minimum shelf life for NOOS classification" value={config.min_shelf_life_days} onChange={v => up("min_shelf_life_days", v)} min={1} max={365} step={1} unit="days" integer />
+    </div>
+  </div>
+);
+
+const ToggleBtn = ({ testId, label, desc, on, toggle }) => (
+  <div className="p-4 flex items-center justify-between" data-testid={testId}>
+    <div><p className="text-sm font-medium text-slate-700">{label}</p><p className="text-xs text-slate-400">{desc}</p></div>
+    <button onClick={() => toggle(!on)} data-testid={`${testId}-btn`}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${on ? "bg-[#0176D3]" : "bg-slate-300"}`}>
+      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-6" : "translate-x-1"}`} />
+    </button>
+  </div>
+);
+
+const ModulesTab = ({ config, up }) => (
+  <div className="bg-white border border-slate-200 rounded-lg shadow-sm" data-testid="modules-panel">
+    <div className="p-4 border-b border-slate-100">
+      <h2 className="font-semibold text-slate-900">Module Toggles</h2>
+      <p className="text-xs text-slate-500 mt-1">Enable or disable analytics modules</p>
+    </div>
+    <div className="divide-y divide-slate-100">
+      <ToggleBtn testId="toggle-noos" label="NOOS Analysis" desc="Never Out of Stock" on={config.noos_enabled} toggle={v => up("noos_enabled", v)} />
+      <ToggleBtn testId="toggle-ros" label="ROS Gap Analysis" desc="Rate of Sale gap detection" on={config.ros_enabled} toggle={v => up("ros_enabled", v)} />
+      <ToggleBtn testId="toggle-size-gap" label="Size Set Gap" desc="Size availability analysis" on={config.size_gap_enabled} toggle={v => up("size_gap_enabled", v)} />
+      <ToggleBtn testId="toggle-lifecycle" label="Lifecycle Analysis" desc="Product lifecycle tracking" on={config.lifecycle_enabled} toggle={v => up("lifecycle_enabled", v)} />
+      <ToggleBtn testId="toggle-replenishment" label="Replenishment Planner" desc="Automated reorder suggestions" on={config.replenishment_enabled} toggle={v => up("replenishment_enabled", v)} />
+    </div>
+  </div>
+);
+
+const StoreClassesTab = ({ classes, setClasses, flash }) => {
+  const [nw, setNw] = useState({ code: "", name: "", priority: "" });
+  const [ed, setEd] = useState(null);
+
+  const add = async () => {
+    if (!nw.code || !nw.name) return flash("Code and name required", "error");
+    try {
+      await axios.post(`${API}/config/store-classes`, nw);
+      setNw({ code: "", name: "", priority: "" });
+      const r = await axios.get(`${API}/config/store-classes`);
+      setClasses(r.data.classes || []);
+      flash("Store class created", "success");
+    } catch (e) { flash(e.response?.data?.detail || "Failed", "error"); }
+  };
+  const upd = async (code) => {
+    try {
+      await axios.put(`${API}/config/store-classes/${code}`, ed);
+      setEd(null);
+      const r = await axios.get(`${API}/config/store-classes`);
+      setClasses(r.data.classes || []);
+      flash("Updated", "success");
+    } catch (e) { flash(e.response?.data?.detail || "Failed", "error"); }
+  };
+  const del = async (code) => {
+    if (!window.confirm(`Delete "${code}"?`)) return;
+    try {
+      await axios.delete(`${API}/config/store-classes/${code}`);
+      const r = await axios.get(`${API}/config/store-classes`);
+      setClasses(r.data.classes || []);
+      flash("Deleted", "success");
+    } catch (e) { flash(e.response?.data?.detail || "Cannot delete", "error"); }
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm" data-testid="store-classes-panel">
+      <div className="p-4 border-b border-slate-100">
+        <h2 className="font-semibold text-slate-900">Store Classification</h2>
+        <p className="text-xs text-slate-500 mt-1">Define store classes and their priority ordering</p>
+      </div>
+      <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-end gap-3">
+        <div className="flex-1"><label className="text-xs text-slate-500 font-medium">Code</label>
+          <input data-testid="new-class-code" value={nw.code} onChange={e => setNw(p => ({ ...p, code: e.target.value }))} className="filter-input mt-1" placeholder="D" /></div>
+        <div className="flex-[2]"><label className="text-xs text-slate-500 font-medium">Name</label>
+          <input data-testid="new-class-name" value={nw.name} onChange={e => setNw(p => ({ ...p, name: e.target.value }))} className="filter-input mt-1" placeholder="Discount Store" /></div>
+        <div className="flex-1"><label className="text-xs text-slate-500 font-medium">Priority</label>
+          <input data-testid="new-class-priority" type="number" value={nw.priority} onChange={e => setNw(p => ({ ...p, priority: e.target.value }))} className="filter-input mt-1" placeholder="4" /></div>
+        <button onClick={add} data-testid="add-class-btn" className="btn-primary flex items-center gap-1 h-[38px]"><Plus size={14} /> Add</button>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {classes.length === 0 && <div className="p-6 text-center text-slate-400 text-sm">No store classes defined yet</div>}
+        {classes.map(c => (
+          <div key={c.code} className="p-4 flex items-center justify-between" data-testid={`class-${c.code}`}>
+            {ed?.code === c.code ? (
+              <div className="flex items-center gap-3 flex-1">
+                <input value={ed.name} onChange={e => setEd(p => ({ ...p, name: e.target.value }))} className="filter-input" />
+                <input type="number" value={ed.priority} onChange={e => setEd(p => ({ ...p, priority: e.target.value }))} className="filter-input w-20" />
+                <button onClick={() => upd(c.code)} className="btn-primary text-xs px-3 py-1">Save</button>
+                <button onClick={() => setEd(null)} className="text-xs text-slate-500">Cancel</button>
               </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-widest text-neutral-400 mb-2">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  data-testid="end-date-input"
-                  value={config.end_date || ""}
-                  onChange={(e) => setConfig(prev => ({ ...prev, end_date: e.target.value }))}
-                  className="input"
-                />
-              </div>
-            </div>
+            ) : (
+              <><div><span className="font-mono text-sm font-bold text-slate-700 mr-3">{c.code}</span><span className="text-sm text-slate-600">{c.name}</span><span className="text-xs text-slate-400 ml-2">Priority: {c.priority}</span></div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setEd({ ...c })} data-testid={`edit-class-${c.code}`} className="p-1.5 hover:bg-slate-100 rounded"><Pencil size={14} className="text-slate-400" /></button>
+                  <button onClick={() => del(c.code)} data-testid={`delete-class-${c.code}`} className="p-1.5 hover:bg-red-50 rounded"><Trash2 size={14} className="text-red-400" /></button>
+                </div></>
+            )}
           </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-          {/* Thresholds */}
-          <div className="bg-white border border-neutral-200 p-6">
-            <h2 className="text-lg font-medium text-neutral-900 mb-6">
-              Analysis Thresholds
-            </h2>
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-neutral-700">
-                    Minimum Shelf Life (Days)
-                  </label>
-                  <span className="text-lg font-light text-neutral-900">
-                    {config.min_shelf_life_days}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  data-testid="shelf-life-slider"
-                  min="7"
-                  max="90"
-                  value={config.min_shelf_life_days}
-                  onChange={(e) => setConfig(prev => ({ ...prev, min_shelf_life_days: parseInt(e.target.value) }))}
-                  className="w-full h-2 bg-neutral-200 appearance-none cursor-pointer accent-neutral-900"
-                />
-                <div className="flex justify-between text-xs text-neutral-400 mt-1">
-                  <span>7 days</span>
-                  <span>90 days</span>
-                </div>
-              </div>
+const CategoriesTab = ({ categories, setCategories, flash }) => {
+  const [nw, setNw] = useState({ code: "", name: "", parent: "" });
+  const [ed, setEd] = useState(null);
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-neutral-700">
-                    Pivotal Size Threshold (%)
-                  </label>
-                  <span className="text-lg font-light text-neutral-900">
-                    {config.pivotal_size_threshold}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  data-testid="pivotal-threshold-slider"
-                  min="50"
-                  max="100"
-                  value={config.pivotal_size_threshold}
-                  onChange={(e) => setConfig(prev => ({ ...prev, pivotal_size_threshold: parseInt(e.target.value) }))}
-                  className="w-full h-2 bg-neutral-200 appearance-none cursor-pointer accent-neutral-900"
-                />
-                <div className="flex justify-between text-xs text-neutral-400 mt-1">
-                  <span>50%</span>
-                  <span>100%</span>
-                </div>
-                <p className="text-xs text-neutral-500 mt-2">
-                  Styles with pivotal size availability above this threshold are classified as "healthy"
-                </p>
-              </div>
-            </div>
+  const add = async () => {
+    if (!nw.code || !nw.name) return flash("Code and name required", "error");
+    try {
+      await axios.post(`${API}/config/categories`, nw);
+      setNw({ code: "", name: "", parent: "" });
+      const r = await axios.get(`${API}/config/categories`);
+      setCategories(r.data.categories || []);
+      flash("Category created", "success");
+    } catch (e) { flash(e.response?.data?.detail || "Failed", "error"); }
+  };
+  const upd = async (code) => {
+    try {
+      await axios.put(`${API}/config/categories/${code}`, ed);
+      setEd(null);
+      const r = await axios.get(`${API}/config/categories`);
+      setCategories(r.data.categories || []);
+      flash("Updated", "success");
+    } catch (e) { flash(e.response?.data?.detail || "Failed", "error"); }
+  };
+  const del = async (code) => {
+    if (!window.confirm(`Delete "${code}"?`)) return;
+    try {
+      await axios.delete(`${API}/config/categories/${code}`);
+      const r = await axios.get(`${API}/config/categories`);
+      setCategories(r.data.categories || []);
+      flash("Deleted", "success");
+    } catch (e) { flash(e.response?.data?.detail || "Cannot delete", "error"); }
+  };
+
+  const roots = categories.filter(c => !c.parent);
+  const childOf = (code) => categories.filter(c => c.parent === code);
+
+  const renderCat = (cat, depth) => (
+    <div key={cat.code}>
+      <div className="p-4 flex items-center justify-between" style={{ paddingLeft: `${16 + depth * 24}px` }} data-testid={`cat-${cat.code}`}>
+        {ed?.code === cat.code ? (
+          <div className="flex items-center gap-3 flex-1">
+            <input value={ed.name} onChange={e => setEd(p => ({ ...p, name: e.target.value }))} className="filter-input" />
+            <button onClick={() => upd(cat.code)} className="btn-primary text-xs px-3 py-1">Save</button>
+            <button onClick={() => setEd(null)} className="text-xs text-slate-500">Cancel</button>
           </div>
-
-          {/* Calculation Reference */}
-          <div className="bg-neutral-50 border border-neutral-200 p-6">
-            <h3 className="text-sm font-medium text-neutral-700 mb-3">
-              Calculation Reference
-            </h3>
-            <div className="text-xs text-neutral-500 space-y-2">
-              <p><strong>ROS Formula:</strong> Total Quantity Sold ÷ Live Days</p>
-              <p><strong>Sales Loss:</strong> (Healthy ROS × Broken Days) - Actual Broken Sales</p>
-              <p><strong>Healthy Set:</strong> Pivotal size availability ≥ {config.pivotal_size_threshold}%</p>
-            </div>
+        ) : (
+          <><div className="flex items-center gap-2">
+            {childOf(cat.code).length > 0 ? <ChevronDown size={14} className="text-slate-400" /> : <span className="w-4" />}
+            <span className="font-mono text-xs font-bold text-slate-500">{cat.code}</span>
+            <span className="text-sm text-slate-700">{cat.name}</span>
+            {cat.parent && <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">child of {cat.parent}</span>}
           </div>
-        </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEd({ ...cat })} data-testid={`edit-cat-${cat.code}`} className="p-1.5 hover:bg-slate-100 rounded"><Pencil size={14} className="text-slate-400" /></button>
+            <button onClick={() => del(cat.code)} data-testid={`delete-cat-${cat.code}`} className="p-1.5 hover:bg-red-50 rounded"><Trash2 size={14} className="text-red-400" /></button>
+          </div></>
+        )}
+      </div>
+      {childOf(cat.code).map(ch => renderCat(ch, depth + 1))}
+    </div>
+  );
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm" data-testid="categories-panel">
+      <div className="p-4 border-b border-slate-100">
+        <h2 className="font-semibold text-slate-900">Category Hierarchy</h2>
+        <p className="text-xs text-slate-500 mt-1">Define product categories with optional nesting</p>
+      </div>
+      <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-end gap-3">
+        <div className="flex-1"><label className="text-xs text-slate-500 font-medium">Code</label>
+          <input data-testid="new-cat-code" value={nw.code} onChange={e => setNw(p => ({ ...p, code: e.target.value }))} className="filter-input mt-1" placeholder="ACTIVE" /></div>
+        <div className="flex-[2]"><label className="text-xs text-slate-500 font-medium">Name</label>
+          <input data-testid="new-cat-name" value={nw.name} onChange={e => setNw(p => ({ ...p, name: e.target.value }))} className="filter-input mt-1" placeholder="Activewear" /></div>
+        <div className="flex-[2]"><label className="text-xs text-slate-500 font-medium">Parent</label>
+          <select data-testid="new-cat-parent" value={nw.parent} onChange={e => setNw(p => ({ ...p, parent: e.target.value }))} className="filter-input mt-1">
+            <option value="">None (top level)</option>
+            {categories.map(c => <option key={c.code} value={c.code}>{c.name} ({c.code})</option>)}
+          </select></div>
+        <button onClick={add} data-testid="add-cat-btn" className="btn-primary flex items-center gap-1 h-[38px]"><Plus size={14} /> Add</button>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {categories.length === 0 && <div className="p-6 text-center text-slate-400 text-sm">No custom categories. Auto-detected from Style Master uploads.</div>}
+        {roots.map(c => renderCat(c, 0))}
       </div>
     </div>
   );

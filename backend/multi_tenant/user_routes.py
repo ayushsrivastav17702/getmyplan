@@ -4,7 +4,7 @@ All endpoints are tenant-scoped via the middleware context.
 """
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 import secrets
 import logging
@@ -259,3 +259,109 @@ async def get_audit_log(limit: int = 50, current_user: dict = Depends(require_ro
         {"_id": 0},
     ).sort("created_at", -1).to_list(limit)
     return {"logs": logs}
+
+
+
+# ──────────── Custom Role Creation (CONF-30) ────────────
+
+class CreateRoleRequest(BaseModel):
+    role_name: str = Field(..., min_length=2, max_length=50)
+    display_name: str = Field(..., min_length=2)
+    description: str = ""
+    permissions: List[str] = []  # e.g. ["dashboard.executive.view", "analytics.stockout.view"]
+
+@user_router.post("/roles/create")
+async def create_custom_role(body: CreateRoleRequest, current_user: dict = Depends(require_role(["super_admin", "admin"]))):
+    """Create a custom role with selected permissions."""
+    shared = get_shared_db()
+    role_name = body.role_name.lower().replace(" ", "_")
+
+    existing = await shared.roles.find_one({"role_name": role_name})
+    if existing:
+        raise HTTPException(400, f"Role '{role_name}' already exists")
+
+    await shared.roles.insert_one({
+        "role_name": role_name,
+        "display_name": body.display_name,
+        "description": body.description,
+        "priority": 50,
+        "is_system": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    # Store custom role permissions
+    await shared.role_permissions.update_one(
+        {"role_name": role_name},
+        {"$set": {"role_name": role_name, "permissions": body.permissions,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+
+    # Register in ROLE_PERMISSIONS runtime cache
+    from .rbac import ROLE_PERMISSIONS
+    ROLE_PERMISSIONS[role_name] = body.permissions
+
+    return {"message": f"Role '{body.display_name}' created", "role_name": role_name, "permissions": body.permissions}
+
+
+# ──────────── Permission Override (CONF-32) ────────────
+
+class PermissionOverrideRequest(BaseModel):
+    add_permissions: List[str] = []     # permissions to grant
+    remove_permissions: List[str] = []  # permissions to revoke
+
+@user_router.put("/{email}/permissions")
+async def override_user_permissions(email: str, body: PermissionOverrideRequest,
+                                    current_user: dict = Depends(require_role(["super_admin", "admin"]))):
+    """Override specific permissions for a user without changing their role."""
+    ctx = tenant_context.get()
+    shared = get_shared_db()
+
+    user_tenant = await shared.user_tenants.find_one({
+        "email": email.lower(), "tenant_id": ctx.tenant_id, "is_active": True
+    })
+    if not user_tenant:
+        raise HTTPException(404, f"User '{email}' not found in tenant")
+
+    await shared.permission_overrides.update_one(
+        {"email": email.lower(), "tenant_id": ctx.tenant_id},
+        {"$set": {
+            "email": email.lower(),
+            "tenant_id": ctx.tenant_id,
+            "add_permissions": body.add_permissions,
+            "remove_permissions": body.remove_permissions,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"message": f"Permission overrides saved for {email}"}
+
+@user_router.get("/{email}/permissions")
+async def get_user_permissions(email: str, current_user: dict = Depends(require_role(["super_admin", "admin"]))):
+    """Get effective permissions for a user (role + overrides)."""
+    ctx = tenant_context.get()
+    shared = get_shared_db()
+
+    user_tenant = await shared.user_tenants.find_one({
+        "email": email.lower(), "tenant_id": ctx.tenant_id, "is_active": True
+    })
+    if not user_tenant:
+        raise HTTPException(404, f"User '{email}' not found in tenant")
+
+    role_perms = set(resolve_permissions(user_tenant["role"]))
+
+    overrides = await shared.permission_overrides.find_one({
+        "email": email.lower(), "tenant_id": ctx.tenant_id
+    }, {"_id": 0})
+
+    if overrides:
+        role_perms.update(overrides.get("add_permissions", []))
+        role_perms -= set(overrides.get("remove_permissions", []))
+
+    return {
+        "email": email,
+        "role": user_tenant["role"],
+        "role_permissions": sorted(resolve_permissions(user_tenant["role"])),
+        "overrides": overrides or {},
+        "effective_permissions": sorted(role_perms),
+    }

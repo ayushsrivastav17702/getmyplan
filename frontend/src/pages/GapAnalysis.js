@@ -13,6 +13,7 @@ const GapAnalysis = () => {
   const [rosGapData, setRosGapData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [moduleConfig, setModuleConfig] = useState({});
   const [filterOptions, setFilterOptions] = useState({});
   const [filters, setFilters] = useState({
     startDate: "",
@@ -88,6 +89,19 @@ const GapAnalysis = () => {
     fetchData();
   }, [activeTab]);
 
+  // Fetch module config for tab visibility
+  useEffect(() => {
+    axios.get(`${API}/config`).then(r => {
+      setModuleConfig(r.data || {});
+      // If current tab is disabled, switch to first available
+      if (r.data?.noos_enabled === false && activeTab === "noos") {
+        setActiveTab(r.data?.size_gap_enabled !== false ? "size-gap" : "ros-gap");
+      } else if (r.data?.size_gap_enabled === false && activeTab === "size-gap") {
+        setActiveTab(r.data?.noos_enabled !== false ? "noos" : "ros-gap");
+      }
+    }).catch(() => {});
+  }, []);
+
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
@@ -108,11 +122,14 @@ const GapAnalysis = () => {
     });
   };
 
-  const tabs = [
-    { key: "noos", label: "NOOS Analysis" },
-    { key: "size-gap", label: "Size Set Gap" },
-    { key: "ros-gap", label: "ROS Gap Analysis" },
+  const allTabs = [
+    { key: "noos", label: "NOOS Analysis", configKey: "noos_enabled" },
+    { key: "size-gap", label: "Size Set Gap", configKey: "size_gap_enabled" },
+    { key: "ros-gap", label: "ROS Gap Analysis", configKey: null },
   ];
+
+  // Filter tabs by module config
+  const tabs = allTabs.filter(t => t.configKey === null || moduleConfig[t.configKey] !== false);
 
   const personas = [
     { key: "cxo", label: "CXO View", icon: Users, description: "High-level metrics and revenue impact" },

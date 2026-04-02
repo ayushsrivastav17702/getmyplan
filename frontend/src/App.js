@@ -72,6 +72,19 @@ const ProtectedRoute = ({ permission, children }) => {
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const location = useLocation();
   const { user, tenantId, tenantInfo, logout, hasPermission } = useAuth();
+  const [moduleConfig, setModuleConfig] = useState(null);
+
+  // Fetch module config to control nav visibility
+  useEffect(() => {
+    axios.get(`${API}/config`).then(r => setModuleConfig(r.data)).catch(() => {});
+  }, []);
+
+  // Map: module toggle → nav paths that should be hidden when toggle is OFF
+  const MODULE_NAV_MAP = {
+    replenishment_enabled: ["/replenishment"],
+    noos_enabled: [],  // NOOS is a tab inside Gap Analysis, not a separate nav item
+    size_gap_enabled: [], // same — tab inside Gap Analysis
+  };
 
   const getUploadCount = () => {
     if (!uploadStatus) return { uploaded: 0, total: 7 };
@@ -82,10 +95,16 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const { uploaded, total } = getUploadCount();
   const allUploaded = uploaded === total;
 
-  // Filter nav items by the user's permission set
-  const visibleNavItems = navItems.filter(item =>
-    item.permission === null || hasPermission(item.permission)
-  );
+  // Filter nav items by permission AND module toggles
+  const visibleNavItems = navItems.filter(item => {
+    if (item.permission !== null && !hasPermission(item.permission)) return false;
+    if (moduleConfig) {
+      for (const [toggleKey, paths] of Object.entries(MODULE_NAV_MAP)) {
+        if (paths.includes(item.path) && moduleConfig[toggleKey] === false) return false;
+      }
+    }
+    return true;
+  });
 
   return (
     <>
