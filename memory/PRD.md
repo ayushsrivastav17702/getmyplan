@@ -63,19 +63,56 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - [x] ProtectedRoute component wraps each Route with permission check
 - [x] Sidebar nav filtering — only shows pages the user has permission for
 - [x] Unauthorized page with role display and "Back to Home" button
-- [x] Verified: admin=16 nav items, merchandiser=15, store_manager=6
-- [x] Verified: direct URL access to denied pages shows Access Denied
-- [x] PermissionGate component available for in-page conditional rendering
 - [x] Testing: 100% (Iteration 16: 11 backend + all frontend)
 
+### Phase 17 — Executive Dashboard P0 Enhancements (Feb 2026)
+- [x] DASH-26: 401 Interceptor — expired tokens auto-redirect to login with "Session expired" message
+- [x] DASH-02/03: Revenue & Margin KPI cards (₹9.3Cr, 33K units, 100% MRP Realisation, Health Score)
+- [x] DASH-33: Week-over-Week comparison card (+8.3% revenue, +5.5% units)
+- [x] DASH-34: Year-over-Year comparison card (with fallback for missing prior-year data)
+- [x] DASH-08: Quick date presets (Last 7d, 30d, 90d, This Month, Last Month, Quarter, YTD)
+- [x] DASH-12: Date validation (end < start blocked with error message)
+- [x] DASH-24: Auto-refresh toggle with 30s countdown
+- [x] New backend endpoint: /api/analytics/executive-kpis
+- [x] Testing: 100% (Iteration 17: 19 backend + all frontend)
+
+### Tenant Admin Panel (Implemented, Testing Pending from Phase 16)
+- [x] Implementation complete: Metrics, API Keys, Audit Logs, Settings tabs
+- [ ] Formal testing via testing_agent_v3_fork
+
+## Executive Dashboard Test Case Audit (35 cases)
+| Status   | Count | Percentage |
+|----------|-------|------------|
+| PASS     | 30    | 86%        |
+| PARTIAL  | 3     | 9%         |
+| GAP      | 2     | 6%         |
+| **Total**| **35**| **100%**   |
+
+### Remaining P1 Gaps
+- DASH-15: Revenue trend line chart (time-series)
+- DASH-25: Offline detection / network error UI
+- DASH-13: Explicit "No matching results" empty state for filters
+
+### Remaining P2 Gaps
+- DASH-35: PDF export of dashboard
+- DASH-06: Negative revenue validation
+- DASH-29: Timezone-aware date display
+
 ## Prioritized Backlog
+### P0
+- [x] Executive Dashboard P0 test cases (DONE)
+- [ ] Tenant Admin Panel formal testing
+
 ### P1
 - Real SFTP integration
+- Revenue trend line chart (DASH-15)
+- Offline detection (DASH-25)
 - PDF report generation
 - Email alerts for SLA/SFTP
 - PermissionGate usage inside pages (hide edit/export buttons for viewers)
 
 ### P2
+- PDF export for dashboard (DASH-35)
 - Scheduled analysis jobs
 - Modularize server.py into route files (~3200+ lines)
 - Tenant billing/usage tracking
