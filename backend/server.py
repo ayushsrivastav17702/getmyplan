@@ -1508,7 +1508,6 @@ async def retry_failed_files():
 
     retried = 0
     for log in failed:
-        # In demo mode, just flip status to success with some probability
         if sftp_service.demo_mode and random.random() < 0.7:
             await db.sftp_logs.insert_one({
                 **log,
@@ -1520,6 +1519,292 @@ async def retry_failed_files():
             retried += 1
 
     return {"message": f"Retried {retried}/{len(failed)} failed files", "retried": retried}
+
+
+# ==================== DATA QUALITY & SLA ====================
+
+DEMO_STORES = [
+    {"code": "ST001", "name": "Store Mumbai Central", "region": "West"},
+    {"code": "ST002", "name": "Store Delhi CP", "region": "North"},
+    {"code": "ST003", "name": "Store Bangalore MG", "region": "South"},
+    {"code": "ST004", "name": "Store Chennai T.Nagar", "region": "South"},
+    {"code": "ST005", "name": "Store Kolkata Park St", "region": "East"},
+    {"code": "ST006", "name": "Store Hyderabad Banj", "region": "South"},
+    {"code": "ST007", "name": "Store Pune FC Road", "region": "West"},
+    {"code": "ST008", "name": "Store Ahmedabad CG", "region": "West"},
+    {"code": "ST009", "name": "Store Jaipur MI Road", "region": "North"},
+    {"code": "ST010", "name": "Store Lucknow Hazrat", "region": "North"},
+]
+
+QUALITY_ISSUES_POOL = [
+    "Missing size breakdown in inventory file",
+    "Incorrect MRP values detected (negative or zero)",
+    "Duplicate transaction IDs found",
+    "Date format mismatch in sales file",
+    "Inventory file missing store_code column",
+    "Sales quantity exceeds stock on hand",
+    "Revenue does not match quantity * MRP",
+    "SKU codes not found in master data",
+    "File uploaded after SLA deadline (10:00 AM)",
+    "Incomplete records — some rows have null values",
+]
+
+
+@api_router.get("/admin/quality/store-uploads/{date}")
+async def get_store_uploads(date: str):
+    """Get per-store upload status with quality scores for a given date."""
+    # Find logs for the requested date
+    logs = await db.sftp_logs.find(
+        {"file_date": date}, {"_id": 0}
+    ).to_list(2000)
+
+    # Also check logs by processed_at date if file_date yields nothing
+    if not logs:
+        logs = await db.sftp_logs.find(
+            {"processed_at": {"$regex": f"^{date}"}}, {"_id": 0}
+        ).to_list(2000)
+
+    # Build per-store lookup
+    store_logs: Dict[str, List] = {}
+    for l in logs:
+        sc = l.get('store_code')
+        if sc:
+            store_logs.setdefault(sc, []).append(l)
+
+    # Get 7-day history for quality scoring
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    history = await db.sftp_logs.find(
+        {"processed_at": {"$gte": week_ago}}, {"_id": 0}
+    ).to_list(5000)
+
+    store_history: Dict[str, List] = {}
+    for l in history:
+        sc = l.get('store_code')
+        if sc:
+            store_history.setdefault(sc, []).append(l)
+
+    result = []
+    for store_info in DEMO_STORES:
+        code = store_info["code"]
+        day_logs = store_logs.get(code, [])
+        hist_logs = store_history.get(code, [])
+
+        sales_log = next((l for l in day_logs if l.get('file_type') == 'daily_sales'), None)
+        inv_log = next((l for l in day_logs if l.get('file_type') == 'store_inventory'), None)
+
+        # Determine status
+        if sales_log and inv_log:
+            if sales_log.get('status') == 'success' and inv_log.get('status') == 'success':
+                status = 'uploaded'
+            else:
+                status = 'partial'
+        elif sales_log or inv_log:
+            status = 'partial'
+        else:
+            status = 'missing'
+
+        upload_time = None
+        if sales_log:
+            ts = sales_log.get('processed_at', '')
+            if 'T' in ts:
+                try:
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    upload_time = dt.strftime('%I:%M %p')
+                    # Check if late (after 10 AM UTC)
+                    if dt.hour >= 10 and status == 'uploaded':
+                        status = 'late'
+                except Exception:
+                    pass
+
+        # Quality scores from 7-day history
+        total_hist = len(hist_logs)
+        success_hist = sum(1 for l in hist_logs if l.get('status') == 'success')
+        error_hist = sum(1 for l in hist_logs if l.get('error_message'))
+        total_rows = sum(l.get('rows_processed', 0) for l in hist_logs)
+        rejected_rows = sum(l.get('rows_rejected', 0) for l in hist_logs)
+
+        completeness = min(100, int((success_hist / max(total_hist, 1)) * 100))
+        accuracy = min(100, int(((total_rows - rejected_rows) / max(total_rows, 1)) * 100))
+        timeliness = min(100, max(0, completeness - random.randint(0, 15)))
+        quality_score = int((completeness * 0.35 + accuracy * 0.35 + timeliness * 0.30))
+
+        # Pick relevant issues
+        issues = []
+        if status == 'missing':
+            issues.append("No upload received today")
+        if status == 'partial':
+            if not inv_log:
+                issues.append("Inventory file not uploaded")
+            if not sales_log:
+                issues.append("Sales file not uploaded")
+        if error_hist > 0:
+            issues.append(random.choice(QUALITY_ISSUES_POOL))
+
+        last_upload = None
+        latest = sales_log or inv_log
+        if latest:
+            last_upload = latest.get('processed_at', '')[:16].replace('T', ' ')
+
+        result.append({
+            "code": code,
+            "name": store_info["name"],
+            "region": store_info["region"],
+            "status": status,
+            "uploadTime": upload_time,
+            "salesStatus": "success" if sales_log and sales_log.get('status') == 'success' else "missing",
+            "inventoryStatus": "success" if inv_log and inv_log.get('status') == 'success' else "missing",
+            "qualityScore": quality_score if status != 'missing' else 0,
+            "completeness": completeness if status != 'missing' else 0,
+            "accuracy": accuracy if status != 'missing' else 0,
+            "timeliness": timeliness if status != 'missing' else 0,
+            "lastUpload": last_upload,
+            "issues": issues,
+        })
+
+    return result
+
+
+@api_router.get("/admin/quality/sla-metrics")
+async def get_sla_metrics():
+    """Get SLA compliance metrics."""
+    now = datetime.now(timezone.utc)
+    today = now.strftime('%Y-%m-%d')
+    week_ago = (now - timedelta(days=7)).isoformat()
+    prev_week = (now - timedelta(days=14)).isoformat()
+
+    # Today's logs
+    today_logs = await db.sftp_logs.find(
+        {"processed_at": {"$regex": f"^{today}"}}, {"_id": 0}
+    ).to_list(500)
+
+    # Also check by file_date
+    if not today_logs:
+        yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+        today_logs = await db.sftp_logs.find(
+            {"file_date": yesterday}, {"_id": 0}
+        ).to_list(500)
+
+    active_stores = len(DEMO_STORES)
+    # Expected: 2 files per store (sales + inventory) + 2 warehouse files
+    expected = active_stores * 2 + 2
+    received = len([l for l in today_logs if l.get('status') == 'success'])
+    on_time = len([l for l in today_logs if l.get('status') == 'success' and
+                   'T' in l.get('processed_at', '') and
+                   int(l.get('processed_at', 'T10').split('T')[1][:2]) < 10])
+
+    compliance = round((received / max(expected, 1)) * 100, 1)
+
+    # By file type
+    by_type = []
+    for ft, label in [('daily_sales', 'Daily Sales'), ('store_inventory', 'Store Inventory'), ('warehouse_inventory', 'WH Inventory')]:
+        ft_logs = [l for l in today_logs if l.get('file_type') == ft]
+        ft_success = len([l for l in ft_logs if l.get('status') == 'success'])
+        ft_expected = active_stores if ft != 'warehouse_inventory' else 2
+        by_type.append({
+            "name": label,
+            "expected": ft_expected,
+            "received": ft_success,
+            "compliance": round((ft_success / max(ft_expected, 1)) * 100, 1),
+            "target": 95 if ft == 'daily_sales' else 90,
+        })
+
+    # Week-over-week trend
+    this_week = await db.sftp_logs.find(
+        {"processed_at": {"$gte": week_ago}}, {"_id": 0}
+    ).to_list(2000)
+    prev_week_logs = await db.sftp_logs.find(
+        {"processed_at": {"$gte": prev_week, "$lt": week_ago}}, {"_id": 0}
+    ).to_list(2000)
+
+    tw_rate = (sum(1 for l in this_week if l.get('status') == 'success') / max(len(this_week), 1)) * 100
+    pw_rate = (sum(1 for l in prev_week_logs if l.get('status') == 'success') / max(len(prev_week_logs), 1)) * 100
+    trend = round(tw_rate - pw_rate, 1)
+
+    return {
+        "complianceRate": compliance,
+        "expectedFiles": expected,
+        "receivedFiles": received,
+        "missingFiles": max(0, expected - received),
+        "onTimeFiles": on_time,
+        "lateFiles": max(0, received - on_time),
+        "activeStores": active_stores,
+        "byFileType": by_type,
+        "trend": trend,
+    }
+
+
+@api_router.get("/admin/quality/scorecard")
+async def get_quality_scorecard():
+    """Get data quality scorecard across all dimensions."""
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    logs = await db.sftp_logs.find(
+        {"processed_at": {"$gte": week_ago}}, {"_id": 0}
+    ).to_list(5000)
+
+    total = len(logs)
+    success = sum(1 for l in logs if l.get('status') == 'success')
+    total_rows = sum(l.get('rows_processed', 0) for l in logs)
+    rejected_rows = sum(l.get('rows_rejected', 0) for l in logs)
+    error_count = sum(1 for l in logs if l.get('error_message'))
+
+    completeness_score = round((success / max(total, 1)) * 100, 1)
+    accuracy_score = round(((total_rows - rejected_rows) / max(total_rows, 1)) * 100, 1)
+
+    # Timeliness — % of files uploaded before 10 AM
+    on_time = sum(1 for l in logs if 'T' in l.get('processed_at', '') and
+                  int(l.get('processed_at', 'T10').split('T')[1][:2]) < 10)
+    timeliness_score = round((on_time / max(total, 1)) * 100, 1)
+
+    # Consistency — how many days had all expected files
+    days = set(l.get('processed_at', '')[:10] for l in logs if l.get('processed_at'))
+    full_days = 0
+    for day in days:
+        day_logs = [l for l in logs if l.get('processed_at', '').startswith(day)]
+        stores_covered = set(l.get('store_code') for l in day_logs if l.get('store_code'))
+        if len(stores_covered) >= 8:
+            full_days += 1
+    consistency_score = round((full_days / max(len(days), 1)) * 100, 1)
+
+    # Validity — inverse of error rate
+    validity_score = round(((total - error_count) / max(total, 1)) * 100, 1)
+
+    overall = round(
+        completeness_score * 0.25 +
+        accuracy_score * 0.25 +
+        timeliness_score * 0.20 +
+        consistency_score * 0.15 +
+        validity_score * 0.15
+    , 1)
+
+    def build_metric(current, target, issues_list):
+        gap = max(0, round(target - current, 1))
+        return {"current": current, "target": target, "gap": gap, "issues": issues_list}
+
+    return {
+        "overall": overall,
+        "completeness": build_metric(completeness_score, 95, [
+            {"description": "Missing files from stores", "impact": round(100 - completeness_score, 1)},
+        ] if completeness_score < 95 else []),
+        "accuracy": build_metric(accuracy_score, 95, [
+            {"description": "Rows rejected due to validation errors", "impact": round(100 - accuracy_score, 1)},
+        ] if accuracy_score < 95 else []),
+        "timeliness": build_metric(timeliness_score, 90, [
+            {"description": "Files uploaded after 10 AM SLA deadline", "impact": round(100 - timeliness_score, 1)},
+        ] if timeliness_score < 90 else []),
+        "consistency": build_metric(consistency_score, 90, [
+            {"description": "Days with incomplete store coverage", "impact": round(100 - consistency_score, 1)},
+        ] if consistency_score < 90 else []),
+        "validity": build_metric(validity_score, 95, [
+            {"description": "Files with processing errors", "impact": round(100 - validity_score, 1)},
+        ] if validity_score < 95 else []),
+        "recommendations": [
+            "Send automated reminders to stores that miss the 10 AM upload deadline",
+            "Implement column-level validation rules in CSV templates",
+            "Schedule weekly data quality review meetings with store managers",
+            "Add SKU master cross-reference checks before processing",
+            "Create automated re-upload requests for failed files",
+        ],
+    }
 
 
 # Include the router in the main app

@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import axios from "axios";
 import { 
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award
 } from "lucide-react";
 
 // Pages
@@ -17,6 +17,7 @@ import BIDashboards from "./pages/BIDashboards";
 import FAQChatbot from "./pages/FAQChatbot";
 import WarehouseAnalysis from "./pages/WarehouseAnalysis";
 import SFTPMonitor from "./pages/SFTPMonitor";
+import DataQuality from "./pages/DataQuality";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -31,6 +32,7 @@ const navItems = [
   { path: "/bi-dashboards", label: "BI Dashboards", icon: TrendingUp },
   { path: "/warehouse", label: "Warehouse", icon: Warehouse },
   { path: "/sftp-monitor", label: "SFTP Monitor", icon: Server },
+  { path: "/data-quality", label: "Data Quality", icon: Award },
   { path: "/chatbot", label: "FAQ Chatbot", icon: MessageSquare },
 ];
 
@@ -192,6 +194,7 @@ function App() {
               <Route path="/bi-dashboards" element={<BIDashboards />} />
               <Route path="/warehouse" element={<WarehouseAnalysis />} />
               <Route path="/sftp-monitor" element={<SFTPMonitor />} />
+              <Route path="/data-quality" element={<DataQuality />} />
               <Route path="/chatbot" element={<FAQChatbot />} />
             </Routes>
           </div>
