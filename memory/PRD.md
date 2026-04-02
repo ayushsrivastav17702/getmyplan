@@ -1,7 +1,7 @@
 # Fashion Retail Gap Analysis Platform - PRD
 
 ## Original Problem Statement
-Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, and Data Quality & SLA Dashboard.
+Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, Data Quality & SLA Dashboard, and PRD-based ROS Gap Analysis.
 
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme)
@@ -18,7 +18,7 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 | /upload | Data Upload | Master vs Daily file upload with history |
 | /config | Configuration | Analysis config |
 | /core-logics | Core Logics | TrueROS + Store-Style with charts |
-| /gap-analysis | Gap Analysis | NOOS + Size Gap with charts |
+| /gap-analysis | Gap Analysis | NOOS + Size Gap + ROS Gap with charts |
 | /bi-dashboards | BI Dashboards | Revenue, units, store/style analytics |
 | /warehouse | Warehouse | Inventory, velocity, fulfillment |
 | /sftp-monitor | SFTP Monitor | Data pipeline monitoring |
@@ -47,12 +47,25 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 - [x] SFTP Monitor Dashboard with demo mode
 
 ### Phase 7 — Data Quality & SLA (Apr 2, 2026)
-- [x] **Store Upload Tracker** — Grid of 10 color-coded store cards (green=uploaded, red=missing, amber=late, orange=partial). Click opens detail modal with sales/inventory status, quality ring, completeness/accuracy/timeliness breakdowns, and issues.
-- [x] **SLA Monitor** — Overall compliance rate, expected/received/missing file counts, SLA by file type (Daily Sales, Store Inventory, WH Inventory) with progress bars and targets, week-over-week trend.
-- [x] **Data Quality Scorecard** — Overall weighted score (completeness 25%, accuracy 25%, timeliness 20%, consistency 15%, validity 15%). 5 selectable metric tabs with current score, target, gap-to-target, issues, and recommendations.
-- [x] **Quality by Store Chart** — Bar chart with color-coded quality scores per store.
-- [x] **Quick Actions** — Send reminders, generate report, configure SLA targets.
-- [x] **Backend APIs** — 3 endpoints: `/api/admin/quality/store-uploads/{date}`, `/api/admin/quality/sla-metrics`, `/api/admin/quality/scorecard`
+- [x] Store Upload Tracker, SLA Monitor, Data Quality Scorecard
+- [x] Quality by Store Chart, Quick Actions
+- [x] Backend APIs for quality metrics
+
+### Phase 8 — ROS Gap Analysis (Feb 2026)
+- [x] **New Backend Endpoint** `/api/analytics/ros-gap` — Computes PRD formulas using real CSV data:
+  - Raw ROS = Net Sales Qty / True Live Days
+  - Healthy Size Set = >=75% sizes available per store-style-day
+  - Sales Loss = (Healthy ROS x Broken Days) - Actual Broken Sales
+  - NOOS = Sales >80% + Inventory >80% of period days
+- [x] **PRD Formula Cards** — 4 prominent cards displaying each formula
+- [x] **KPI Summary Cards** — Avg ROS Gap, Total Sales Loss, Healthy Coverage %, NOOS Qualified Styles
+- [x] **Charts** — Style Health Distribution (Doughnut), Top 10 Sales Loss by Style (Bar), Store-wise Size Set Health (Stacked Bar)
+- [x] **Style-wise ROS Gap Table** — Style, Healthy ROS, Actual ROS, Gap, Sales Loss, Stores, Status
+- [x] **Store-wise Size Set Health Table** — Store, Healthy %, Broken %, Sales Loss, Styles
+- [x] **NOOS Style Analysis Table** — Style, Stores, NOOS Stores, Sales/Inv Consistency, NOOS %, Status
+- [x] **Persona Views** — CXO Executive Insight, Merchandiser detail tables, Consultant methodology cards
+- [x] **Full Filter Integration** — Date, Category, Channel, Region filters work with ROS Gap tab
+- [x] **Testing** — 100% pass rate (Iteration 8: 11 backend + all frontend tests passed)
 
 ## Prioritized Backlog
 ### P1
@@ -64,3 +77,4 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 - Scheduled analysis jobs
 - Product lifecycle timeline visualization
 - Preset sharing via URL
+- Migrate in-memory Pandas to persistent MongoDB collections
