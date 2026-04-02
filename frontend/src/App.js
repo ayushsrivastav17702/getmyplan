@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from "react-router-dom";
 import axios from "axios";
-import { 
-  Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users
+import {
+  Home, Upload, Settings, BarChart3, PieChart, TrendingUp,
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle,
+  Warehouse, Server, Award, XCircle, ShoppingCart, Clock,
+  Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users
 } from "lucide-react";
 
 // Auth
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
+import Unauthorized from "./pages/Unauthorized";
 
 // Pages
 import GettingStarted from "./pages/GettingStarted";
@@ -32,43 +35,58 @@ import UserManagement from "./pages/UserManagement";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-// Navigation items
+// ─── Navigation items with permission keys ───
+// permission: null = visible to all authenticated users
+// permission: "module.resource.action" = filtered by hasPermission()
 const navItems = [
-  { path: "/", label: "Getting Started", icon: Home },
-  { path: "/dashboard", label: "Executive Dashboard", icon: LayoutDashboard },
-  { path: "/upload", label: "Data Upload", icon: Upload },
-  { path: "/config", label: "Configuration", icon: Settings },
-  { path: "/core-logics", label: "Core Logics", icon: BarChart3 },
-  { path: "/gap-analysis", label: "Gap Analysis", icon: PieChart },
-  { path: "/stock-out", label: "Stock-Out Analysis", icon: XCircle },
-  { path: "/replenishment", label: "Replenishment Planner", icon: ShoppingCart },
-  { path: "/doh", label: "DOH Analysis", icon: Clock },
-  { path: "/planogram", label: "Planogram Fill Rate", icon: LayoutIcon },
-  { path: "/bi-dashboards", label: "BI Dashboards", icon: TrendingUp },
-  { path: "/warehouse", label: "Warehouse", icon: Warehouse },
-  { path: "/sftp-monitor", label: "SFTP Monitor", icon: Server },
-  { path: "/data-quality", label: "Data Quality", icon: Award },
-  { path: "/chatbot", label: "FAQ Chatbot", icon: MessageSquare },
-  { path: "/users", label: "User Management", icon: Users, adminOnly: true },
+  { path: "/",              label: "Getting Started",      icon: Home,            permission: null },
+  { path: "/dashboard",     label: "Executive Dashboard",  icon: LayoutDashboard, permission: "dashboard.executive.view" },
+  { path: "/upload",        label: "Data Upload",          icon: Upload,          permission: "data.upload.manage" },
+  { path: "/config",        label: "Configuration",        icon: Settings,        permission: "data.config.manage" },
+  { path: "/core-logics",   label: "Core Logics",          icon: BarChart3,       permission: "analytics.core_logics.view" },
+  { path: "/gap-analysis",  label: "Gap Analysis",         icon: PieChart,        permission: "analytics.gap.view" },
+  { path: "/stock-out",     label: "Stock-Out Analysis",   icon: XCircle,         permission: "analytics.stockout.view" },
+  { path: "/replenishment", label: "Replenishment Planner",icon: ShoppingCart,     permission: "analytics.replenishment.view" },
+  { path: "/doh",           label: "DOH Analysis",         icon: Clock,           permission: "analytics.doh.view" },
+  { path: "/planogram",     label: "Planogram Fill Rate",  icon: LayoutIcon,      permission: "analytics.planogram.view" },
+  { path: "/bi-dashboards", label: "BI Dashboards",        icon: TrendingUp,      permission: "dashboard.bi.view" },
+  { path: "/warehouse",     label: "Warehouse",            icon: Warehouse,       permission: "dashboard.warehouse.view" },
+  { path: "/sftp-monitor",  label: "SFTP Monitor",         icon: Server,          permission: "data.sftp.view" },
+  { path: "/data-quality",  label: "Data Quality",         icon: Award,           permission: "data.quality.view" },
+  { path: "/chatbot",       label: "FAQ Chatbot",          icon: MessageSquare,   permission: "chatbot.faq.view" },
+  { path: "/users",         label: "User Management",      icon: Users,           permission: "users.list.view" },
 ];
 
-// Sidebar Component
+// ─── Route guard: renders child only if the user has the required permission ───
+const ProtectedRoute = ({ permission, children }) => {
+  const { hasPermission } = useAuth();
+  if (permission && !hasPermission(permission)) {
+    return <Unauthorized />;
+  }
+  return children;
+};
+
+// ─── Sidebar ───
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const location = useLocation();
-  const { user, tenantId, tenantInfo, logout, hasRole } = useAuth();
-  
+  const { user, tenantId, tenantInfo, logout, hasPermission } = useAuth();
+
   const getUploadCount = () => {
     if (!uploadStatus) return { uploaded: 0, total: 7 };
     const uploaded = Object.values(uploadStatus).filter(s => s.uploaded && s.valid).length;
     return { uploaded, total: 7 };
   };
-  
+
   const { uploaded, total } = getUploadCount();
   const allUploaded = uploaded === total;
 
+  // Filter nav items by the user's permission set
+  const visibleNavItems = navItems.filter(item =>
+    item.permission === null || hasPermission(item.permission)
+  );
+
   return (
     <>
-      {/* Mobile menu button */}
       <button
         data-testid="mobile-menu-toggle"
         onClick={() => setIsOpen(!isOpen)}
@@ -77,18 +95,15 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
         w-64 bg-white border-r border-slate-200 flex flex-col
         transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}>
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-slate-200 bg-[#0176D3]">
-          <h1 className="text-xl font-semibold tracking-tight text-white">
-            Increff Analytics
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight text-white">Increff Analytics</h1>
         </div>
 
         {/* Tenant Info */}
@@ -104,9 +119,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
               <span className="text-[10px] text-slate-500 uppercase tracking-wider">
                 {tenantInfo.plan_type || "starter"} plan
               </span>
-              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
-                Active
-              </span>
+              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Active</span>
             </div>
           </div>
         )}
@@ -114,40 +127,33 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         {/* Upload Status */}
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Upload Status
-            </span>
-            <span className={`text-xs font-bold ${allUploaded ? 'text-green-600' : 'text-amber-600'}`}>
-              {uploaded}/{total}
-            </span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Upload Status</span>
+            <span className={`text-xs font-bold ${allUploaded ? "text-green-600" : "text-amber-600"}`}>{uploaded}/{total}</span>
           </div>
           <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-500 rounded-full ${allUploaded ? 'bg-green-500' : 'bg-[#0176D3]'}`}
+            <div
+              className={`h-full transition-all duration-500 rounded-full ${allUploaded ? "bg-green-500" : "bg-[#0176D3]"}`}
               style={{ width: `${(uploaded / total) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation — filtered by permissions */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
-          {navItems
-            .filter(item => !item.adminOnly || hasRole(["admin", "super_admin"]))
-            .map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
-            
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                data-testid={`nav-${item.path.replace('/', '') || 'home'}`}
+                data-testid={`nav-${item.path.replace("/", "") || "home"}`}
                 onClick={() => setIsOpen(false)}
                 className={`
                   flex items-center gap-3 px-4 py-2.5 text-sm rounded transition-all duration-200
-                  ${isActive 
-                    ? 'bg-[#0176D3] text-white shadow-sm' 
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}
+                  ${isActive
+                    ? "bg-[#0176D3] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}
                 `}
               >
                 <Icon size={18} strokeWidth={1.5} />
@@ -158,25 +164,18 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
           })}
         </nav>
 
-        {/* File Status List */}
+        {/* Data Files */}
         <div className="px-6 py-4 border-t border-slate-100">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 block">
-            Data Files
-          </span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 block">Data Files</span>
           <div className="space-y-2">
-            {['style_master', 'sku_ean_master', 'store_master', 'warehouse_master', 'daily_sales', 'store_inventory', 'warehouse_inventory'].map((file) => {
+            {["style_master","sku_ean_master","store_master","warehouse_master","daily_sales","store_inventory","warehouse_inventory"].map((file) => {
               const status = uploadStatus?.[file];
               const isUploaded = status?.uploaded && status?.valid;
-              
               return (
                 <div key={file} className="flex items-center gap-2 text-xs">
-                  {isUploaded ? (
-                    <Check size={12} className="text-green-500" />
-                  ) : (
-                    <AlertCircle size={12} className="text-slate-300" />
-                  )}
-                  <span className={isUploaded ? 'text-slate-700' : 'text-slate-400'}>
-                    {file.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                  {isUploaded ? <Check size={12} className="text-green-500" /> : <AlertCircle size={12} className="text-slate-300" />}
+                  <span className={isUploaded ? "text-slate-700" : "text-slate-400"}>
+                    {file.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
                   </span>
                 </div>
               );
@@ -205,19 +204,14 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         )}
       </aside>
 
-      {/* Overlay for mobile */}
       {isOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 bg-black/20 z-30"
-          onClick={() => setIsOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 bg-black/20 z-30" onClick={() => setIsOpen(false)} />
       )}
     </>
   );
 };
 
-
-// Inner app (after auth)
+// ─── Authenticated app with permission-guarded routes ───
 const AuthenticatedApp = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -231,37 +225,38 @@ const AuthenticatedApp = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchUploadStatus();
-  }, [fetchUploadStatus]);
+  useEffect(() => { fetchUploadStatus(); }, [fetchUploadStatus]);
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FA]">
-      <Sidebar 
-        uploadStatus={uploadStatus} 
-        isOpen={sidebarOpen}
-        setIsOpen={setSidebarOpen}
-      />
-      
+      <Sidebar uploadStatus={uploadStatus} isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
+
       <main className="flex-1 min-h-screen">
         <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
           <Routes>
+            {/* Always accessible */}
             <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
-            <Route path="/dashboard" element={<ExecutiveDashboard />} />
-            <Route path="/upload" element={<DataUpload onUploadComplete={fetchUploadStatus} />} />
-            <Route path="/config" element={<Configuration />} />
-            <Route path="/core-logics" element={<CoreLogics />} />
-            <Route path="/gap-analysis" element={<GapAnalysis />} />
-            <Route path="/stock-out" element={<StockOutAnalysis />} />
-            <Route path="/replenishment" element={<ReplenishmentPlanner />} />
-            <Route path="/doh" element={<DOHAnalysis />} />
-            <Route path="/planogram" element={<PlanogramFillRate />} />
-            <Route path="/bi-dashboards" element={<BIDashboards />} />
-            <Route path="/warehouse" element={<WarehouseAnalysis />} />
-            <Route path="/sftp-monitor" element={<SFTPMonitor />} />
-            <Route path="/data-quality" element={<DataQuality />} />
-            <Route path="/chatbot" element={<FAQChatbot />} />
-            <Route path="/users" element={<UserManagement />} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
+
+            {/* Permission-guarded routes */}
+            <Route path="/dashboard"     element={<ProtectedRoute permission="dashboard.executive.view"><ExecutiveDashboard /></ProtectedRoute>} />
+            <Route path="/upload"        element={<ProtectedRoute permission="data.upload.manage"><DataUpload onUploadComplete={fetchUploadStatus} /></ProtectedRoute>} />
+            <Route path="/config"        element={<ProtectedRoute permission="data.config.manage"><Configuration /></ProtectedRoute>} />
+            <Route path="/core-logics"   element={<ProtectedRoute permission="analytics.core_logics.view"><CoreLogics /></ProtectedRoute>} />
+            <Route path="/gap-analysis"  element={<ProtectedRoute permission="analytics.gap.view"><GapAnalysis /></ProtectedRoute>} />
+            <Route path="/stock-out"     element={<ProtectedRoute permission="analytics.stockout.view"><StockOutAnalysis /></ProtectedRoute>} />
+            <Route path="/replenishment" element={<ProtectedRoute permission="analytics.replenishment.view"><ReplenishmentPlanner /></ProtectedRoute>} />
+            <Route path="/doh"           element={<ProtectedRoute permission="analytics.doh.view"><DOHAnalysis /></ProtectedRoute>} />
+            <Route path="/planogram"     element={<ProtectedRoute permission="analytics.planogram.view"><PlanogramFillRate /></ProtectedRoute>} />
+            <Route path="/bi-dashboards" element={<ProtectedRoute permission="dashboard.bi.view"><BIDashboards /></ProtectedRoute>} />
+            <Route path="/warehouse"     element={<ProtectedRoute permission="dashboard.warehouse.view"><WarehouseAnalysis /></ProtectedRoute>} />
+            <Route path="/sftp-monitor"  element={<ProtectedRoute permission="data.sftp.view"><SFTPMonitor /></ProtectedRoute>} />
+            <Route path="/data-quality"  element={<ProtectedRoute permission="data.quality.view"><DataQuality /></ProtectedRoute>} />
+            <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
+            <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
+
+            {/* Catch-all */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
       </main>
@@ -269,26 +264,13 @@ const AuthenticatedApp = () => {
   );
 };
 
-
-// Root app — gate on authentication
+// ─── Root: gate on authentication ───
 const AppRouter = () => {
   const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
-        <div className="spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
-
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><div className="spinner" /></div>;
+  if (!isAuthenticated) return <LoginPage />;
   return <AuthenticatedApp />;
 };
-
 
 function App() {
   return (
