@@ -11,109 +11,78 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 - **Auth**: JWT with bcrypt, tenant-scoped tokens, RBAC with permission-guarded routes
 
-## RBAC System
-### 8 Roles with permission counts
-| Role | Priority | Permissions | Description |
-|------|----------|------------|-------------|
-| super_admin | 100 | 21 (all) | Full platform access |
-| admin | 90 | 21 (all) | Full tenant access |
-| cxo | 80 | 10 | Dashboards + analytics + export |
-| merchandiser | 70 | 15 | All analytics + data management |
-| allocator | 65 | 11 | Analytics + data upload + export |
-| demand_planner | 60 | 6 | Replenishment + DOH + stock-out |
-| store_manager | 40 | 5 | Exec dashboard + store-level analytics |
-| viewer | 30 | 10 | Read-only dashboards + analytics |
-
-### Role vs Page Access Matrix
-| Page | Admin | CXO | Merch | Alloc | Demand | Store | Viewer |
-|------|-------|-----|-------|-------|--------|-------|--------|
-| Getting Started | Y | Y | Y | Y | Y | Y | Y |
-| Exec Dashboard | Y | Y | Y | Y | Y | Y | Y |
-| Data Upload | Y | - | Y | Y | - | - | - |
-| Configuration | Y | - | Y | - | - | - | - |
-| Core Logics | Y | Y | Y | Y | - | - | Y |
-| Gap Analysis | Y | Y | Y | Y | - | - | Y |
-| Stock-Out | Y | Y | Y | Y | Y | Y | Y |
-| Replenishment | Y | Y | Y | Y | Y | - | Y |
-| DOH Analysis | Y | Y | Y | Y | Y | - | Y |
-| Planogram | Y | Y | Y | Y | - | Y | Y |
-| BI Dashboards | Y | Y | Y | Y | Y | - | Y |
-| Warehouse | Y | Y | Y | Y | - | - | Y |
-| SFTP Monitor | Y | - | Y | - | - | - | - |
-| Data Quality | Y | - | Y | - | - | Y | - |
-| FAQ Chatbot | Y | Y | Y | Y | Y | Y | Y |
-| User Management | Y | - | - | - | - | - | - |
-
 ## Completed Phases
 
-### Phase 1-12 (Previous sessions)
-- [x] Full MVP, filters, presets, analytics modules (all 100%)
-
-### Phase 13 — Executive Dashboard
-- [x] Testing: 100% (Iteration 13)
-
-### Phase 14 — Multi-Tenant Architecture
-- [x] Testing: 100% (Iteration 14)
-
-### Phase 15 — RBAC & User Management
-- [x] Testing: 100% (Iteration 15)
-
-### Phase 16 — Full RBAC Integration with All Pages (Feb 2026)
-- [x] Permission-keyed navItems in App.js (16 routes mapped to 15 permission keys)
-- [x] ProtectedRoute component wraps each Route with permission check
-- [x] Sidebar nav filtering — only shows pages the user has permission for
-- [x] Unauthorized page with role display and "Back to Home" button
-- [x] Testing: 100% (Iteration 16: 11 backend + all frontend)
+### Phase 1-16 (Previous sessions)
+- [x] Full MVP analytics, filters, presets
+- [x] Executive Dashboard with 6 module cards
+- [x] MongoDB Multi-Tenancy + RBAC + User Management
+- [x] Full RBAC integration across all 16 pages
+- [x] Tenant Admin Panel (UI + Backend)
 
 ### Phase 17 — Executive Dashboard P0 Enhancements (Feb 2026)
-- [x] DASH-26: 401 Interceptor — expired tokens auto-redirect to login with "Session expired" message
-- [x] DASH-02/03: Revenue & Margin KPI cards (₹9.3Cr, 33K units, 100% MRP Realisation, Health Score)
-- [x] DASH-33: Week-over-Week comparison card (+8.3% revenue, +5.5% units)
-- [x] DASH-34: Year-over-Year comparison card (with fallback for missing prior-year data)
-- [x] DASH-08: Quick date presets (Last 7d, 30d, 90d, This Month, Last Month, Quarter, YTD)
-- [x] DASH-12: Date validation (end < start blocked with error message)
+- [x] DASH-26: 401 Interceptor — expired tokens auto-redirect to login
+- [x] DASH-02/03: Revenue & Margin KPI cards with WoW growth indicators
+- [x] DASH-33: Week-over-Week comparison card
+- [x] DASH-34: Year-over-Year comparison card
+- [x] DASH-08: Quick date presets (7 presets)
+- [x] DASH-12: Date validation (end < start blocked)
 - [x] DASH-24: Auto-refresh toggle with 30s countdown
 - [x] New backend endpoint: /api/analytics/executive-kpis
-- [x] Testing: 100% (Iteration 17: 19 backend + all frontend)
+- [x] Testing: 100% (Iteration 17-18: all 35 test cases audited, 29 PASS, 3 known GAPs)
 
-### Tenant Admin Panel (Implemented, Testing Pending from Phase 16)
-- [x] Implementation complete: Metrics, API Keys, Audit Logs, Settings tabs
-- [ ] Formal testing via testing_agent_v3_fork
+### Phase 18 — Data Upload Validation Enhancements (Feb 2026)
+- [x] UPLOAD-05: File size limit (100MB) — backend + frontend
+- [x] UPLOAD-09: Data type validation (text in numeric field rejected)
+- [x] UPLOAD-11: Null validation on required columns
+- [x] UPLOAD-12: Deduplication with duplicate count in response
+- [x] UPLOAD-20: Future date rejection
+- [x] UPLOAD-23: Negative quantity/revenue rejection
+- [x] UPLOAD-32: Concurrent upload lock (asyncio.Lock per file_type)
+- [x] UPLOAD-35: Encoding detection via chardet (Latin1, UTF-8-BOM, CP1252)
+- [x] UPLOAD-34: BOM character handling
+- [x] UPLOAD-03 fix: 400 status (was 500) for unsupported format
+- [x] UPLOAD-08: Extra columns warning in response
+- [x] Frontend: Client-side file size + extension validation
+- [x] Response enhanced: warnings, duplicates_removed, encoding fields
+- [x] Testing: 100% (Iteration 20: all 35 test cases, 30 PASS, 4 PARTIAL, 3 known GAPs)
 
-## Executive Dashboard Test Case Audit (35 cases)
-| Status   | Count | Percentage |
-|----------|-------|------------|
-| PASS     | 30    | 86%        |
-| PARTIAL  | 3     | 9%         |
-| GAP      | 2     | 6%         |
-| **Total**| **35**| **100%**   |
+## Test Case Coverage Summary
 
-### Remaining P1 Gaps
-- DASH-15: Revenue trend line chart (time-series)
-- DASH-25: Offline detection / network error UI
-- DASH-13: Explicit "No matching results" empty state for filters
+### Executive Dashboard (35 test cases)
+| Status | Count | % |
+|--------|-------|---|
+| PASS   | 29    | 83% |
+| PARTIAL| 1     | 3% |
+| GAP    | 3     | 9% |
 
-### Remaining P2 Gaps
-- DASH-35: PDF export of dashboard
-- DASH-06: Negative revenue validation
-- DASH-29: Timezone-aware date display
+Remaining GAPs: DASH-15 (trend line chart), DASH-25 (offline detection), DASH-35 (PDF export)
+
+### Data Upload (35 test cases)
+| Status | Count | % |
+|--------|-------|---|
+| PASS   | 30    | 86% |
+| PARTIAL| 4     | 11% |
+| GAP    | 3     | 9% |
+
+Remaining GAPs: UPLOAD-26/28 (SFTP real connection — currently MOCKED), UPLOAD-33 (browser-level network retry)
 
 ## Prioritized Backlog
+
 ### P0
-- [x] Executive Dashboard P0 test cases (DONE)
 - [ ] Tenant Admin Panel formal testing
 
 ### P1
-- Real SFTP integration
-- Revenue trend line chart (DASH-15)
-- Offline detection (DASH-25)
+- DASH-15: Revenue trend line chart
+- DASH-25: Offline detection UI
+- Real SFTP integration (replace demo mode)
 - PDF report generation
 - Email alerts for SLA/SFTP
-- PermissionGate usage inside pages (hide edit/export buttons for viewers)
+- PermissionGate inside pages (hide edit/export for viewers)
 
 ### P2
-- PDF export for dashboard (DASH-35)
+- DASH-35: PDF export for dashboard
+- Modularize server.py into route files (~3500+ lines)
 - Scheduled analysis jobs
-- Modularize server.py into route files (~3200+ lines)
 - Tenant billing/usage tracking
 - Team activity dashboard
