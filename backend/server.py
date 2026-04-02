@@ -8,11 +8,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import pandas as pd
 import numpy as np
 import random
 import io
+import asyncio
+import chardet
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from sftp import sftp_service, sftp_scheduler
 
@@ -83,7 +85,10 @@ class FileUploadResponse(BaseModel):
     columns: List[str]
     valid: bool
     errors: List[str]
+    warnings: List[str] = []
     preview: List[Dict[str, Any]]
+    duplicates_removed: int = 0
+    encoding: Optional[str] = None
 
 class AnalysisConfig(BaseModel):
     noos_enabled: bool = True
@@ -140,30 +145,162 @@ REQUIRED_COLUMNS = {
     'warehouse_inventory': ['sku', 'warehouse', 'quantity', 'day']
 }
 
+# Data type and range validation rules for known columns
+COLUMN_RULES = {
+    'quantity': {'type': 'numeric', 'min': 0, 'nullable': False},
+    'revenue':  {'type': 'numeric', 'min': 0, 'nullable': False},
+    'mrp':      {'type': 'numeric', 'min': 0, 'nullable': False},
+    'day':      {'type': 'date', 'max_date': 'today', 'nullable': False},
+}
+
+# Unique-key columns used for deduplication
+DEDUP_KEYS = {
+    'daily_sales': ['channel', 'store_code', 'sku', 'day'],
+    'store_inventory': ['channel', 'store_code', 'ean', 'day'],
+    'warehouse_inventory': ['sku', 'warehouse', 'day'],
+    'style_master': ['style_code'],
+    'sku_ean_master': ['ean'],
+    'store_master': ['store_code'],
+    'warehouse_master': ['warehouse'],
+}
+
+MAX_UPLOAD_SIZE_MB = 100
+MAX_UPLOAD_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+# Simple per-file-type lock to prevent concurrent overwrites
+_upload_locks: Dict[str, asyncio.Lock] = {}
+
+def _get_upload_lock(file_type: str) -> asyncio.Lock:
+    if file_type not in _upload_locks:
+        _upload_locks[file_type] = asyncio.Lock()
+    return _upload_locks[file_type]
+
 
 # ==================== HELPER FUNCTIONS ====================
 
+def _detect_encoding(raw_bytes: bytes) -> str:
+    """Detect file encoding using chardet."""
+    result = chardet.detect(raw_bytes[:32768])  # sample first 32KB
+    enc = (result.get('encoding') or 'utf-8').lower()
+    ALIASES = {'ascii': 'utf-8', 'windows-1252': 'cp1252'}
+    enc = ALIASES.get(enc, enc)
+    # Handle UTF-8 BOM: if file starts with BOM bytes, use utf-8-sig to strip it
+    if enc == 'utf-8' and raw_bytes[:3] == b'\xef\xbb\xbf':
+        enc = 'utf-8-sig'
+    return enc
+
+
 def validate_file(df: pd.DataFrame, file_type: str) -> Dict[str, Any]:
-    """Validate uploaded file against required columns"""
-    errors = []
+    """Validate uploaded file: columns, types, nulls, ranges, dates, duplicates."""
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    # --- 1. Normalize columns ---
+    df.columns = [col.lower().strip() for col in df.columns]
+
+    # --- 2. Required columns check ---
     required = REQUIRED_COLUMNS.get(file_type, [])
-    df_columns = [col.lower().strip() for col in df.columns]
-    
-    # Normalize column names
-    df.columns = df_columns
-    
-    missing = [col for col in required if col not in df_columns]
+    missing = [c for c in required if c not in df.columns]
     if missing:
         errors.append(f"Missing required columns: {', '.join(missing)}")
-    
+
     if len(df) == 0:
-        errors.append("File is empty")
-    
+        errors.append("File is empty — no data rows found")
+
+    if errors:
+        return {'valid': False, 'errors': errors, 'warnings': warnings,
+                'columns': list(df.columns), 'rows': len(df),
+                'duplicates_removed': 0}
+
+    # --- 3. Deduplication ---
+    dedup_cols = DEDUP_KEYS.get(file_type)
+    dupes_removed = 0
+    if dedup_cols:
+        valid_dedup = [c for c in dedup_cols if c in df.columns]
+        if valid_dedup:
+            before = len(df)
+            df.drop_duplicates(subset=valid_dedup, keep='last', inplace=True)
+            df.reset_index(drop=True, inplace=True)
+            dupes_removed = before - len(df)
+            if dupes_removed:
+                warnings.append(f"Removed {dupes_removed} duplicate rows")
+
+    # --- 4. Per-column validation (type, null, range, date) ---
+    row_errors: List[str] = []
+    for col_name, rules in COLUMN_RULES.items():
+        if col_name not in df.columns:
+            continue
+
+        col = df[col_name]
+
+        # Null check
+        if not rules.get('nullable', True):
+            null_mask = col.isna() | (col.astype(str).str.strip() == '')
+            null_count = int(null_mask.sum())
+            if null_count > 0:
+                first_rows = df.index[null_mask][:3].tolist()
+                row_nums = ', '.join(str(r + 2) for r in first_rows)
+                suffix = f" (and {null_count - 3} more)" if null_count > 3 else ""
+                row_errors.append(
+                    f"Column '{col_name}' has {null_count} empty values — rows: {row_nums}{suffix}")
+
+        # Numeric type + range
+        if rules['type'] == 'numeric':
+            numeric_col = pd.to_numeric(col, errors='coerce')
+            bad_mask = col.notna() & numeric_col.isna()
+            bad_count = int(bad_mask.sum())
+            if bad_count:
+                first_bad = df.index[bad_mask][:3].tolist()
+                row_nums = ', '.join(str(r + 2) for r in first_bad)
+                row_errors.append(
+                    f"Column '{col_name}' has {bad_count} non-numeric values — rows: {row_nums}")
+
+            if 'min' in rules:
+                below = numeric_col.dropna() < rules['min']
+                below_count = int(below.sum())
+                if below_count:
+                    first_below = df.index[numeric_col.fillna(0) < rules['min']][:3].tolist()
+                    row_nums = ', '.join(str(r + 2) for r in first_below)
+                    row_errors.append(
+                        f"Column '{col_name}' has {below_count} values below {rules['min']} — rows: {row_nums}")
+
+        # Date type + future-date check
+        if rules['type'] == 'date':
+            date_col = pd.to_datetime(col, errors='coerce')
+            bad_dates = col.notna() & date_col.isna()
+            bad_count = int(bad_dates.sum())
+            if bad_count:
+                first_bad = df.index[bad_dates][:3].tolist()
+                row_nums = ', '.join(str(r + 2) for r in first_bad)
+                row_errors.append(
+                    f"Column '{col_name}' has {bad_count} invalid date values — rows: {row_nums}")
+
+            if rules.get('max_date') == 'today':
+                today = pd.Timestamp(date.today())
+                future = date_col.dropna() > today
+                fut_count = int(future.sum())
+                if fut_count:
+                    first_fut = df.index[date_col > today][:3].tolist()
+                    row_nums = ', '.join(str(r + 2) for r in first_fut)
+                    row_errors.append(
+                        f"Column '{col_name}' has {fut_count} future dates — rows: {row_nums}")
+
+    if row_errors:
+        errors.extend(row_errors)
+
+    # Extra columns warning
+    known = set(required)
+    extra = [c for c in df.columns if c not in known]
+    if extra:
+        warnings.append(f"Extra columns ignored: {', '.join(extra)}")
+
     return {
         'valid': len(errors) == 0,
         'errors': errors,
+        'warnings': warnings,
         'columns': list(df.columns),
-        'rows': len(df)
+        'rows': len(df),
+        'duplicates_removed': dupes_removed,
     }
 
 
@@ -226,57 +363,92 @@ async def get_status_checks():
 
 @api_router.post("/upload/{file_type}", response_model=FileUploadResponse)
 async def upload_file(file_type: str, file: UploadFile = File(...)):
-    """Upload and validate a data file"""
+    """Upload and validate a data file with comprehensive checks."""
     if file_type not in REQUIRED_COLUMNS:
         raise HTTPException(status_code=400, detail=f"Unknown file type: {file_type}")
-    
-    try:
-        contents = await file.read()
-        if file.filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(contents))
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(io.BytesIO(contents))
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file format")
-        
-        validation = validate_file(df, file_type)
-        
-        if validation['valid']:
-            await cache_data(file_type, df, validation)
-        
-        # Log to upload history
-        await get_db().upload_history.insert_one({
-            "file_type": file_type,
-            "file_name": file.filename,
-            "status": "success" if validation['valid'] else "failed",
-            "rows_processed": validation['rows'],
-            "columns": validation['columns'],
-            "errors": validation['errors'],
-            "uploaded_at": datetime.now(timezone.utc).isoformat()
-        })
-        
-        preview = df.head(5).fillna('').to_dict('records')
-        
-        return FileUploadResponse(
-            file_type=file_type,
-            rows=validation['rows'],
-            columns=validation['columns'],
-            valid=validation['valid'],
-            errors=validation['errors'],
-            preview=preview
-        )
-    except Exception as e:
-        logger.error(f"Error processing file: {str(e)}")
-        # Log failure
-        await get_db().upload_history.insert_one({
-            "file_type": file_type,
-            "file_name": file.filename if file else "unknown",
-            "status": "failed",
-            "rows_processed": 0,
-            "errors": [str(e)],
-            "uploaded_at": datetime.now(timezone.utc).isoformat()
-        })
-        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+    # Acquire per-file-type lock to prevent concurrent overwrites
+    lock = _get_upload_lock(file_type)
+    if lock.locked():
+        raise HTTPException(status_code=409,
+                            detail=f"An upload for '{file_type}' is already in progress. Please wait.")
+
+    async with lock:
+        try:
+            contents = await file.read()
+
+            # --- File size check ---
+            if len(contents) > MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File too large ({len(contents)/(1024*1024):.1f} MB). "
+                           f"Maximum allowed is {MAX_UPLOAD_SIZE_MB} MB.")
+
+            # --- Extension check ---
+            fname = (file.filename or "").lower()
+            if not (fname.endswith('.csv') or fname.endswith('.xlsx') or fname.endswith('.xls')):
+                raise HTTPException(status_code=400,
+                                    detail="Unsupported file format. Accepted: .csv, .xlsx, .xls")
+
+            # --- Read into DataFrame with encoding detection ---
+            detected_encoding = None
+            if fname.endswith('.csv'):
+                detected_encoding = _detect_encoding(contents)
+                try:
+                    df = pd.read_csv(io.BytesIO(contents), encoding=detected_encoding)
+                except Exception:
+                    # Fallback to latin1 which never throws
+                    detected_encoding = 'latin1'
+                    df = pd.read_csv(io.BytesIO(contents), encoding='latin1')
+            else:
+                df = pd.read_excel(io.BytesIO(contents))
+
+            # --- Validate ---
+            validation = validate_file(df, file_type)
+
+            if validation['valid']:
+                await cache_data(file_type, df, validation)
+
+            # Log to upload history
+            await get_db().upload_history.insert_one({
+                "file_type": file_type,
+                "file_name": file.filename,
+                "status": "success" if validation['valid'] else "failed",
+                "rows_processed": validation['rows'],
+                "columns": validation['columns'],
+                "errors": validation['errors'],
+                "warnings": validation.get('warnings', []),
+                "duplicates_removed": validation.get('duplicates_removed', 0),
+                "encoding": detected_encoding,
+                "uploaded_at": datetime.now(timezone.utc).isoformat()
+            })
+
+            preview = df.head(5).fillna('').to_dict('records')
+
+            return FileUploadResponse(
+                file_type=file_type,
+                rows=validation['rows'],
+                columns=validation['columns'],
+                valid=validation['valid'],
+                errors=validation['errors'],
+                warnings=validation.get('warnings', []),
+                preview=preview,
+                duplicates_removed=validation.get('duplicates_removed', 0),
+                encoding=detected_encoding,
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error processing file: {str(e)}")
+            await get_db().upload_history.insert_one({
+                "file_type": file_type,
+                "file_name": file.filename if file else "unknown",
+                "status": "failed",
+                "rows_processed": 0,
+                "errors": [str(e)],
+                "uploaded_at": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 
 @api_router.get("/upload/status")

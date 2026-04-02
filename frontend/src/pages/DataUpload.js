@@ -110,6 +110,35 @@ const DataUpload = ({ onUploadComplete }) => {
 
   const handleFileUpload = async (fileKey, file) => {
     if (!file) return;
+
+    // Client-side file size validation (100 MB limit)
+    const MAX_SIZE_MB = 100;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setUploadStatus((prev) => ({
+        ...prev,
+        [fileKey]: {
+          uploaded: false,
+          valid: false,
+          errors: [`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed is ${MAX_SIZE_MB} MB.`],
+        },
+      }));
+      return;
+    }
+
+    // Client-side extension validation
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+      setUploadStatus((prev) => ({
+        ...prev,
+        [fileKey]: {
+          uploaded: false,
+          valid: false,
+          errors: [`Unsupported file format (.${ext}). Accepted: .csv, .xlsx, .xls`],
+        },
+      }));
+      return;
+    }
+
     setUploading((prev) => ({ ...prev, [fileKey]: true }));
 
     if (file.name.endsWith(".csv")) {
@@ -138,6 +167,9 @@ const DataUpload = ({ onUploadComplete }) => {
           rows: response.data.rows,
           columns: response.data.columns,
           errors: response.data.errors,
+          warnings: response.data.warnings || [],
+          duplicates_removed: response.data.duplicates_removed || 0,
+          encoding: response.data.encoding,
           preview: response.data.preview,
           uploaded_at: new Date().toISOString(),
         },
@@ -320,6 +352,8 @@ const DataUpload = ({ onUploadComplete }) => {
               </span>
               <span className="text-[10px] text-slate-400">
                 {status.columns?.length} columns
+                {status.duplicates_removed > 0 && ` · ${status.duplicates_removed} dupes removed`}
+                {status.encoding && ` · ${status.encoding}`}
                 {status.uploaded_at && ` · ${formatTimeAgo(status.uploaded_at)}`}
               </span>
             </div>
@@ -350,7 +384,7 @@ const DataUpload = ({ onUploadComplete }) => {
 
         {/* Errors */}
         {status?.errors?.length > 0 && (
-          <div className="px-4 py-2 bg-red-50 border-b border-red-100">
+          <div className="px-4 py-2 bg-red-50 border-b border-red-100" data-testid={`errors-${file.key}`}>
             {status.errors.map((err, i) => (
               <p
                 key={i}
@@ -358,6 +392,18 @@ const DataUpload = ({ onUploadComplete }) => {
               >
                 <AlertCircle size={12} />
                 {err}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* Warnings (duplicates, extra columns, etc.) */}
+        {status?.warnings?.length > 0 && (
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-100" data-testid={`warnings-${file.key}`}>
+            {status.warnings.map((w, i) => (
+              <p key={i} className="text-xs text-amber-600 flex items-center gap-1.5">
+                <AlertCircle size={12} />
+                {w}
               </p>
             ))}
           </div>
