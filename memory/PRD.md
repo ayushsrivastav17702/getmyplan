@@ -10,10 +10,11 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **AI**: GPT 5.2 via Emergent LLM Key
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 
-## Pages & Routes (14 total)
+## Pages & Routes (15 total)
 | Route | Page | Description |
 |-------|------|-------------|
 | / | Getting Started | App overview |
+| /dashboard | Executive Dashboard | Unified CXO view of all modules |
 | /upload | Data Upload | Master vs Daily file upload |
 | /config | Configuration | Analysis config |
 | /core-logics | Core Logics | TrueROS + Store-Style |
@@ -53,20 +54,19 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - [x] Testing: 100% (Iteration 11)
 
 ### Phase 12 — Planogram Fill Rate (Feb 2026)
-- [x] `/api/analytics/planogram-fill-rate` with PRD formulas:
-  - Fill Rate = (Current Stock / Norm Allocated) x 100
-  - Overall Fill Rate = (Sum Stock / Sum Norm) x 100
-  - Lost Sales = Missing Facings x ROS x ASP
-  - Compliance: >=90% Good, 80-90% Moderate, <80% Critical
-- [x] PRD Formula Cards + compliance legend
-- [x] KPI Cards: Overall Fill Rate, Good Compliance, Critical count, Est. Lost Sales
-- [x] Fill Rate Trend line chart with target line
-- [x] Compliance Distribution doughnut chart
-- [x] Recommendations with store-level actions
-- [x] Store/Category view toggle with bar charts
-- [x] Summary + Detail tables with progress bars
-- [x] CSV Export, FilterPanel, Navigation
-- [x] Testing: 100% (Iteration 12: 21 backend + all frontend)
+- [x] `/api/analytics/planogram-fill-rate` with PRD formulas
+- [x] Testing: 100% (Iteration 12)
+
+### Phase 13 — Executive Dashboard (Feb 2026)
+- [x] `/api/analytics/executive-dashboard` aggregates all 5 module KPIs
+- [x] Health Score (0-100) computed from module scores
+- [x] Alerts & Actions panel with priority sorting and drill-down links
+- [x] 6 Module Cards (ROS Gap, Stock-Out, DOH, Planogram, Replenishment, NOOS)
+- [x] Mini doughnut charts in module cards
+- [x] Quick Navigation grid to all pages
+- [x] FilterPanel integration
+- [x] Sidebar nav item added
+- [x] Testing: 100% (Iteration 13: 24 backend + all frontend)
 
 ## Prioritized Backlog
 ### P1
@@ -79,3 +79,4 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Migrate Pandas to persistent MongoDB
 - Product lifecycle timeline
 - Preset sharing via URL
+- Modularize server.py into route files (~3100+ lines)
