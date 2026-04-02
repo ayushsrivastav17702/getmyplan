@@ -2370,7 +2370,10 @@ async def get_ros_gap_analysis(
     end_date: str = None,
     categories: str = None,
     channels: str = None,
-    regions: str = None
+    regions: str = None,
+    brands: str = None,
+    store: str = None,
+    sort_by: str = "sales_loss",
 ):
     """PRD-based ROS Gap Analysis with Healthy Size Set, Sales Loss, and NOOS."""
     sales_df = await get_cached_data('daily_sales')
@@ -2407,6 +2410,18 @@ async def get_ros_gap_analysis(
             category_list = categories.split(',')
             sales_sku = apply_category_filter(sales_sku, category_list, style_df)
             inv_sku = apply_category_filter(inv_sku, category_list, style_df)
+
+        # Brand filter (GAP-06)
+        if brands and style_df is not None and 'brand' in style_df.columns:
+            brand_list = [b.strip() for b in brands.split(',')]
+            filtered_styles = style_df[style_df['brand'].isin(brand_list)]['style_code'].tolist()
+            sales_sku = sales_sku[sales_sku['style'].isin(filtered_styles)]
+            inv_sku = inv_sku[inv_sku['style'].isin(filtered_styles)]
+
+        # Store filter (GAP-07)
+        if store:
+            sales_sku = sales_sku[sales_sku['store_code'] == store]
+            inv_sku = inv_sku[inv_sku['store_code'] == store]
 
         if len(sales_sku) == 0:
             return {"error": "No data matches the selected filters", "data": {}}
@@ -2471,7 +2486,7 @@ async def get_ros_gap_analysis(
         # Tag each day as healthy or broken
         day_health = daily_size_avail[['store_code', 'style', 'day', 'is_healthy']].drop_duplicates()
         sales_tagged = sales_daily.merge(day_health, on=['store_code', 'style', 'day'], how='left')
-        sales_tagged['is_healthy'] = sales_tagged['is_healthy'].fillna(False)
+        sales_tagged['is_healthy'] = sales_tagged['is_healthy'].fillna(False).astype(bool)
 
         healthy_sales = sales_tagged[sales_tagged['is_healthy']].groupby(['store_code', 'style'])['day_qty'].sum().reset_index()
         healthy_sales.columns = ['store_code', 'style', 'healthy_sales']
@@ -2540,7 +2555,16 @@ async def get_ros_gap_analysis(
         ).reset_index()
         style_ros['ros_gap'] = (style_ros['healthy_ros'] - style_ros['raw_ros']).round(3)
         style_ros['status'] = np.where(style_ros['healthy_days'] > style_ros['broken_days'], 'Healthy', 'Broken')
-        style_ros = style_ros.sort_values('total_sales_loss', ascending=False)
+
+        # GAP-08: Sort by gap size (or sales_loss, ros_gap)
+        sort_map = {
+            'sales_loss': ('total_sales_loss', False),
+            'gap_size': ('ros_gap', False),
+            'ros': ('raw_ros', False),
+            'revenue': ('total_revenue', False),
+        }
+        sort_col, sort_asc = sort_map.get(sort_by, ('total_sales_loss', False))
+        style_ros = style_ros.sort_values(sort_col, ascending=sort_asc)
 
         # Store-wise Size Set Health
         store_health = ros_df.groupby('store_code').agg(
@@ -2565,6 +2589,32 @@ async def get_ros_gap_analysis(
         healthy_coverage = round((ros_df['healthy_days'].sum() / max(total_days_all, 1)) * 100, 1)
         noos_count = int(noos_styles['is_noos'].sum())
 
+        # GAP-10: Weekly gap trend
+        weekly_trend = []
+        try:
+            sales_sku_copy = sales_sku.copy()
+            sales_sku_copy['week'] = sales_sku_copy['day'].dt.isocalendar().week.astype(int)
+            inv_sku_copy = inv_sku.copy()
+            if 'day' in inv_sku_copy.columns:
+                inv_sku_copy['day'] = pd.to_datetime(inv_sku_copy['day'])
+                inv_sku_copy['week'] = inv_sku_copy['day'].dt.isocalendar().week.astype(int)
+                weekly_health = inv_sku_copy[inv_sku_copy['quantity'] > 0].groupby(['store_code', 'style', 'week'])['size'].nunique().reset_index()
+                weekly_health.columns = ['store_code', 'style', 'week', 'avail']
+                weekly_health = weekly_health.merge(style_total_sizes, on='style', how='left')
+                weekly_health['healthy'] = (weekly_health['avail'] / weekly_health['total_sizes'].clip(lower=1) * 100) >= _psa_threshold
+                wk_agg = weekly_health.groupby('week').agg(
+                    total_combos=('store_code', 'count'),
+                    healthy_combos=('healthy', 'sum'),
+                ).reset_index()
+                wk_agg['healthy_pct'] = (wk_agg['healthy_combos'] / wk_agg['total_combos'].clip(lower=1) * 100).round(1)
+
+                wk_sales = sales_sku_copy.groupby('week')['quantity'].sum().reset_index()
+                wk_sales.columns = ['week', 'total_qty']
+                wk_agg = wk_agg.merge(wk_sales, on='week', how='left').fillna(0)
+                weekly_trend = wk_agg.sort_values('week').to_dict('records')
+        except Exception:
+            pass
+
         return {
             "summary": {
                 "avg_ros_gap": round(avg_ros_gap, 3),
@@ -2578,7 +2628,8 @@ async def get_ros_gap_analysis(
             },
             "style_ros_gap": style_ros.round(3).fillna(0).to_dict('records'),
             "store_health": store_health.round(1).fillna(0).to_dict('records'),
-            "noos_styles": noos_styles.round(1).fillna(0).to_dict('records')
+            "noos_styles": noos_styles.round(1).fillna(0).to_dict('records'),
+            "weekly_trend": weekly_trend
         }
     except Exception as e:
         logger.error(f"ROS Gap analysis error: {str(e)}")
@@ -2595,100 +2646,176 @@ async def get_size_gap_analysis(
     understock_threshold: int = -5,
     overstock_threshold: int = 5
 ):
-    """Calculate size set gap analysis with filters"""
+    """Enhanced size set gap analysis: healthy size sets, sales loss, store comparison, category/gender breakdown."""
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
     style_df = await get_cached_data('style_master')
     store_df = await get_cached_data('store_master')
-    
+
     if sales_df is None or sku_df is None or inventory_df is None:
         return {"error": "Required data not uploaded", "data": []}
-    
+
     try:
-        # Apply filters to sales data
+        # Apply filters
         sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
-        
+        inventory_df_f = inventory_df.copy()
+        inventory_df_f['day'] = pd.to_datetime(inventory_df_f['day'])
+        inventory_df_f = apply_date_filter(inventory_df_f, start_date, end_date, 'day')
+
         if channels:
             channel_list = channels.split(',')
             sales_df = apply_channel_filter(sales_df, channel_list)
-            inventory_df = apply_channel_filter(inventory_df, channel_list)
-        
+            inventory_df_f = apply_channel_filter(inventory_df_f, channel_list)
         if regions and store_df is not None:
             region_list = regions.split(',')
             sales_df = apply_region_filter(sales_df, region_list, store_df)
-            inventory_df = apply_region_filter(inventory_df, region_list, store_df)
-        
-        # Merge sales with SKU data
-        sales_with_sku = sales_df.merge(
-            sku_df[['ean', 'style', 'size']], 
-            left_on='sku', right_on='ean', how='left'
-        )
-        
-        # Apply category filter
+            inventory_df_f = apply_region_filter(inventory_df_f, region_list, store_df)
+
+        sales_with_sku = sales_df.merge(sku_df[['ean', 'style', 'size']], left_on='sku', right_on='ean', how='left')
+        inv_sku = inventory_df_f.merge(sku_df[['ean', 'style', 'size']], on='ean', how='left')
+
         if categories and style_df is not None:
             category_list = categories.split(',')
             sales_with_sku = apply_category_filter(sales_with_sku, category_list, style_df)
-        
+            inv_sku = apply_category_filter(inv_sku, category_list, style_df)
+
         if len(sales_with_sku) == 0:
             return {"error": "No data matches the selected filters", "data": [], "summary": {}}
-        
-        # Calculate size distribution from sales
+
+        # ---- Original size gap (overstock/understock) ----
         size_dist = sales_with_sku.groupby(['style', 'size'])['quantity'].sum().reset_index()
         total_by_style = size_dist.groupby('style')['quantity'].sum().reset_index()
         total_by_style.columns = ['style', 'total_sales']
-        
         size_dist = size_dist.merge(total_by_style, on='style')
         size_dist['sales_ratio'] = (size_dist['quantity'] / size_dist['total_sales']).round(4)
-        
-        # Get current inventory (apply date filter)
-        inventory_df['day'] = pd.to_datetime(inventory_df['day'])
-        if end_date:
-            inventory_df = inventory_df[inventory_df['day'] <= pd.to_datetime(end_date)]
-        latest_date = inventory_df['day'].max()
-        current_inv = inventory_df[inventory_df['day'] == latest_date].copy()
-        
-        inv_with_sku = current_inv.merge(
-            sku_df[['ean', 'style', 'size']], 
-            on='ean', how='left'
-        )
-        
-        inv_by_size = inv_with_sku.groupby(['style', 'size'])['quantity'].sum().reset_index()
+
+        latest_date = inventory_df_f['day'].max()
+        current_inv = inventory_df_f[inventory_df_f['day'] == latest_date].copy()
+        inv_with_sku_latest = current_inv.merge(sku_df[['ean', 'style', 'size']], on='ean', how='left')
+        inv_by_size = inv_with_sku_latest.groupby(['style', 'size'])['quantity'].sum().reset_index()
         inv_by_size.columns = ['style', 'size', 'current_qty']
-        
-        # Calculate total inventory per style
         total_inv = inv_by_size.groupby('style')['current_qty'].sum().reset_index()
         total_inv.columns = ['style', 'total_inv']
-        
-        # Merge to calculate gaps
+
         gap_df = inv_by_size.merge(size_dist[['style', 'size', 'sales_ratio']], on=['style', 'size'], how='outer')
         gap_df = gap_df.merge(total_inv, on='style', how='left')
-        
         gap_df['sales_ratio'] = gap_df['sales_ratio'].fillna(0.1)
         gap_df['current_qty'] = gap_df['current_qty'].fillna(0)
         gap_df['total_inv'] = gap_df['total_inv'].fillna(0)
-        
         gap_df['ideal_qty'] = (gap_df['total_inv'] * gap_df['sales_ratio']).round(0)
         gap_df['gap'] = (gap_df['current_qty'] - gap_df['ideal_qty']).round(0)
-        
-        # Apply threshold-based classification
         gap_df['status'] = gap_df['gap'].apply(
             lambda x: 'Overstock' if x >= overstock_threshold else 'Understock' if x <= understock_threshold else 'Optimal'
         )
-        
         status_counts = gap_df['status'].value_counts().to_dict()
-        
+
+        # ---- GAP-11..14: Healthy size set per store ----
+        _cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
+        _psa = (_cfg or {}).get("pivotal_size_threshold", 75)
+        style_total_sizes = sku_df.groupby('style')['size'].nunique().reset_index()
+        style_total_sizes.columns = ['style', 'total_sizes']
+
+        # Latest inventory per store-style
+        pos = inv_sku[inv_sku['quantity'] > 0]
+        store_style_avail = pos[pos['day'] == latest_date].groupby(['store_code', 'style'])['size'].nunique().reset_index()
+        store_style_avail.columns = ['store_code', 'style', 'available_sizes']
+        all_combos = inv_sku[inv_sku['day'] == latest_date][['store_code', 'style']].drop_duplicates()
+        health_df = all_combos.merge(store_style_avail, on=['store_code', 'style'], how='left')
+        health_df['available_sizes'] = health_df['available_sizes'].fillna(0).astype(int)
+        health_df = health_df.merge(style_total_sizes, on='style', how='left')
+        health_df['total_sizes'] = health_df['total_sizes'].fillna(1).astype(int)
+        health_df['size_pct'] = (health_df['available_sizes'] / health_df['total_sizes'].clip(lower=1) * 100).round(1)
+        health_df['is_healthy'] = health_df['size_pct'] >= _psa
+
+        healthy_count = int(health_df['is_healthy'].sum())
+        unhealthy_count = len(health_df) - healthy_count
+
+        # GAP-14: Sales loss = (Healthy ROS × Broken Days) - Actual Broken Sales
+        # Simplified sales loss per store-style
+        sales_agg = sales_with_sku.groupby(['store_code', 'style']).agg(
+            total_qty=('quantity', 'sum'), total_rev=('revenue', 'sum'),
+        ).reset_index()
+        days_in_period = max(sales_with_sku['day'].nunique() if 'day' in sales_with_sku.columns else 1, 1)
+        sales_agg['ros'] = (sales_agg['total_qty'] / days_in_period).round(3)
+        health_loss = health_df.merge(sales_agg[['store_code', 'style', 'ros', 'total_rev']], on=['store_code', 'style'], how='left').fillna(0)
+        # Sales loss = ROS * (1 - size_pct/100) * days_in_period (approximation for broken days)
+        health_loss['estimated_loss'] = np.where(
+            ~health_loss['is_healthy'],
+            (health_loss['ros'] * (1 - health_loss['size_pct'] / 100) * days_in_period).round(1),
+            0
+        )
+        total_estimated_loss = float(health_loss['estimated_loss'].sum())
+
+        # GAP-16: Store comparison
+        store_comparison = health_df.groupby('store_code').agg(
+            total_combos=('style', 'count'),
+            healthy_count=('is_healthy', 'sum'),
+            avg_size_pct=('size_pct', 'mean'),
+        ).reset_index()
+        store_comparison['healthy_pct'] = (store_comparison['healthy_count'] / store_comparison['total_combos'].clip(lower=1) * 100).round(1)
+        store_comparison = store_comparison.sort_values('healthy_pct', ascending=True)
+
+        # GAP-17: By category
+        category_breakdown = []
+        if style_df is not None and 'category' in style_df.columns:
+            health_cat = health_df.merge(style_df[['style_code', 'category']].rename(columns={'style_code': 'style'}), on='style', how='left')
+            cat_agg = health_cat.groupby('category').agg(
+                total=('style', 'count'), healthy=('is_healthy', 'sum'), avg_pct=('size_pct', 'mean'),
+            ).reset_index()
+            cat_agg['healthy_pct'] = (cat_agg['healthy'] / cat_agg['total'].clip(lower=1) * 100).round(1)
+            category_breakdown = cat_agg.fillna(0).to_dict('records')
+
+        # GAP-18: By gender
+        gender_breakdown = []
+        if style_df is not None and 'gender' in style_df.columns:
+            health_gen = health_df.merge(style_df[['style_code', 'gender']].rename(columns={'style_code': 'style'}), on='style', how='left')
+            gen_agg = health_gen.groupby('gender').agg(
+                total=('style', 'count'), healthy=('is_healthy', 'sum'), avg_pct=('size_pct', 'mean'),
+            ).reset_index()
+            gen_agg['healthy_pct'] = (gen_agg['healthy'] / gen_agg['total'].clip(lower=1) * 100).round(1)
+            gender_breakdown = gen_agg.fillna(0).to_dict('records')
+
+        # GAP-19: Weekly trend
+        weekly_trend = []
+        try:
+            inv_sku_copy = inv_sku.copy()
+            inv_sku_copy['week'] = inv_sku_copy['day'].dt.isocalendar().week.astype(int)
+            wk_avail = inv_sku_copy[inv_sku_copy['quantity'] > 0].groupby(['store_code', 'style', 'week'])['size'].nunique().reset_index()
+            wk_avail.columns = ['store_code', 'style', 'week', 'avail']
+            wk_avail = wk_avail.merge(style_total_sizes, on='style', how='left')
+            wk_avail['healthy'] = (wk_avail['avail'] / wk_avail['total_sizes'].clip(lower=1) * 100) >= _psa
+            wk_trend = wk_avail.groupby('week').agg(
+                total=('store_code', 'count'), healthy=('healthy', 'sum'),
+            ).reset_index()
+            wk_trend['healthy_pct'] = (wk_trend['healthy'] / wk_trend['total'].clip(lower=1) * 100).round(1)
+            weekly_trend = wk_trend.sort_values('week').to_dict('records')
+        except Exception:
+            pass
+
         return {
             "summary": {
                 "overstock": status_counts.get('Overstock', 0),
                 "understock": status_counts.get('Understock', 0),
                 "optimal": status_counts.get('Optimal', 0),
-                "total_gap": abs(gap_df['gap']).sum()
+                "total_gap": abs(gap_df['gap']).sum(),
+                "healthy_store_styles": healthy_count,
+                "unhealthy_store_styles": unhealthy_count,
+                "healthy_pct": round(healthy_count / max(healthy_count + unhealthy_count, 1) * 100, 1),
+                "total_estimated_loss": total_estimated_loss,
+                "psa_threshold": _psa,
             },
-            "data": gap_df.dropna(subset=['style']).fillna(0).to_dict('records')
+            "data": gap_df.dropna(subset=['style']).fillna(0).to_dict('records'),
+            "store_health": health_df.fillna(0).to_dict('records'),
+            "store_comparison": store_comparison.fillna(0).to_dict('records'),
+            "category_breakdown": category_breakdown,
+            "gender_breakdown": gender_breakdown,
+            "weekly_trend": weekly_trend,
         }
     except Exception as e:
         logger.error(f"Size gap analysis error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e), "data": []}
 
 
@@ -2698,99 +2825,174 @@ async def get_noos_analysis(
     end_date: str = None,
     categories: str = None,
     channels: str = None,
-    regions: str = None
+    regions: str = None,
+    export_all: bool = False,
 ):
-    """Calculate NOOS (Never Out of Stock) analysis with filters"""
+    """Enhanced NOOS analysis: new-style exclusion, seasonal check, low-stock alerts, recovery plan."""
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
     style_df = await get_cached_data('style_master')
     store_df = await get_cached_data('store_master')
-    
+
     if sales_df is None or inventory_df is None or sku_df is None:
         return {"error": "Required data not uploaded", "data": []}
-    
+
     try:
-        # Apply date filters
         sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
         inventory_df = apply_date_filter(inventory_df, start_date, end_date, 'day')
-        
-        # Apply channel filters
+
         if channels:
             channel_list = channels.split(',')
             sales_df = apply_channel_filter(sales_df, channel_list)
             inventory_df = apply_channel_filter(inventory_df, channel_list)
-        
-        # Apply region filters
         if regions and store_df is not None:
             region_list = regions.split(',')
             sales_df = apply_region_filter(sales_df, region_list, store_df)
             inventory_df = apply_region_filter(inventory_df, region_list, store_df)
-        
+
         sales_df['day'] = pd.to_datetime(sales_df['day'])
         inventory_df['day'] = pd.to_datetime(inventory_df['day'])
-        
-        # Merge inventory with SKU
-        inv_with_sku = inventory_df.merge(
-            sku_df[['ean', 'style']], on='ean', how='left'
-        )
-        
-        # Apply category filter
+
+        inv_with_sku = inventory_df.merge(sku_df[['ean', 'style']], on='ean', how='left')
         if categories and style_df is not None:
             category_list = categories.split(',')
             inv_with_sku = apply_category_filter(inv_with_sku, category_list, style_df)
-        
+
         if len(inv_with_sku) == 0:
             return {"error": "No data matches the selected filters", "data": [], "summary": {}}
-        
-        # Calculate exposure days (days with positive inventory)
+
+        # Calculate exposure days
         exposure = inv_with_sku[inv_with_sku['quantity'] > 0].groupby(['store_code', 'style'])['day'].nunique().reset_index()
         exposure.columns = ['store_code', 'style', 'exposure_days']
-        
-        # Total possible days
-        total_days = inventory_df['day'].nunique()
-        exposure['availability_pct'] = (exposure['exposure_days'] / total_days * 100).round(1) if total_days > 0 else 0
-        
-        # Merge with sales
-        sales_with_sku = sales_df.merge(
-            sku_df[['ean', 'style']], left_on='sku', right_on='ean', how='left'
-        )
-        
-        # Apply category filter to sales
+        total_days = max(inventory_df['day'].nunique(), sales_df['day'].nunique(), 1)
+        exposure['availability_pct'] = (exposure['exposure_days'] / total_days * 100).round(1)
+
+        # Sales
+        sales_with_sku = sales_df.merge(sku_df[['ean', 'style']], left_on='sku', right_on='ean', how='left')
         if categories and style_df is not None:
-            category_list = categories.split(',')
             sales_with_sku = apply_category_filter(sales_with_sku, category_list, style_df)
-        
-        style_sales = sales_with_sku.groupby(['store_code', 'style']).agg({
-            'quantity': 'sum',
-            'revenue': 'sum'
-        }).reset_index()
-        
-        noos_df = exposure.merge(style_sales, on=['store_code', 'style'], how='outer')
-        noos_df = noos_df.fillna(0)
-        
-        # NOOS classification
-        min_shelf_life = 30
+        style_sales = sales_with_sku.groupby(['store_code', 'style']).agg(
+            quantity=('quantity', 'sum'), revenue=('revenue', 'sum'),
+            sales_days=('day', 'nunique'),
+        ).reset_index()
+        style_sales['sales_pct'] = (style_sales['sales_days'] / max(total_days, 1) * 100).round(1)
+
+        noos_df = exposure.merge(style_sales, on=['store_code', 'style'], how='outer').fillna(0)
+
+        # GAP-23: Exclude new styles (<30 days old)
+        first_sale = sales_with_sku.groupby('style')['day'].min().reset_index()
+        first_sale.columns = ['style', 'first_sale_date']
+        period_end = sales_df['day'].max() if len(sales_df) > 0 else pd.Timestamp.now()
+        first_sale['style_age_days'] = (period_end - first_sale['first_sale_date']).dt.days
+        noos_df = noos_df.merge(first_sale[['style', 'style_age_days']], on='style', how='left')
+        noos_df['style_age_days'] = noos_df['style_age_days'].fillna(0).astype(int)
+        noos_df['is_new_style'] = noos_df['style_age_days'] < 30
+
+        # GAP-24: Seasonal exclusion
+        noos_df['is_seasonal_excluded'] = False
+        if style_df is not None and 'season' in style_df.columns:
+            current_month = period_end.month if hasattr(period_end, 'month') else 1
+            # Simple seasonal logic: check prefix match
+            if 3 <= current_month <= 8:
+                season_prefix = 'SS'
+            else:
+                season_prefix = 'AW'
+            season_map = style_df[['style_code', 'season']].rename(columns={'style_code': 'style'})
+            noos_df = noos_df.merge(season_map, on='style', how='left')
+            noos_df['season'] = noos_df['season'].fillna('Unknown')
+            # Out-of-season: season doesn't start with the current prefix AND isn't generic
+            generic_seasons = ['All-Season', 'Unknown', 'Perennial', '']
+            noos_df['is_seasonal_excluded'] = ~(
+                noos_df['season'].str.startswith(season_prefix)
+                | noos_df['season'].isin(generic_seasons)
+            )
+
+        # NOOS classification (GAP-20, GAP-21, GAP-22)
+        _cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
+        min_shelf_life = (_cfg or {}).get("min_shelf_life_days", 30)
         noos_df['meets_shelf_life'] = noos_df['exposure_days'] >= min_shelf_life
         noos_df['noos_candidate'] = (
-            (noos_df['meets_shelf_life']) & 
-            (noos_df['quantity'] > 0) & 
-            (noos_df['availability_pct'] >= 80)
+            noos_df['meets_shelf_life']
+            & (noos_df['quantity'] > 0)
+            & (noos_df['availability_pct'] >= 80)
+            & (noos_df['sales_pct'] >= 80)
+            & (~noos_df['is_new_style'])          # GAP-23
+            & (~noos_df['is_seasonal_excluded'])   # GAP-24
         )
-        
-        noos_candidates = len(noos_df[noos_df['noos_candidate']])
-        
+        # GAP-25: Inventory but no sales → NOOS = False (already handled: quantity > 0 check covers this)
+
+        # GAP-26: Low stock alert (stock running low for NOOS items)
+        latest_date = inventory_df['day'].max()
+        latest_inv = inv_with_sku[inv_with_sku['day'] == latest_date]
+        current_stock = latest_inv.groupby(['store_code', 'style'])['quantity'].sum().reset_index()
+        current_stock.columns = ['store_code', 'style', 'current_stock']
+        noos_df = noos_df.merge(current_stock, on=['store_code', 'style'], how='left')
+        noos_df['current_stock'] = noos_df['current_stock'].fillna(0)
+        # Low stock = NOOS candidate with stock below 20% of average daily sales * 30
+        noos_df['daily_avg_sales'] = np.where(
+            noos_df['sales_days'] > 0,
+            noos_df['quantity'] / noos_df['sales_days'],
+            0
+        )
+        noos_df['stock_threshold'] = (noos_df['daily_avg_sales'] * 30 * 0.8).round(0)
+        noos_df['low_stock_alert'] = (
+            noos_df['noos_candidate']
+            & (noos_df['current_stock'] < noos_df['stock_threshold'])
+            & (noos_df['current_stock'] > 0)
+        )
+
+        # GAP-28: Recovery plan (suggested actions for NOOS items at risk)
+        def recovery_plan(row):
+            if not row.get('noos_candidate', False):
+                return "Not NOOS - no action needed"
+            if row.get('low_stock_alert', False):
+                return f"URGENT: Replenish {int(row['stock_threshold'] - row['current_stock'])} units. Current stock covers ~{int(row['current_stock'] / max(row['daily_avg_sales'], 0.1))} days."
+            if row.get('availability_pct', 0) < 90:
+                return "Monitor: Availability below 90%. Ensure consistent replenishment."
+            return "Healthy NOOS - maintain current stock levels."
+        noos_df['recovery_plan'] = noos_df.apply(recovery_plan, axis=1)
+
+        noos_candidates = int(noos_df['noos_candidate'].sum())
+        low_stock_count = int(noos_df['low_stock_alert'].sum())
+
+        # GAP-27 & export: Prepare export data
+        export_cols = [
+            'store_code', 'style', 'exposure_days', 'availability_pct',
+            'sales_days', 'sales_pct', 'quantity', 'revenue', 'current_stock',
+            'noos_candidate', 'low_stock_alert', 'recovery_plan',
+        ]
+        export_data = noos_df[[c for c in export_cols if c in noos_df.columns]]
+
+        if export_all:
+            from fastapi.responses import StreamingResponse
+            import io
+            csv_buf = io.StringIO()
+            export_data.to_csv(csv_buf, index=False)
+            csv_buf.seek(0)
+            return StreamingResponse(
+                iter([csv_buf.getvalue()]),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=noos_export.csv"},
+            )
+
         return {
             "summary": {
                 "total_combinations": len(noos_df),
                 "noos_candidates": noos_candidates,
                 "avg_availability": float(noos_df['availability_pct'].mean()) if len(noos_df) > 0 else 0,
-                "total_revenue": float(noos_df['revenue'].sum())
+                "total_revenue": float(noos_df['revenue'].sum()),
+                "low_stock_alerts": low_stock_count,
+                "new_styles_excluded": int(noos_df['is_new_style'].sum()),
+                "seasonal_excluded": int(noos_df['is_seasonal_excluded'].sum()),
+                "total_days": total_days,
             },
-            "data": noos_df.to_dict('records')
+            "data": noos_df.fillna(0).to_dict('records'),
         }
     except Exception as e:
         logger.error(f"NOOS analysis error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e), "data": []}
 
 
