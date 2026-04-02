@@ -616,6 +616,238 @@ async def get_analytics_overview():
     return overview
 
 
+@api_router.get("/analytics/stock-out")
+async def get_stock_out_analysis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None
+):
+    """
+    PRD Stock-Out Analysis.
+    Stock-out: SOH = 0 AND Last 30 Days ROS > 0
+    Daily Sales Loss: ((ROS x 1) - SOH) x ASP
+    Severity: LostSales x Duration x Importance
+    """
+    sales_df = await get_cached_data('daily_sales')
+    inventory_df = await get_cached_data('store_inventory')
+    sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
+
+    if sales_df is None or inventory_df is None or sku_df is None:
+        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+
+    try:
+        # Apply filters
+        sales_df = apply_date_filter(sales_df, start_date, end_date, 'day')
+        inventory_df = apply_date_filter(inventory_df, start_date, end_date, 'day')
+
+        if channels:
+            channel_list = channels.split(',')
+            sales_df = apply_channel_filter(sales_df, channel_list)
+            inventory_df = apply_channel_filter(inventory_df, channel_list)
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_df = apply_region_filter(sales_df, region_list, store_df)
+            inventory_df = apply_region_filter(inventory_df, region_list, store_df)
+
+        sales_df['day'] = pd.to_datetime(sales_df['day'])
+        inventory_df['day'] = pd.to_datetime(inventory_df['day'])
+
+        # Merge with SKU master for style, size, ASP (mrp)
+        sku_cols = ['ean']
+        if 'style' in sku_df.columns:
+            sku_cols.append('style')
+        if 'size' in sku_df.columns:
+            sku_cols.append('size')
+        if 'mrp' in sku_df.columns:
+            sku_cols.append('mrp')
+
+        sales_sku = sales_df.merge(sku_df[sku_cols], left_on='sku', right_on='ean', how='left')
+
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            sales_sku = apply_category_filter(sales_sku, category_list, style_df)
+
+        if len(sales_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": {}}
+
+        # ================================================
+        # 1. Calculate ROS per store-SKU (last 30 days)
+        # ================================================
+        ros_df = sales_sku.groupby(['store_code', 'sku']).agg(
+            total_qty=('quantity', 'sum'),
+            total_revenue=('revenue', 'sum'),
+            live_days=('day', 'nunique')
+        ).reset_index()
+        ros_df['ros'] = (ros_df['total_qty'] / ros_df['live_days'].clip(lower=1)).round(3)
+
+        # Get ASP per SKU
+        if 'mrp' in sku_df.columns:
+            asp_map = sku_df.groupby('ean')['mrp'].first()
+            ros_df['asp'] = ros_df['sku'].map(asp_map).fillna(0)
+        else:
+            ros_df['asp'] = np.where(
+                ros_df['total_qty'] > 0,
+                (ros_df['total_revenue'] / ros_df['total_qty']).round(2),
+                0
+            )
+
+        # ================================================
+        # 2. Latest SOH per store-SKU
+        # ================================================
+        latest_date = inventory_df['day'].max()
+        latest_inv = inventory_df[inventory_df['day'] == latest_date].copy()
+        soh_df = latest_inv.groupby(['store_code', 'ean'])['quantity'].sum().reset_index()
+        soh_df.columns = ['store_code', 'sku', 'soh']
+
+        # ================================================
+        # 3. Identify stock-outs: SOH=0 AND ROS>0
+        # ================================================
+        merged = ros_df.merge(soh_df, on=['store_code', 'sku'], how='left')
+        merged['soh'] = merged['soh'].fillna(0)
+        merged['is_stockout'] = (merged['soh'] == 0) & (merged['ros'] > 0)
+
+        total_store_skus = len(merged)
+        stockouts = merged[merged['is_stockout']]
+        total_stockouts = len(stockouts)
+        stockout_rate = round((total_stockouts / max(total_store_skus, 1)) * 100, 1)
+
+        # ================================================
+        # 4. Sales Loss per stock-out: ((ROS x 1) - SOH) x ASP
+        # ================================================
+        stockouts = stockouts.copy()
+        stockouts['daily_sales_loss'] = ((stockouts['ros'] * 1 - stockouts['soh']) * stockouts['asp']).clip(lower=0).round(2)
+        total_lost_sales = float(stockouts['daily_sales_loss'].sum())
+
+        # ================================================
+        # 5. Stock-out duration (consecutive days with SOH=0)
+        # ================================================
+        inv_with_sku = inventory_df.merge(
+            sku_df[['ean']].drop_duplicates(), on='ean', how='inner'
+        )
+        zero_days = inv_with_sku[inv_with_sku['quantity'] == 0].groupby(
+            ['store_code', 'ean']
+        )['day'].nunique().reset_index()
+        zero_days.columns = ['store_code', 'sku', 'stockout_days']
+
+        stockouts = stockouts.merge(zero_days, on=['store_code', 'sku'], how='left')
+        stockouts['stockout_days'] = stockouts['stockout_days'].fillna(1).astype(int)
+
+        # Severity = LostSales x Duration x Importance (importance=1 default)
+        stockouts['severity'] = (stockouts['daily_sales_loss'] * stockouts['stockout_days']).round(2)
+
+        # ================================================
+        # 6. Top impacted SKUs
+        # ================================================
+        # Add style info
+        if 'style' in sku_df.columns:
+            sku_style_map = sku_df.groupby('ean')['style'].first()
+            stockouts['style'] = stockouts['sku'].map(sku_style_map).fillna('Unknown')
+        else:
+            stockouts['style'] = 'Unknown'
+
+        top_skus = stockouts.groupby('sku').agg(
+            stockout_count=('store_code', 'nunique'),
+            total_daily_loss=('daily_sales_loss', 'sum'),
+            avg_ros=('ros', 'mean'),
+            avg_asp=('asp', 'mean'),
+            style=('style', 'first')
+        ).reset_index().sort_values('total_daily_loss', ascending=False).head(15)
+
+        # ================================================
+        # 7. Top impacted stores
+        # ================================================
+        top_stores = stockouts.groupby('store_code').agg(
+            stockout_count=('sku', 'nunique'),
+            total_daily_loss=('daily_sales_loss', 'sum'),
+            avg_duration=('stockout_days', 'mean'),
+            total_severity=('severity', 'sum')
+        ).reset_index().sort_values('total_severity', ascending=False).head(15)
+        top_stores['avg_duration'] = top_stores['avg_duration'].round(1)
+
+        # ================================================
+        # 8. Category impact (if style master available)
+        # ================================================
+        category_impact = []
+        if style_df is not None and 'category' in style_df.columns and 'style' in stockouts.columns:
+            if 'style_code' in style_df.columns:
+                style_cat = style_df[['style_code', 'category']].drop_duplicates()
+                so_cat = stockouts.merge(style_cat, left_on='style', right_on='style_code', how='left')
+            else:
+                so_cat = stockouts.copy()
+                so_cat['category'] = 'Unknown'
+            cat_agg = so_cat.groupby('category').agg(
+                stockout_count=('sku', 'nunique'),
+                total_daily_loss=('daily_sales_loss', 'sum')
+            ).reset_index().sort_values('total_daily_loss', ascending=False)
+            category_impact = cat_agg.fillna(0).to_dict('records')
+
+        # ================================================
+        # 9. Daily stock-out trend
+        # ================================================
+        inv_with_ros = inventory_df.merge(
+            ros_df[['store_code', 'sku', 'ros']].drop_duplicates(),
+            left_on=['store_code', 'ean'], right_on=['store_code', 'sku'], how='left'
+        )
+        inv_with_ros['ros'] = inv_with_ros['ros'].fillna(0)
+        inv_with_ros['is_stockout'] = (inv_with_ros['quantity'] == 0) & (inv_with_ros['ros'] > 0)
+
+        daily_trend = inv_with_ros.groupby('day')['is_stockout'].sum().reset_index()
+        daily_trend.columns = ['date', 'stockout_count']
+        daily_trend['date'] = daily_trend['date'].dt.strftime('%Y-%m-%d')
+        daily_trend = daily_trend.sort_values('date')
+
+        # ================================================
+        # 10. High-risk SKUs (low days-to-stockout)
+        # ================================================
+        # For non-stockout items: days_to_stockout = SOH / ROS
+        non_stockout = merged[(~merged['is_stockout']) & (merged['ros'] > 0) & (merged['soh'] > 0)].copy()
+        non_stockout['days_to_stockout'] = (non_stockout['soh'] / non_stockout['ros']).round(1)
+        non_stockout['risk'] = pd.cut(
+            non_stockout['days_to_stockout'],
+            bins=[-1, 3, 5, 7, float('inf')],
+            labels=['critical', 'high', 'medium', 'low']
+        )
+        if 'style' in sku_df.columns:
+            sku_style_map2 = sku_df.groupby('ean')['style'].first()
+            non_stockout['style'] = non_stockout['sku'].map(sku_style_map2).fillna('Unknown')
+        else:
+            non_stockout['style'] = 'Unknown'
+
+        high_risk = non_stockout[non_stockout['days_to_stockout'] <= 7].sort_values('days_to_stockout').head(15)
+        high_risk_list = high_risk[['sku', 'store_code', 'ros', 'soh', 'asp', 'days_to_stockout', 'risk', 'style']].fillna(0).to_dict('records')
+        # Convert risk category to string
+        for item in high_risk_list:
+            item['risk'] = str(item['risk'])
+
+        # ================================================
+        # 11. Stores impacted count
+        # ================================================
+        stores_impacted = int(stockouts['store_code'].nunique())
+
+        return {
+            "summary": {
+                "total_stockouts": total_stockouts,
+                "stockout_rate": stockout_rate,
+                "total_lost_sales": round(total_lost_sales, 2),
+                "stores_impacted": stores_impacted,
+                "total_store_skus": total_store_skus,
+                "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
+            },
+            "top_skus": top_skus.round(2).fillna(0).to_dict('records'),
+            "top_stores": top_stores.round(2).fillna(0).to_dict('records'),
+            "category_impact": category_impact,
+            "daily_trend": daily_trend.to_dict('records'),
+            "high_risk_skus": high_risk_list,
+        }
+    except Exception as e:
+        logger.error(f"Stock-out analysis error: {str(e)}")
+        return {"error": str(e), "data": {}}
+
+
 @api_router.get("/analytics/ros")
 async def get_ros_analysis(
     start_date: str = None,
