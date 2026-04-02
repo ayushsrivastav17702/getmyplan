@@ -848,6 +848,169 @@ async def get_stock_out_analysis(
         return {"error": str(e), "data": {}}
 
 
+@api_router.get("/analytics/executive-dashboard")
+async def get_executive_dashboard(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None
+):
+    """Aggregated executive dashboard pulling top KPIs from all analytics modules."""
+    modules = {}
+    alerts = []
+    query = f"start_date={start_date or ''}&end_date={end_date or ''}&categories={categories or ''}&channels={channels or ''}&regions={regions or ''}"
+
+    # --- ROS Gap ---
+    try:
+        ros_resp = await get_ros_gap_analysis(start_date, end_date, categories, channels, regions)
+        if not ros_resp.get('error'):
+            s = ros_resp.get('summary', {})
+            modules['ros_gap'] = {
+                'avg_ros_gap': s.get('avg_ros_gap', 0),
+                'total_sales_loss': s.get('total_sales_loss', 0),
+                'healthy_coverage_pct': s.get('healthy_coverage_pct', 0),
+                'healthy_styles': s.get('healthy_styles', 0),
+                'broken_styles': s.get('broken_styles', 0),
+                'noos_styles': s.get('noos_styles', 0),
+            }
+            if s.get('total_sales_loss', 0) > 0:
+                alerts.append({
+                    'module': 'ROS Gap',
+                    'priority': 'high' if s.get('total_sales_loss', 0) > 1000 else 'medium',
+                    'title': f"{s.get('broken_styles', 0)} styles with broken size sets",
+                    'description': f"Estimated {int(s.get('total_sales_loss', 0))} units lost due to broken size sets.",
+                    'link': '/gap-analysis'
+                })
+    except Exception:
+        modules['ros_gap'] = None
+
+    # --- Stock-Out ---
+    try:
+        so_resp = await get_stock_out_analysis(start_date, end_date, categories, channels, regions)
+        if not so_resp.get('error'):
+            s = so_resp.get('summary', {})
+            modules['stock_out'] = {
+                'total_stockouts': s.get('total_stockouts', 0),
+                'stockout_rate': s.get('stockout_rate', 0),
+                'total_lost_sales': s.get('total_lost_sales', 0),
+                'stores_impacted': s.get('stores_impacted', 0),
+            }
+            if s.get('total_stockouts', 0) > 0:
+                alerts.append({
+                    'module': 'Stock-Out',
+                    'priority': 'high',
+                    'title': f"{s.get('total_stockouts', 0)} active stock-outs",
+                    'description': f"Affecting {s.get('stores_impacted', 0)} stores with {formatCurrencyPy(s.get('total_lost_sales', 0))} daily loss.",
+                    'link': '/stock-out'
+                })
+    except Exception:
+        modules['stock_out'] = None
+
+    # --- DOH ---
+    try:
+        doh_resp = await get_doh_analysis(start_date, end_date, categories, channels, regions, 9)
+        if not doh_resp.get('error'):
+            s = doh_resp.get('summary', {})
+            modules['doh'] = {
+                'overall_doh': s.get('overall_doh', 0),
+                'ideal_doh': s.get('ideal_doh', 9),
+                'optimal_count': s.get('optimal_count', 0),
+                'overstocked_count': s.get('overstocked_count', 0),
+                'understocked_count': s.get('understocked_count', 0),
+                'stockedout_count': s.get('stockedout_count', 0),
+            }
+            risk = s.get('understocked_count', 0) + s.get('stockedout_count', 0)
+            if risk > 0:
+                alerts.append({
+                    'module': 'DOH',
+                    'priority': 'medium',
+                    'title': f"{risk} store-SKUs at risk (understocked/stocked-out)",
+                    'description': f"Overall DOH is {s.get('overall_doh', 0)} days vs ideal {s.get('ideal_doh', 9)} days.",
+                    'link': '/doh'
+                })
+    except Exception:
+        modules['doh'] = None
+
+    # --- Planogram Fill Rate ---
+    try:
+        plano_resp = await get_planogram_fill_rate(start_date, end_date, categories, channels, regions, 85)
+        if not plano_resp.get('error'):
+            s = plano_resp.get('summary', {})
+            modules['planogram'] = {
+                'overall_fill_rate': s.get('overall_fill_rate', 0),
+                'target_fill_rate': s.get('target_fill_rate', 85),
+                'good_count': s.get('good_count', 0),
+                'moderate_count': s.get('moderate_count', 0),
+                'critical_count': s.get('critical_count', 0),
+                'total_lost_sales': s.get('total_lost_sales', 0),
+            }
+            if s.get('critical_count', 0) > 0:
+                alerts.append({
+                    'module': 'Planogram',
+                    'priority': 'high' if s.get('critical_count', 0) > 100 else 'medium',
+                    'title': f"{s.get('critical_count', 0)} store-SKUs below 80% fill rate",
+                    'description': f"Overall fill rate: {s.get('overall_fill_rate', 0)}%. Lost sales: {formatCurrencyPy(s.get('total_lost_sales', 0))}.",
+                    'link': '/planogram'
+                })
+    except Exception:
+        modules['planogram'] = None
+
+    # --- Replenishment ---
+    try:
+        repl_resp = await get_replenishment_plan(start_date, end_date, categories, channels, regions, 14, 7, 0.1)
+        if not repl_resp.get('error'):
+            s = repl_resp.get('summary', {})
+            modules['replenishment'] = {
+                'total_po_value': s.get('total_po_value', 0),
+                'total_reorder_units': s.get('total_reorder_units', 0),
+                'skus_needing_reorder': s.get('skus_needing_reorder', 0),
+                'stockout_count': s.get('stockout_count', 0),
+                'critical_count': s.get('critical_count', 0),
+            }
+            urgent = s.get('stockout_count', 0) + s.get('critical_count', 0)
+            if urgent > 0:
+                alerts.append({
+                    'module': 'Replenishment',
+                    'priority': 'high',
+                    'title': f"{urgent} urgent reorder items",
+                    'description': f"Total PO value: {formatCurrencyPy(s.get('total_po_value', 0))}. {s.get('skus_needing_reorder', 0)} SKUs need reorder.",
+                    'link': '/replenishment'
+                })
+    except Exception:
+        modules['replenishment'] = None
+
+    # --- Health Score (0-100) ---
+    scores = []
+    if modules.get('stock_out'):
+        so_score = max(0, 100 - modules['stock_out']['stockout_rate'])
+        scores.append(so_score)
+    if modules.get('doh'):
+        d = modules['doh']
+        total_items = d['optimal_count'] + d['overstocked_count'] + d['understocked_count'] + d['stockedout_count']
+        doh_score = (d['optimal_count'] / max(total_items, 1)) * 100 if total_items > 0 else 50
+        scores.append(doh_score)
+    if modules.get('planogram'):
+        scores.append(modules['planogram']['overall_fill_rate'])
+    if modules.get('ros_gap'):
+        rg = modules['ros_gap']
+        total_s = rg['healthy_styles'] + rg['broken_styles']
+        ros_score = (rg['healthy_styles'] / max(total_s, 1)) * 100 if total_s > 0 else 50
+        scores.append(ros_score)
+
+    health_score = round(sum(scores) / max(len(scores), 1), 1) if scores else 0
+
+    # Sort alerts by priority
+    priority_order = {'high': 0, 'medium': 1, 'low': 2}
+    alerts.sort(key=lambda a: priority_order.get(a['priority'], 2))
+
+    return {
+        'health_score': health_score,
+        'modules': modules,
+        'alerts': alerts,
+    }
+
+
 @api_router.get("/analytics/planogram-fill-rate")
 async def get_planogram_fill_rate(
     start_date: str = None,

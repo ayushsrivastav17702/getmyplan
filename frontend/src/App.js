@@ -4,11 +4,12 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import axios from "axios";
 import { 
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard
 } from "lucide-react";
 
 // Pages
 import GettingStarted from "./pages/GettingStarted";
+import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 import DataUpload from "./pages/DataUpload";
 import Configuration from "./pages/Configuration";
 import CoreLogics from "./pages/CoreLogics";
