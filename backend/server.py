@@ -18,6 +18,7 @@ import chardet
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from sftp import sftp_service, sftp_scheduler
 from routes.core_logic import router as core_logic_router, init_core_logic
+from routes.replenishment import router as replenishment_router, init_replenishment
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -4107,6 +4108,7 @@ async def get_quality_scorecard():
 
 # Include the router in the main app
 api_router.include_router(core_logic_router)
+api_router.include_router(replenishment_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -4180,6 +4182,7 @@ async def startup():
     await _ensure_default_tenant()
     await seed_rbac()
     init_core_logic(client)
+    init_replenishment(client)
     logger.info("Multi-tenant startup complete")
 
 
