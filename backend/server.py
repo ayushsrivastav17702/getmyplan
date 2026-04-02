@@ -848,6 +848,289 @@ async def get_stock_out_analysis(
         return {"error": str(e), "data": {}}
 
 
+@api_router.get("/analytics/doh")
+async def get_doh_analysis(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+    ideal_doh: int = 9
+):
+    """
+    DOH (Days on Hand) Analysis using PRD formulas.
+    DOH(store,sku) = Inventory(store,sku) / Daily Raw ROS(store,sku)
+    Overall Channel DOH = Sum(DOH x Inventory) / Sum(Inventory)
+    Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
+    """
+    sales_df = await get_cached_data('daily_sales')
+    inventory_df = await get_cached_data('store_inventory')
+    sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
+
+    if sales_df is None or inventory_df is None or sku_df is None:
+        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+
+    try:
+        sales_filtered = apply_date_filter(sales_df.copy(), start_date, end_date, 'day')
+        inventory_filtered = apply_date_filter(inventory_df.copy(), start_date, end_date, 'day')
+
+        if channels:
+            channel_list = channels.split(',')
+            sales_filtered = apply_channel_filter(sales_filtered, channel_list)
+            inventory_filtered = apply_channel_filter(inventory_filtered, channel_list)
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_filtered = apply_region_filter(sales_filtered, region_list, store_df)
+            inventory_filtered = apply_region_filter(inventory_filtered, region_list, store_df)
+
+        sales_filtered['day'] = pd.to_datetime(sales_filtered['day'])
+        inventory_filtered['day'] = pd.to_datetime(inventory_filtered['day'])
+
+        # Merge sales with SKU master for style
+        sku_cols = ['ean']
+        if 'style' in sku_df.columns:
+            sku_cols.append('style')
+        sales_sku = sales_filtered.merge(sku_df[sku_cols], left_on='sku', right_on='ean', how='left')
+
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            sales_sku = apply_category_filter(sales_sku, category_list, style_df)
+
+        if len(sales_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": {}}
+
+        # ================================================
+        # 1. ROS per store-SKU
+        # ================================================
+        ros_calc = sales_sku.groupby(['store_code', 'sku']).agg(
+            total_qty=('quantity', 'sum'),
+            total_revenue=('revenue', 'sum'),
+            live_days=('day', 'nunique')
+        ).reset_index()
+        ros_calc['ros'] = (ros_calc['total_qty'] / ros_calc['live_days'].clip(lower=1)).round(4)
+
+        # ================================================
+        # 2. Latest SOH per store-SKU
+        # ================================================
+        latest_date = inventory_filtered['day'].max()
+        latest_inv = inventory_filtered[inventory_filtered['day'] == latest_date].copy()
+        soh_df = latest_inv.groupby(['store_code', 'ean'])['quantity'].sum().reset_index()
+        soh_df.columns = ['store_code', 'sku', 'soh']
+
+        # ================================================
+        # 3. DOH = SOH / ROS per store-SKU
+        # ================================================
+        doh_df = ros_calc.merge(soh_df, on=['store_code', 'sku'], how='outer')
+        doh_df['soh'] = doh_df['soh'].fillna(0)
+        doh_df['ros'] = doh_df['ros'].fillna(0)
+        doh_df['total_qty'] = doh_df['total_qty'].fillna(0)
+        doh_df['total_revenue'] = doh_df['total_revenue'].fillna(0)
+
+        doh_df['doh'] = np.where(
+            doh_df['ros'] > 0,
+            (doh_df['soh'] / doh_df['ros']).round(1),
+            np.where(doh_df['soh'] > 0, 9999, 0)
+        )
+
+        # Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
+        upper = ideal_doh * 1.2
+        lower = ideal_doh * 0.8
+
+        def classify(row):
+            if row['soh'] == 0 and row['ros'] > 0:
+                return 'STOCKED_OUT'
+            if row['ros'] == 0 and row['soh'] > 0:
+                return 'NO_SALES'
+            if row['ros'] == 0 and row['soh'] == 0:
+                return 'STOCKED_OUT'
+            if row['doh'] > upper:
+                return 'OVERSTOCKED'
+            if row['doh'] < lower:
+                return 'UNDERSTOCKED'
+            return 'OPTIMAL'
+
+        doh_df['status'] = doh_df.apply(classify, axis=1)
+
+        # Add style info
+        if 'style' in sku_df.columns:
+            sku_style_map = sku_df.groupby('ean')['style'].first()
+            doh_df['style'] = doh_df['sku'].map(sku_style_map).fillna('Unknown')
+        else:
+            doh_df['style'] = 'Unknown'
+
+        # ================================================
+        # 4. Store-wise aggregation (weighted DOH)
+        # ================================================
+        valid = doh_df[(doh_df['ros'] > 0) & (doh_df['soh'] > 0)].copy()
+        valid['weighted_doh'] = valid['doh'] * valid['soh']
+
+        store_agg = valid.groupby('store_code').agg(
+            total_inventory=('soh', 'sum'),
+            weighted_doh_sum=('weighted_doh', 'sum'),
+            sku_count=('sku', 'nunique'),
+            total_revenue=('total_revenue', 'sum')
+        ).reset_index()
+        store_agg['doh'] = (store_agg['weighted_doh_sum'] / store_agg['total_inventory'].clip(lower=1)).round(1)
+
+        # Status counts per store
+        store_status = doh_df.groupby(['store_code', 'status']).size().unstack(fill_value=0).reset_index()
+        for col in ['OPTIMAL', 'OVERSTOCKED', 'UNDERSTOCKED', 'STOCKED_OUT', 'NO_SALES']:
+            if col not in store_status.columns:
+                store_status[col] = 0
+
+        store_agg = store_agg.merge(store_status, on='store_code', how='left')
+
+        def store_overall(row):
+            if row.get('STOCKED_OUT', 0) > row.get('OPTIMAL', 0):
+                return 'STOCKED_OUT'
+            if row.get('UNDERSTOCKED', 0) > row.get('OPTIMAL', 0):
+                return 'UNDERSTOCKED'
+            if row.get('OVERSTOCKED', 0) > row.get('OPTIMAL', 0):
+                return 'OVERSTOCKED'
+            return 'OPTIMAL'
+
+        store_agg['status'] = store_agg.apply(store_overall, axis=1)
+        store_data = store_agg.sort_values('doh')[
+            ['store_code', 'total_inventory', 'doh', 'sku_count', 'status',
+             'OPTIMAL', 'OVERSTOCKED', 'UNDERSTOCKED', 'STOCKED_OUT']
+        ].fillna(0).to_dict('records')
+        for s in store_data:
+            s['ideal_doh'] = ideal_doh
+
+        # ================================================
+        # 5. Category-wise aggregation
+        # ================================================
+        category_data = []
+        if style_df is not None and 'category' in style_df.columns and 'style' in doh_df.columns:
+            if 'style_code' in style_df.columns:
+                style_cat = style_df[['style_code', 'category']].drop_duplicates()
+                doh_cat = doh_df.merge(style_cat, left_on='style', right_on='style_code', how='left')
+            else:
+                doh_cat = doh_df.copy()
+                doh_cat['category'] = 'Unknown'
+
+            valid_cat = doh_cat[(doh_cat['ros'] > 0) & (doh_cat['soh'] > 0)].copy()
+            valid_cat['weighted_doh'] = valid_cat['doh'] * valid_cat['soh']
+
+            cat_agg = valid_cat.groupby('category').agg(
+                total_inventory=('soh', 'sum'),
+                weighted_doh_sum=('weighted_doh', 'sum'),
+                sku_count=('sku', 'nunique')
+            ).reset_index()
+            cat_agg['doh'] = (cat_agg['weighted_doh_sum'] / cat_agg['total_inventory'].clip(lower=1)).round(1)
+
+            def cat_classify(row):
+                if row['doh'] > upper:
+                    return 'OVERSTOCKED'
+                if row['doh'] < lower:
+                    return 'UNDERSTOCKED'
+                return 'OPTIMAL'
+
+            cat_agg['status'] = cat_agg.apply(cat_classify, axis=1)
+            cat_agg['ideal_doh'] = ideal_doh
+            category_data = cat_agg[['category', 'total_inventory', 'doh', 'sku_count', 'status', 'ideal_doh']].fillna(0).to_dict('records')
+
+        # ================================================
+        # 6. DOH trend over time (weekly buckets)
+        # ================================================
+        inv_daily = inventory_filtered.groupby('day')['quantity'].sum().reset_index()
+        inv_daily.columns = ['day', 'total_inv']
+        sales_daily = sales_filtered.groupby('day')['quantity'].sum().reset_index()
+        sales_daily.columns = ['day', 'total_sales']
+
+        daily_merged = inv_daily.merge(sales_daily, on='day', how='outer').sort_values('day').fillna(0)
+        daily_merged['ros_7d'] = daily_merged['total_sales'].rolling(7, min_periods=1).mean()
+        daily_merged['doh'] = np.where(
+            daily_merged['ros_7d'] > 0,
+            (daily_merged['total_inv'] / daily_merged['ros_7d']).round(1),
+            0
+        )
+        # Stockout count per day
+        daily_stockouts = inventory_filtered[inventory_filtered['quantity'] == 0].groupby('day').size().reset_index()
+        daily_stockouts.columns = ['day', 'stockout_count']
+        daily_merged = daily_merged.merge(daily_stockouts, on='day', how='left')
+        daily_merged['stockout_count'] = daily_merged['stockout_count'].fillna(0).astype(int)
+
+        # Resample to weekly
+        daily_merged = daily_merged.set_index('day')
+        weekly = daily_merged.resample('W').agg({
+            'doh': 'mean',
+            'stockout_count': 'sum',
+            'total_inv': 'last'
+        }).reset_index()
+        weekly['doh'] = weekly['doh'].round(1)
+        weekly['week_label'] = weekly['day'].dt.strftime('%b %d')
+
+        trend_data = weekly[['week_label', 'doh', 'stockout_count']].tail(8).fillna(0).to_dict('records')
+
+        # ================================================
+        # 7. Detail table (store-SKU level, top 200)
+        # ================================================
+        detail_df = doh_df[doh_df['ros'] > 0][
+            ['store_code', 'sku', 'style', 'soh', 'ros', 'doh', 'status']
+        ].sort_values('doh').head(200)
+        detail_df['ideal_doh'] = ideal_doh
+        detail_data = detail_df.round(2).fillna(0).to_dict('records')
+
+        # ================================================
+        # 8. Summary KPIs
+        # ================================================
+        status_counts = doh_df['status'].value_counts().to_dict()
+        total_items = len(doh_df)
+        overall_doh = 0
+        if len(valid) > 0:
+            overall_doh = round(float(valid['weighted_doh'].sum() / valid['soh'].sum()), 1)
+
+        # Recommendations
+        recommendations = []
+        understocked_stores = len([s for s in store_data if s['status'] == 'UNDERSTOCKED'])
+        overstocked_stores = len([s for s in store_data if s['status'] == 'OVERSTOCKED'])
+        stockedout_stores = len([s for s in store_data if s['status'] == 'STOCKED_OUT'])
+
+        if stockedout_stores > 0:
+            recommendations.append({
+                "priority": "high",
+                "title": "Stock-out detected across stores",
+                "description": f"{stockedout_stores} stores have critical stock-outs with active demand. Immediate replenishment needed."
+            })
+        if understocked_stores > 0:
+            recommendations.append({
+                "priority": "high",
+                "title": f"DOH below {lower:.0f} days in {understocked_stores} stores",
+                "description": f"These stores have DOH below 80% of ideal ({ideal_doh} days). Increase replenishment frequency."
+            })
+        if overstocked_stores > 0:
+            recommendations.append({
+                "priority": "medium",
+                "title": f"DOH above {upper:.0f} days in {overstocked_stores} stores",
+                "description": f"These stores have DOH above 120% of ideal. Consider reducing order quantities or inter-store transfers."
+            })
+
+        return {
+            "summary": {
+                "overall_doh": overall_doh,
+                "ideal_doh": ideal_doh,
+                "total_store_skus": total_items,
+                "optimal_count": int(status_counts.get('OPTIMAL', 0)),
+                "overstocked_count": int(status_counts.get('OVERSTOCKED', 0)),
+                "understocked_count": int(status_counts.get('UNDERSTOCKED', 0)),
+                "stockedout_count": int(status_counts.get('STOCKED_OUT', 0)),
+                "no_sales_count": int(status_counts.get('NO_SALES', 0)),
+                "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
+            },
+            "store_data": store_data,
+            "category_data": category_data,
+            "trend_data": trend_data,
+            "detail": detail_data,
+            "recommendations": recommendations,
+        }
+    except Exception as e:
+        logger.error(f"DOH analysis error: {str(e)}")
+        return {"error": str(e), "data": {}}
+
+
 @api_router.get("/analytics/replenishment")
 async def get_replenishment_plan(
     start_date: str = None,

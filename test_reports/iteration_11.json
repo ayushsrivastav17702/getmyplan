@@ -1,0 +1,86 @@
+{
+  "summary": "Completed comprehensive testing of DOH (Days on Hand) Analysis page (Iteration 11). All backend APIs working correctly (19/19 tests passed). Frontend UI fully functional with PRD Formula cards (3), KPI cards (4), charts (2), data tables (2), configurable ideal DOH slider (1-60 days), and CSV export. FilterPanel integrates correctly. Navigation sidebar includes DOH Analysis. Existing Replenishment Planner and Stock-Out Analysis pages still work (regression).",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: GET /api/analytics/doh returns 200",
+    "Backend: Response has summary field with all required KPIs (overall_doh, ideal_doh, total_store_skus, optimal_count, overstocked_count, understocked_count, stockedout_count, snapshot_date)",
+    "Backend: Response has store_data array with required columns (store_code, total_inventory, doh, sku_count, status, ideal_doh)",
+    "Backend: Response has category_data array",
+    "Backend: Response has trend_data array with weekly data (week_label, doh, stockout_count)",
+    "Backend: Response has detail array with store-SKU level data (store_code, sku, style, soh, ros, doh, status, ideal_doh)",
+    "Backend: Response has recommendations array with priority, title, description",
+    "Backend: Default ideal_doh is 9",
+    "Backend: ideal_doh query parameter works correctly (tested with 15, 30)",
+    "Backend: Classification recalculates with ideal_doh change (PRD formula: Optimal ±20%, Overstocked >120%, Understocked <80%)",
+    "Backend: Status values are valid (OPTIMAL, OVERSTOCKED, UNDERSTOCKED, STOCKED_OUT, NO_SALES)",
+    "Backend: Summary values are valid numbers with correct ranges",
+    "Backend: Detail table is sorted by lowest DOH first (most urgent)",
+    "Backend: Date filter parameters accepted",
+    "Backend: Channel filter parameter accepted",
+    "Backend: Region filter parameter accepted",
+    "Backend: Existing /api/analytics/stock-out endpoint still works (regression)",
+    "Backend: Existing /api/analytics/replenishment endpoint still works (regression)",
+    "Backend: /api/analytics/filter-options endpoint still works (regression)",
+    "Frontend: DOH Analysis page renders at /doh with data-testid='doh-analysis-page'",
+    "Frontend: PRD Formula card displayed with data-testid='doh-formula-card'",
+    "Frontend: 3 PRD Formula cards displayed (DOH Store-SKU, Channel DOH, Classification)",
+    "Frontend: DOH Config section displayed with data-testid='doh-config'",
+    "Frontend: Ideal DOH slider works (range 1-60 days) with data-testid='slider-ideal-doh'",
+    "Frontend: Optimal range text updates dynamically (e.g., '7 – 11 days (±20%)' for ideal=9)",
+    "Frontend: Recalculate button triggers new API call with data-testid='recalculate-doh-btn'",
+    "Frontend: 4 KPI cards displayed (Overall DOH, Optimal, At Risk, Stocked Out)",
+    "Frontend: DOH Trend & Stock-Outs line chart renders with data-testid='chart-doh-trend'",
+    "Frontend: DOH Status Distribution doughnut chart renders with data-testid='chart-status-dist'",
+    "Frontend: Recommendations section displays action items with data-testid='doh-recommendations'",
+    "Frontend: Store/Category view toggle buttons work (data-testid='view-store', 'view-category')",
+    "Frontend: Store-wise DOH bar chart shows Current DOH vs Ideal DOH with data-testid='chart-doh-bars'",
+    "Frontend: Store-wise DOH table with columns: Store, Inventory, Current DOH, Ideal DOH, SKUs, Status (data-testid='table-doh-summary')",
+    "Frontend: Detail table shows store-SKU level data sorted by lowest DOH (data-testid='table-doh-detail')",
+    "Frontend: Export CSV button works with data-testid='export-doh-btn'",
+    "Frontend: Export Detail CSV button works with data-testid='export-detail-doh-btn'",
+    "Frontend: Refresh button works with data-testid='refresh-doh-btn'",
+    "Frontend: FilterPanel integrates correctly (date, category, channel, region filters)",
+    "Frontend: Navigation sidebar includes DOH Analysis with data-testid='nav-doh'",
+    "Frontend: Existing Replenishment Planner page still works at /replenishment (regression)",
+    "Frontend: Existing Stock-Out Analysis page still works at /stock-out (regression)"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_doh_analysis.py",
+    "/app/test_reports/pytest/pytest_results_iter11.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_doh_analysis.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - All 19 DOH Analysis API tests passed",
+    "frontend": "100% - All UI components render correctly, all features work"
+  },
+
+  "test_credentials": "No authentication required",
+  "seed_data_creation": "Uses real uploaded CSV data (7/7 files uploaded). DOH calculations performed on actual daily_sales, store_inventory, and sku_ean_master data from MongoDB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DOH Analysis page fully implemented and tested at /doh. Backend endpoint /api/analytics/doh returns summary, store_data, category_data, trend_data, detail, and recommendations arrays. Accepts ideal_doh (default 9) query param which recalculates classification using PRD formulas: DOH = Inventory / Daily ROS, Channel DOH = Sum(DOH x Inv) / Sum(Inv), Classification: Optimal ±20% of ideal, Overstocked >120%, Understocked <80%. Frontend uses Chart.js components (LineChart, BarChart, DoughnutChart from /app/frontend/src/components/Charts.js). FilterPanel component integrates correctly. All existing pages (Stock-Out Analysis, Replenishment Planner) still work. Data is NOT mocked - uses real uploaded CSV data. Key test IDs: doh-analysis-page, doh-formula-card, formula-doh, formula-channel-doh, formula-classification, doh-config, slider-ideal-doh, recalculate-doh-btn, kpi-overall-doh, kpi-optimal, kpi-at-risk, kpi-stockedout, chart-doh-trend, chart-status-dist, doh-recommendations, view-store, view-category, chart-doh-bars, table-doh-summary, table-doh-detail, export-doh-btn, export-detail-doh-btn, refresh-doh-btn, nav-doh.",
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
