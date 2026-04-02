@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import axios from "axios";
 import { 
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard, LogOut, Building2
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users
 } from "lucide-react";
 
 // Auth
@@ -27,6 +27,7 @@ import StockOutAnalysis from "./pages/StockOutAnalysis";
 import ReplenishmentPlanner from "./pages/ReplenishmentPlanner";
 import DOHAnalysis from "./pages/DOHAnalysis";
 import PlanogramFillRate from "./pages/PlanogramFillRate";
+import UserManagement from "./pages/UserManagement";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -48,12 +49,13 @@ const navItems = [
   { path: "/sftp-monitor", label: "SFTP Monitor", icon: Server },
   { path: "/data-quality", label: "Data Quality", icon: Award },
   { path: "/chatbot", label: "FAQ Chatbot", icon: MessageSquare },
+  { path: "/users", label: "User Management", icon: Users, adminOnly: true },
 ];
 
 // Sidebar Component
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const location = useLocation();
-  const { user, tenantId, tenantInfo, logout } = useAuth();
+  const { user, tenantId, tenantInfo, logout, hasRole } = useAuth();
   
   const getUploadCount = () => {
     if (!uploadStatus) return { uploaded: 0, total: 7 };
@@ -129,7 +131,9 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
 
         {/* Navigation */}
         <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {navItems
+            .filter(item => !item.adminOnly || hasRole(["admin", "super_admin"]))
+            .map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             
@@ -257,6 +261,7 @@ const AuthenticatedApp = () => {
             <Route path="/sftp-monitor" element={<SFTPMonitor />} />
             <Route path="/data-quality" element={<DataQuality />} />
             <Route path="/chatbot" element={<FAQChatbot />} />
+            <Route path="/users" element={<UserManagement />} />
           </Routes>
         </div>
       </main>

@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [tenantId, setTenantId] = useState(null);
   const [tenantInfo, setTenantInfo] = useState(null);
+  const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Restore session from localStorage
@@ -23,7 +24,7 @@ export const AuthProvider = ({ children }) => {
         setToken(data.token);
         setTenantId(data.tenantId);
         setTenantInfo(data.tenantInfo);
-        // Set default headers
+        setPermissions(data.permissions || data.user?.permissions || []);
         axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
         axios.defaults.headers.common["X-Tenant-ID"] = data.tenantId;
       } catch (e) {
@@ -38,6 +39,7 @@ export const AuthProvider = ({ children }) => {
       headers: { "X-Tenant-ID": selectedTenantId },
     });
     const { access_token, user: userData } = resp.data;
+    const userPerms = userData.permissions || [];
 
     // Fetch tenant info
     let tInfo = null;
@@ -54,17 +56,17 @@ export const AuthProvider = ({ children }) => {
     setToken(access_token);
     setTenantId(selectedTenantId);
     setTenantInfo(tInfo);
+    setPermissions(userPerms);
 
-    // Set default headers for all subsequent requests
     axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
     axios.defaults.headers.common["X-Tenant-ID"] = selectedTenantId;
 
-    // Persist
     localStorage.setItem("merch_auth", JSON.stringify({
       user: userData,
       token: access_token,
       tenantId: selectedTenantId,
       tenantInfo: tInfo,
+      permissions: userPerms,
     }));
 
     return userData;
@@ -75,18 +77,32 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setTenantId(null);
     setTenantInfo(null);
+    setPermissions([]);
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     localStorage.removeItem("merch_auth");
   }, []);
 
+  const hasPermission = useCallback((perm) => {
+    if (!user) return false;
+    const role = user.role;
+    if (role === "admin" || role === "super_admin") return true;
+    return permissions.includes(perm);
+  }, [user, permissions]);
+
+  const hasRole = useCallback((allowedRoles) => {
+    if (!user) return false;
+    if (typeof allowedRoles === "string") return user.role === allowedRoles;
+    return allowedRoles.includes(user.role);
+  }, [user]);
+
   const isAuthenticated = !!token && !!user;
 
   return (
     <AuthContext.Provider value={{
-      user, token, tenantId, tenantInfo,
+      user, token, tenantId, tenantInfo, permissions,
       loading, isAuthenticated,
-      login, logout,
+      login, logout, hasPermission, hasRole,
     }}>
       {children}
     </AuthContext.Provider>

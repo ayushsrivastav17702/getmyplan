@@ -167,6 +167,10 @@ async def login(body: LoginRequest, request: Request):
         "role": role,
     })
 
+    # Resolve permissions for this role
+    from .rbac import resolve_permissions
+    perms = resolve_permissions(role)
+
     return TokenResponse(
         access_token=token,
         user={
@@ -175,6 +179,7 @@ async def login(body: LoginRequest, request: Request):
             "full_name": user.get("full_name", ""),
             "role": role,
             "tenant_id": ctx.tenant_id,
+            "permissions": perms,
         },
     )
 

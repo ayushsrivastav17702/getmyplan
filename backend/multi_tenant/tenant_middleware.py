@@ -27,6 +27,7 @@ PUBLIC_PATHS = {
     "/api/health",
     "/api/tenants/create",
     "/api/tenants/check-subdomain",
+    "/api/users/accept-invite",
     "/docs",
     "/openapi.json",
 }

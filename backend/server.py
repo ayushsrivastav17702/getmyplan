@@ -21,6 +21,8 @@ from multi_tenant import (
     TenantMiddleware,
     auth_router,
     tenant_router,
+    user_router,
+    seed_rbac,
     get_shared_db,
     get_current_tenant,
     tenant_context,
@@ -3192,6 +3194,7 @@ async def get_quality_scorecard():
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
+app.include_router(user_router)
 
 # CORS must be added BEFORE tenant middleware (Starlette processes middleware LIFO)
 app.add_middleware(
@@ -3259,6 +3262,7 @@ async def _ensure_default_tenant():
 async def startup():
     await ensure_shared_indexes()
     await _ensure_default_tenant()
+    await seed_rbac()
     logger.info("Multi-tenant startup complete")
 
 
