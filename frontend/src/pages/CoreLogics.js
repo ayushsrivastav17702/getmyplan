@@ -3,6 +3,7 @@ import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
+import { BarChart, DoughnutChart } from "../components/Charts";
 
 const CoreLogics = () => {
   const [activeTab, setActiveTab] = useState("ros");
@@ -249,6 +250,37 @@ const CoreLogics = () => {
             </div>
           </div>
 
+          {/* ROS Charts */}
+          {rosData.data?.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                <h3 className="font-semibold text-slate-900 mb-4">Healthy vs Broken Distribution</h3>
+                <DoughnutChart
+                  labels={['Healthy', 'Broken']}
+                  data={[
+                    rosData.summary?.healthy_count || 0,
+                    rosData.summary?.broken_count || 0
+                  ]}
+                  height={260}
+                />
+              </div>
+              <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                <h3 className="font-semibold text-slate-900 mb-4">Top 10 Styles by ROS</h3>
+                <BarChart
+                  labels={rosData.data.slice(0, 10).map(d => d.style)}
+                  datasets={[{
+                    label: 'ROS',
+                    data: rosData.data.slice(0, 10).map(d => d.ros),
+                    colors: rosData.data.slice(0, 10).map(d => d.status === 'healthy' ? '#2E844A' : '#EA001E')
+                  }]}
+                  horizontal={true}
+                  height={260}
+                  showLegend={false}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Data Table */}
           <div className="bg-white border border-slate-200 rounded shadow-sm">
             <div className="p-4 border-b border-slate-100">
@@ -308,6 +340,24 @@ const CoreLogics = () => {
               <span className="metric-value">{storeStyleData.summary?.unique_styles || 0}</span>
             </div>
           </div>
+
+          {/* Store-Style Charts */}
+          {storeStyleData.data?.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded shadow-sm p-6 mb-8">
+              <h3 className="font-semibold text-slate-900 mb-4">Top 10 Combos by Revenue/Day</h3>
+              <BarChart
+                labels={storeStyleData.data.slice(0, 10).map(d => `${d.store_code}-${d.style}`)}
+                datasets={[{
+                  label: 'Rev/Day',
+                  data: storeStyleData.data.slice(0, 10).map(d => d.revenue_per_day),
+                  color: '#0176D3'
+                }]}
+                height={300}
+                formatValue={formatCurrency}
+                showLegend={false}
+              />
+            </div>
+          )}
 
           {/* Data Table */}
           <div className="bg-white border border-slate-200 rounded shadow-sm">

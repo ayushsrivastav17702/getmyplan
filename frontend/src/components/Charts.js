@@ -208,14 +208,14 @@ export const BarChart = ({
         grid: { display: horizontal },
         ticks: {
           font: { family: "'IBM Plex Sans', sans-serif", size: 11 },
-          callback: horizontal ? formatValue : undefined
+          ...(horizontal ? { callback: formatValue } : {})
         }
       },
       y: {
         grid: { display: !horizontal, color: '#E2E8F0' },
         ticks: {
           font: { family: "'IBM Plex Sans', sans-serif", size: 11 },
-          callback: !horizontal ? formatValue : undefined
+          ...(!horizontal ? { callback: formatValue } : {})
         }
       }
     }
@@ -360,7 +360,7 @@ export const StackedBarChart = ({
         grid: { display: horizontal },
         ticks: {
           font: { family: "'IBM Plex Sans', sans-serif", size: 11 },
-          callback: horizontal ? formatValue : undefined
+          ...(horizontal ? { callback: formatValue } : {})
         }
       },
       y: {
@@ -368,7 +368,7 @@ export const StackedBarChart = ({
         grid: { display: !horizontal, color: '#E2E8F0' },
         ticks: {
           font: { family: "'IBM Plex Sans', sans-serif", size: 11 },
-          callback: !horizontal ? formatValue : undefined
+          ...(!horizontal ? { callback: formatValue } : {})
         }
       }
     }

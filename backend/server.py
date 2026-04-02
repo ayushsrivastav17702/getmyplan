@@ -323,6 +323,49 @@ async def get_presets(page_type: str = None):
     return presets
 
 
+@api_router.get("/presets/tags/all")
+async def get_all_tags():
+    """Get all unique tags used in presets"""
+    presets = await db.filter_presets.find({}, {"tags": 1, "_id": 0}).to_list(1000)
+    all_tags = set()
+    for preset in presets:
+        all_tags.update(preset.get('tags', []))
+    return sorted(list(all_tags))
+
+
+@api_router.get("/presets/export")
+async def export_presets(page_type: str = None):
+    """Export presets as JSON for sharing"""
+    query = {}
+    if page_type:
+        query['page_type'] = page_type
+    presets = await db.filter_presets.find(query, {"_id": 0}).to_list(1000)
+    return {"presets": presets, "exported_at": datetime.now(timezone.utc).isoformat(), "page_type": page_type}
+
+
+class PresetImport(BaseModel):
+    presets: List[Dict[str, Any]]
+
+
+@api_router.post("/presets/import")
+async def import_presets(data: PresetImport):
+    """Import presets from JSON"""
+    imported = 0
+    for preset_data in data.presets:
+        preset_data.pop('_id', None)
+        if 'id' not in preset_data:
+            preset_data['id'] = str(uuid.uuid4())
+        else:
+            existing = await db.filter_presets.find_one({"id": preset_data['id']})
+            if existing:
+                preset_data['id'] = str(uuid.uuid4())
+        preset_data['created_at'] = preset_data.get('created_at', datetime.now(timezone.utc).isoformat())
+        preset_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        await db.filter_presets.insert_one(preset_data)
+        imported += 1
+    return {"message": f"Imported {imported} presets", "imported": imported}
+
+
 @api_router.get("/presets/{preset_id}")
 async def get_preset(preset_id: str):
     """Get a specific preset by ID"""
@@ -371,16 +414,6 @@ async def delete_preset(preset_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Preset not found")
     return {"message": "Preset deleted"}
-
-
-@api_router.get("/presets/tags/all")
-async def get_all_tags():
-    """Get all unique tags used in presets"""
-    presets = await db.filter_presets.find({}, {"tags": 1, "_id": 0}).to_list(1000)
-    all_tags = set()
-    for preset in presets:
-        all_tags.update(preset.get('tags', []))
-    return sorted(list(all_tags))
 
 
 # ==================== ANALYTICS ====================
@@ -969,6 +1002,117 @@ async def get_store_style_ranking():
     except Exception as e:
         logger.error(f"Store-style ranking error: {str(e)}")
         return {"error": str(e), "data": []}
+
+
+@api_router.get("/analytics/warehouse")
+async def get_warehouse_analysis(
+    start_date: str = None,
+    end_date: str = None
+):
+    """Get warehouse inventory analysis"""
+    wh_master = await get_cached_data('warehouse_master')
+    wh_inv = await get_cached_data('warehouse_inventory')
+    sku_df = await get_cached_data('sku_ean_master')
+    sales_df = await get_cached_data('daily_sales')
+
+    if wh_inv is None:
+        return {"error": "Warehouse inventory data not uploaded", "data": {}}
+
+    try:
+        wh_inv['day'] = pd.to_datetime(wh_inv['day'])
+
+        if start_date:
+            wh_inv = wh_inv[wh_inv['day'] >= pd.to_datetime(start_date)]
+        if end_date:
+            wh_inv = wh_inv[wh_inv['day'] <= pd.to_datetime(end_date)]
+
+        if len(wh_inv) == 0:
+            return {"error": "No warehouse data for the selected period", "data": {}}
+
+        latest_date = wh_inv['day'].max()
+        latest_inv = wh_inv[wh_inv['day'] == latest_date].copy()
+
+        # By warehouse
+        by_warehouse = latest_inv.groupby('warehouse').agg(
+            total_qty=('quantity', 'sum'),
+            sku_count=('sku', 'nunique')
+        ).reset_index().sort_values('total_qty', ascending=False)
+
+        # By SKU (top movers)
+        by_sku = latest_inv.groupby('sku').agg(
+            total_qty=('quantity', 'sum'),
+            warehouse_count=('warehouse', 'nunique')
+        ).reset_index().sort_values('total_qty', ascending=False).head(20)
+
+        # Merge with SKU master for style info
+        if sku_df is not None:
+            by_sku = by_sku.merge(
+                sku_df[['ean', 'style', 'size']].rename(columns={'ean': 'sku'}),
+                on='sku', how='left'
+            )
+
+        # Trend over time
+        trend = wh_inv.groupby(wh_inv['day'].dt.to_period('D').astype(str)).agg(
+            total_qty=('quantity', 'sum'),
+            unique_skus=('sku', 'nunique')
+        ).reset_index()
+        trend.columns = ['date', 'total_qty', 'unique_skus']
+
+        # Online fulfillment split
+        online_split = []
+        if wh_master is not None and 'online_fulfillment_flag' in wh_master.columns:
+            merged = latest_inv.merge(wh_master[['warehouse', 'online_fulfillment_flag']], on='warehouse', how='left')
+            online_split = merged.groupby('online_fulfillment_flag')['quantity'].sum().reset_index()
+            online_split.columns = ['fulfillment_type', 'total_qty']
+            online_split['fulfillment_type'] = online_split['fulfillment_type'].map(
+                lambda x: 'Online' if str(x).strip().lower() in ['1', 'true', 'yes', 'y'] else 'Offline'
+            )
+            online_split = online_split.to_dict('records')
+
+        # Calculate velocity if sales data exists
+        velocity_data = []
+        if sales_df is not None and sku_df is not None:
+            sales_df_copy = sales_df.copy()
+            sales_df_copy['day'] = pd.to_datetime(sales_df_copy['day'])
+            if start_date:
+                sales_df_copy = sales_df_copy[sales_df_copy['day'] >= pd.to_datetime(start_date)]
+            if end_date:
+                sales_df_copy = sales_df_copy[sales_df_copy['day'] <= pd.to_datetime(end_date)]
+
+            sales_by_sku = sales_df_copy.groupby('sku')['quantity'].sum().reset_index()
+            sales_by_sku.columns = ['sku', 'sold_qty']
+
+            velocity = latest_inv.groupby('sku')['quantity'].sum().reset_index()
+            velocity.columns = ['sku', 'stock_qty']
+            velocity = velocity.merge(sales_by_sku, on='sku', how='left')
+            velocity['sold_qty'] = velocity['sold_qty'].fillna(0)
+            velocity['days_of_stock'] = velocity.apply(
+                lambda r: round(r['stock_qty'] / (r['sold_qty'] / 90), 1) if r['sold_qty'] > 0 else 999, axis=1
+            )
+            velocity = velocity.sort_values('days_of_stock').head(20)
+            if sku_df is not None:
+                velocity = velocity.merge(
+                    sku_df[['ean', 'style', 'size']].rename(columns={'ean': 'sku'}),
+                    on='sku', how='left'
+                )
+            velocity_data = velocity.fillna('').to_dict('records')
+
+        return {
+            "totals": {
+                "total_stock": int(latest_inv['quantity'].sum()),
+                "total_skus": int(latest_inv['sku'].nunique()),
+                "total_warehouses": int(latest_inv['warehouse'].nunique()),
+                "snapshot_date": str(latest_date.date())
+            },
+            "by_warehouse": by_warehouse.fillna(0).to_dict('records'),
+            "by_sku": by_sku.fillna('').to_dict('records'),
+            "trend": trend.to_dict('records') if len(trend) > 1 else [],
+            "online_split": online_split,
+            "velocity": velocity_data
+        }
+    except Exception as e:
+        logger.error(f"Warehouse analysis error: {str(e)}")
+        return {"error": str(e), "data": {}}
 
 
 # ==================== CHATBOT ====================

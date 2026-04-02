@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Filter, ChevronDown, ChevronUp, X, Calendar, Save, 
-  Star, Trash2, Tag, BookmarkPlus, Settings2
+  Star, Trash2, Tag, BookmarkPlus, Settings2, Upload, Download
 } from "lucide-react";
 import axios from "axios";
 import { API } from "../App";
@@ -166,6 +166,36 @@ const FilterPanel = ({
       await fetchTeamPresets();
     } catch (err) {
       console.error("Error toggling favorite:", err);
+    }
+  };
+
+  const handleExportPresets = async () => {
+    try {
+      const response = await axios.get(`${API}/presets/export?page_type=${pageType}`);
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `presets_${pageType}_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error exporting presets:", err);
+    }
+  };
+
+  const handleImportPresets = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await axios.post(`${API}/presets/import`, { presets: data.presets || data });
+      await fetchTeamPresets();
+      e.target.value = '';
+    } catch (err) {
+      console.error("Error importing presets:", err);
+      e.target.value = '';
     }
   };
 
@@ -373,7 +403,7 @@ const FilterPanel = ({
             </div>
 
             {/* Save New Preset Button */}
-            <div className="p-3 border-t border-slate-100">
+            <div className="p-3 border-t border-slate-100 space-y-2">
               <button
                 data-testid="open-save-preset-btn"
                 onClick={() => { setShowPresetList(false); setShowPresetModal(true); }}
@@ -382,6 +412,24 @@ const FilterPanel = ({
                 <Save size={16} />
                 Save Current Filters as Preset
               </button>
+              <div className="flex gap-2">
+                <button
+                  data-testid="export-presets-btn"
+                  onClick={handleExportPresets}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200 rounded transition-colors"
+                >
+                  <Download size={14} />
+                  Export
+                </button>
+                <label
+                  data-testid="import-presets-btn"
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200 rounded transition-colors cursor-pointer"
+                >
+                  <Upload size={14} />
+                  Import
+                  <input type="file" accept=".json" onChange={handleImportPresets} className="hidden" />
+                </label>
+              </div>
             </div>
           </motion.div>
         )}

@@ -3,6 +3,7 @@ import axios from "axios";
 import { API } from "../App";
 import { RefreshCw, Download, Users, Briefcase, BarChart3 } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
+import { BarChart, DoughnutChart } from "../components/Charts";
 
 const GapAnalysis = () => {
   const [activeTab, setActiveTab] = useState("noos");
@@ -291,6 +292,45 @@ const GapAnalysis = () => {
             </div>
           )}
 
+          {/* NOOS Charts */}
+          {noosData.data?.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                <h3 className="font-semibold text-slate-900 mb-4">NOOS Candidate Distribution</h3>
+                <DoughnutChart
+                  labels={['NOOS Candidates', 'Non-NOOS']}
+                  data={[
+                    noosData.summary?.noos_candidates || 0,
+                    (noosData.summary?.total_combinations || 0) - (noosData.summary?.noos_candidates || 0)
+                  ]}
+                  height={260}
+                />
+              </div>
+              <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                <h3 className="font-semibold text-slate-900 mb-4">Top Styles by Revenue</h3>
+                {(() => {
+                  const styleRevenue = {};
+                  noosData.data.forEach(row => {
+                    if (row.style && row.revenue) {
+                      styleRevenue[row.style] = (styleRevenue[row.style] || 0) + row.revenue;
+                    }
+                  });
+                  const sorted = Object.entries(styleRevenue).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                  return (
+                    <BarChart
+                      labels={sorted.map(([s]) => s)}
+                      datasets={[{ label: 'Revenue', data: sorted.map(([, v]) => v), color: '#0176D3' }]}
+                      horizontal={true}
+                      height={260}
+                      formatValue={formatCurrency}
+                      showLegend={false}
+                    />
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Consultant Methodology */}
           {persona === "consultant" && (
             <div className="bg-white border border-slate-200 p-6 mb-8 rounded shadow-sm">
@@ -388,6 +428,46 @@ const GapAnalysis = () => {
               <span className="text-sm text-slate-500">units</span>
             </div>
           </div>
+
+          {/* Size Gap Charts */}
+          {sizeGapData.data?.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                <h3 className="font-semibold text-slate-900 mb-4">Status Distribution</h3>
+                <DoughnutChart
+                  labels={['Overstock', 'Understock', 'Optimal']}
+                  data={[
+                    sizeGapData.summary?.overstock || 0,
+                    sizeGapData.summary?.understock || 0,
+                    sizeGapData.summary?.optimal || 0
+                  ]}
+                  height={260}
+                />
+              </div>
+              <div className="bg-white border border-slate-200 rounded shadow-sm p-6">
+                <h3 className="font-semibold text-slate-900 mb-4">Gap by Style (Top 10)</h3>
+                {(() => {
+                  const styleGap = {};
+                  sizeGapData.data.forEach(row => {
+                    if (row.style) {
+                      styleGap[row.style] = (styleGap[row.style] || 0) + Math.abs(row.gap || 0);
+                    }
+                  });
+                  const sorted = Object.entries(styleGap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                  return (
+                    <BarChart
+                      labels={sorted.map(([s]) => s)}
+                      datasets={[{ label: 'Abs Gap', data: sorted.map(([, v]) => v), color: '#EA001E' }]}
+                      horizontal={true}
+                      height={260}
+                      formatValue={formatNumber}
+                      showLegend={false}
+                    />
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Data Table */}
           <div className="bg-white border border-slate-200 rounded shadow-sm">
