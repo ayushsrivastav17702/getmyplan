@@ -4,8 +4,12 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import axios from "axios";
 import { 
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard, LogOut, Building2
 } from "lucide-react";
+
+// Auth
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
 
 // Pages
 import GettingStarted from "./pages/GettingStarted";
@@ -49,6 +53,7 @@ const navItems = [
 // Sidebar Component
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const location = useLocation();
+  const { user, tenantId, tenantInfo, logout } = useAuth();
   
   const getUploadCount = () => {
     if (!uploadStatus) return { uploaded: 0, total: 7 };
@@ -73,7 +78,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-40
-        w-64 bg-white border-r border-slate-200 
+        w-64 bg-white border-r border-slate-200 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
@@ -83,6 +88,26 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
             Increff Analytics
           </h1>
         </div>
+
+        {/* Tenant Info */}
+        {tenantInfo && (
+          <div className="px-4 py-3 border-b border-slate-100 bg-blue-50/60" data-testid="tenant-info-bar">
+            <div className="flex items-center gap-2">
+              <Building2 size={14} className="text-[#0176D3]" />
+              <span className="text-xs font-semibold text-[#0176D3] truncate">
+                {tenantInfo.company_name || tenantId}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                {tenantInfo.plan_type || "starter"} plan
+              </span>
+              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                Active
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Upload Status */}
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
@@ -103,7 +128,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="p-3 space-y-1">
+        <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -130,7 +155,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         </nav>
 
         {/* File Status List */}
-        <div className="px-6 py-4 border-t border-slate-100 mt-auto">
+        <div className="px-6 py-4 border-t border-slate-100">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 block">
             Data Files
           </span>
@@ -154,6 +179,26 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
             })}
           </div>
         </div>
+
+        {/* User / Logout */}
+        {user && (
+          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50" data-testid="user-bar">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-700 truncate">{user.email}</p>
+                <p className="text-[10px] text-slate-400 capitalize">{user.role}</p>
+              </div>
+              <button
+                data-testid="logout-btn"
+                onClick={logout}
+                className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Overlay for mobile */}
@@ -167,7 +212,9 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   );
 };
 
-function App() {
+
+// Inner app (after auth)
+const AuthenticatedApp = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -185,36 +232,65 @@ function App() {
   }, [fetchUploadStatus]);
 
   return (
-    <BrowserRouter>
-      <div className="flex min-h-screen bg-[#F8F9FA]">
-        <Sidebar 
-          uploadStatus={uploadStatus} 
-          isOpen={sidebarOpen}
-          setIsOpen={setSidebarOpen}
-        />
-        
-        <main className="flex-1 min-h-screen">
-          <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
-            <Routes>
-              <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
-              <Route path="/dashboard" element={<ExecutiveDashboard />} />
-              <Route path="/upload" element={<DataUpload onUploadComplete={fetchUploadStatus} />} />
-              <Route path="/config" element={<Configuration />} />
-              <Route path="/core-logics" element={<CoreLogics />} />
-              <Route path="/gap-analysis" element={<GapAnalysis />} />
-              <Route path="/stock-out" element={<StockOutAnalysis />} />
-              <Route path="/replenishment" element={<ReplenishmentPlanner />} />
-              <Route path="/doh" element={<DOHAnalysis />} />
-              <Route path="/planogram" element={<PlanogramFillRate />} />
-              <Route path="/bi-dashboards" element={<BIDashboards />} />
-              <Route path="/warehouse" element={<WarehouseAnalysis />} />
-              <Route path="/sftp-monitor" element={<SFTPMonitor />} />
-              <Route path="/data-quality" element={<DataQuality />} />
-              <Route path="/chatbot" element={<FAQChatbot />} />
-            </Routes>
-          </div>
-        </main>
+    <div className="flex min-h-screen bg-[#F8F9FA]">
+      <Sidebar 
+        uploadStatus={uploadStatus} 
+        isOpen={sidebarOpen}
+        setIsOpen={setSidebarOpen}
+      />
+      
+      <main className="flex-1 min-h-screen">
+        <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
+          <Routes>
+            <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
+            <Route path="/dashboard" element={<ExecutiveDashboard />} />
+            <Route path="/upload" element={<DataUpload onUploadComplete={fetchUploadStatus} />} />
+            <Route path="/config" element={<Configuration />} />
+            <Route path="/core-logics" element={<CoreLogics />} />
+            <Route path="/gap-analysis" element={<GapAnalysis />} />
+            <Route path="/stock-out" element={<StockOutAnalysis />} />
+            <Route path="/replenishment" element={<ReplenishmentPlanner />} />
+            <Route path="/doh" element={<DOHAnalysis />} />
+            <Route path="/planogram" element={<PlanogramFillRate />} />
+            <Route path="/bi-dashboards" element={<BIDashboards />} />
+            <Route path="/warehouse" element={<WarehouseAnalysis />} />
+            <Route path="/sftp-monitor" element={<SFTPMonitor />} />
+            <Route path="/data-quality" element={<DataQuality />} />
+            <Route path="/chatbot" element={<FAQChatbot />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+
+// Root app — gate on authentication
+const AppRouter = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+        <div className="spinner" />
       </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return <AuthenticatedApp />;
+};
+
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRouter />
+      </AuthProvider>
     </BrowserRouter>
   );
 }

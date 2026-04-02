@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -16,13 +16,39 @@ import io
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from sftp import sftp_service, sftp_scheduler
 
+# Multi-tenant imports
+from multi_tenant import (
+    TenantMiddleware,
+    auth_router,
+    tenant_router,
+    get_shared_db,
+    get_current_tenant,
+    tenant_context,
+)
+from multi_tenant.tenant_db import (
+    get_mongo_client as mt_get_mongo_client,
+    get_tenant_db as mt_get_tenant_db,
+    ensure_shared_indexes,
+    SHARED_DB_NAME,
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection — kept for backward compat; tenant-aware helper below
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+_default_db_name = os.environ['DB_NAME']
+db = client[_default_db_name]   # default DB (used when no tenant context)
+
+
+def get_db():
+    """Return the tenant-specific DB when a tenant context exists, else default."""
+    ctx = tenant_context.get()
+    if ctx:
+        return client[ctx.db_name]
+    return db
+
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -140,17 +166,19 @@ def validate_file(df: pd.DataFrame, file_type: str) -> Dict[str, Any]:
 
 
 async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
-    """Retrieve cached data from MongoDB"""
-    doc = await db.uploaded_files.find_one({"file_type": file_type})
+    """Retrieve cached data from tenant-aware MongoDB"""
+    tdb = get_db()
+    doc = await tdb.uploaded_files.find_one({"file_type": file_type})
     if doc and 'data' in doc:
         return pd.DataFrame(doc['data'])
     return None
 
 
 async def cache_data(file_type: str, df: pd.DataFrame, validation: Dict):
-    """Cache uploaded data to MongoDB"""
+    """Cache uploaded data to tenant-aware MongoDB"""
+    tdb = get_db()
     data = df.to_dict('records')
-    await db.uploaded_files.update_one(
+    await tdb.uploaded_files.update_one(
         {"file_type": file_type},
         {
             "$set": {
@@ -179,13 +207,13 @@ async def create_status_check(input: StatusCheckCreate):
     status_obj = StatusCheck(**status_dict)
     doc = status_obj.model_dump()
     doc['timestamp'] = doc['timestamp'].isoformat()
-    _ = await db.status_checks.insert_one(doc)
+    _ = await get_db().status_checks.insert_one(doc)
     return status_obj
 
 
 @api_router.get("/status", response_model=List[StatusCheck])
 async def get_status_checks():
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+    status_checks = await get_db().status_checks.find({}, {"_id": 0}).to_list(1000)
     for check in status_checks:
         if isinstance(check['timestamp'], str):
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
@@ -215,7 +243,7 @@ async def upload_file(file_type: str, file: UploadFile = File(...)):
             await cache_data(file_type, df, validation)
         
         # Log to upload history
-        await db.upload_history.insert_one({
+        await get_db().upload_history.insert_one({
             "file_type": file_type,
             "file_name": file.filename,
             "status": "success" if validation['valid'] else "failed",
@@ -238,7 +266,7 @@ async def upload_file(file_type: str, file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Error processing file: {str(e)}")
         # Log failure
-        await db.upload_history.insert_one({
+        await get_db().upload_history.insert_one({
             "file_type": file_type,
             "file_name": file.filename if file else "unknown",
             "status": "failed",
@@ -252,7 +280,7 @@ async def upload_file(file_type: str, file: UploadFile = File(...)):
 @api_router.get("/upload/status")
 async def get_upload_status():
     """Get status of all uploaded files"""
-    files = await db.uploaded_files.find({}, {"_id": 0, "data": 0}).to_list(100)
+    files = await get_db().uploaded_files.find({}, {"_id": 0, "data": 0}).to_list(100)
     status = {}
     for f in files:
         status[f['file_type']] = {
@@ -273,21 +301,21 @@ async def get_upload_status():
 @api_router.delete("/upload/{file_type}")
 async def delete_file(file_type: str):
     """Delete an uploaded file"""
-    await db.uploaded_files.delete_one({"file_type": file_type})
+    await get_db().uploaded_files.delete_one({"file_type": file_type})
     return {"message": f"Deleted {file_type}"}
 
 
 @api_router.delete("/upload/all")
 async def delete_all_files():
     """Delete all uploaded files"""
-    await db.uploaded_files.delete_many({})
+    await get_db().uploaded_files.delete_many({})
     return {"message": "All files deleted"}
 
 
 @api_router.get("/upload/history")
 async def get_upload_history(limit: int = 50):
     """Get upload history log"""
-    history = await db.upload_history.find(
+    history = await get_db().upload_history.find(
         {}, {"_id": 0}
     ).sort("uploaded_at", -1).to_list(limit)
     return history
@@ -327,7 +355,7 @@ async def get_template(file_type: str):
 @api_router.post("/config")
 async def save_config(config: AnalysisConfig):
     """Save analysis configuration"""
-    await db.analysis_config.update_one(
+    await get_db().analysis_config.update_one(
         {"_id": "main"},
         {"$set": config.model_dump()},
         upsert=True
@@ -338,7 +366,7 @@ async def save_config(config: AnalysisConfig):
 @api_router.get("/config")
 async def get_config():
     """Get analysis configuration"""
-    config = await db.analysis_config.find_one({"_id": "main"}, {"_id": 0})
+    config = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
     if not config:
         return AnalysisConfig().model_dump()
     return config
@@ -360,7 +388,7 @@ async def create_preset(preset: FilterPresetCreate):
     doc = preset_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    await db.filter_presets.insert_one(doc)
+    await get_db().filter_presets.insert_one(doc)
     return preset_obj
 
 
@@ -371,7 +399,7 @@ async def get_presets(page_type: str = None):
     if page_type:
         query['page_type'] = page_type
     
-    presets = await db.filter_presets.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    presets = await get_db().filter_presets.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
     
     # Convert datetime strings back
     for preset in presets:
@@ -386,7 +414,7 @@ async def get_presets(page_type: str = None):
 @api_router.get("/presets/tags/all")
 async def get_all_tags():
     """Get all unique tags used in presets"""
-    presets = await db.filter_presets.find({}, {"tags": 1, "_id": 0}).to_list(1000)
+    presets = await get_db().filter_presets.find({}, {"tags": 1, "_id": 0}).to_list(1000)
     all_tags = set()
     for preset in presets:
         all_tags.update(preset.get('tags', []))
@@ -399,7 +427,7 @@ async def export_presets(page_type: str = None):
     query = {}
     if page_type:
         query['page_type'] = page_type
-    presets = await db.filter_presets.find(query, {"_id": 0}).to_list(1000)
+    presets = await get_db().filter_presets.find(query, {"_id": 0}).to_list(1000)
     return {"presets": presets, "exported_at": datetime.now(timezone.utc).isoformat(), "page_type": page_type}
 
 
@@ -416,12 +444,12 @@ async def import_presets(data: PresetImport):
         if 'id' not in preset_data:
             preset_data['id'] = str(uuid.uuid4())
         else:
-            existing = await db.filter_presets.find_one({"id": preset_data['id']})
+            existing = await get_db().filter_presets.find_one({"id": preset_data['id']})
             if existing:
                 preset_data['id'] = str(uuid.uuid4())
         preset_data['created_at'] = preset_data.get('created_at', datetime.now(timezone.utc).isoformat())
         preset_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-        await db.filter_presets.insert_one(preset_data)
+        await get_db().filter_presets.insert_one(preset_data)
         imported += 1
     return {"message": f"Imported {imported} presets", "imported": imported}
 
@@ -429,7 +457,7 @@ async def import_presets(data: PresetImport):
 @api_router.get("/presets/{preset_id}")
 async def get_preset(preset_id: str):
     """Get a specific preset by ID"""
-    preset = await db.filter_presets.find_one({"id": preset_id}, {"_id": 0})
+    preset = await get_db().filter_presets.find_one({"id": preset_id}, {"_id": 0})
     if not preset:
         raise HTTPException(status_code=404, detail="Preset not found")
     return preset
@@ -438,14 +466,14 @@ async def get_preset(preset_id: str):
 @api_router.put("/presets/{preset_id}")
 async def update_preset(preset_id: str, preset: FilterPresetCreate):
     """Update an existing preset"""
-    existing = await db.filter_presets.find_one({"id": preset_id})
+    existing = await get_db().filter_presets.find_one({"id": preset_id})
     if not existing:
         raise HTTPException(status_code=404, detail="Preset not found")
     
     update_data = preset.model_dump()
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.filter_presets.update_one(
+    await get_db().filter_presets.update_one(
         {"id": preset_id},
         {"$set": update_data}
     )
@@ -455,12 +483,12 @@ async def update_preset(preset_id: str, preset: FilterPresetCreate):
 @api_router.patch("/presets/{preset_id}/favorite")
 async def toggle_preset_favorite(preset_id: str):
     """Toggle favorite status of a preset"""
-    preset = await db.filter_presets.find_one({"id": preset_id})
+    preset = await get_db().filter_presets.find_one({"id": preset_id})
     if not preset:
         raise HTTPException(status_code=404, detail="Preset not found")
     
     new_favorite = not preset.get('is_favorite', False)
-    await db.filter_presets.update_one(
+    await get_db().filter_presets.update_one(
         {"id": preset_id},
         {"$set": {"is_favorite": new_favorite, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -470,7 +498,7 @@ async def toggle_preset_favorite(preset_id: str):
 @api_router.delete("/presets/{preset_id}")
 async def delete_preset(preset_id: str):
     """Delete a preset"""
-    result = await db.filter_presets.delete_one({"id": preset_id})
+    result = await get_db().filter_presets.delete_one({"id": preset_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Preset not found")
     return {"message": "Preset deleted"}
@@ -2621,7 +2649,7 @@ Guidelines:
         response = await chat.send_message(user_message)
         
         # Store chat history
-        await db.chat_history.insert_one({
+        await get_db().chat_history.insert_one({
             "session_id": session_id,
             "user_message": message.message,
             "assistant_response": response,
@@ -2642,7 +2670,7 @@ Guidelines:
 @api_router.get("/chat/history/{session_id}")
 async def get_chat_history(session_id: str):
     """Get chat history for a session"""
-    history = await db.chat_history.find(
+    history = await get_db().chat_history.find(
         {"session_id": session_id}, 
         {"_id": 0}
     ).sort("timestamp", 1).to_list(100)
@@ -2669,7 +2697,7 @@ class SFTPConfigModel(BaseModel):
 @api_router.get("/admin/sftp/status")
 async def get_sftp_status():
     """Get SFTP connection and scheduler status"""
-    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    config_doc = await get_db().sftp_config.find_one({"_id": "main"}, {"_id": 0})
     if config_doc:
         sftp_service.load_config(config_doc)
     return {
@@ -2684,7 +2712,7 @@ async def get_sftp_status():
 @api_router.get("/admin/sftp/config")
 async def get_sftp_config():
     """Get SFTP configuration"""
-    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    config_doc = await get_db().sftp_config.find_one({"_id": "main"}, {"_id": 0})
     return config_doc or {}
 
 
@@ -2692,7 +2720,7 @@ async def get_sftp_config():
 async def save_sftp_config(config: SFTPConfigModel):
     """Save SFTP configuration"""
     doc = config.model_dump()
-    await db.sftp_config.update_one({"_id": "main"}, {"$set": doc}, upsert=True)
+    await get_db().sftp_config.update_one({"_id": "main"}, {"$set": doc}, upsert=True)
     sftp_service.load_config(doc)
     return {"message": "SFTP configuration saved"}
 
@@ -2700,7 +2728,7 @@ async def save_sftp_config(config: SFTPConfigModel):
 @api_router.post("/admin/sftp/test-connection")
 async def test_sftp_connection():
     """Test SFTP server connectivity"""
-    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    config_doc = await get_db().sftp_config.find_one({"_id": "main"}, {"_id": 0})
     if config_doc:
         sftp_service.load_config(config_doc)
     return sftp_service.test_connection()
@@ -2709,14 +2737,14 @@ async def test_sftp_connection():
 @api_router.post("/admin/sftp/trigger")
 async def trigger_sftp_processing():
     """Manually trigger one SFTP processing cycle"""
-    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    config_doc = await get_db().sftp_config.find_one({"_id": "main"}, {"_id": 0})
     if config_doc:
         sftp_service.load_config(config_doc)
 
     if sftp_service.demo_mode:
         records = sftp_service.generate_demo_cycle()
         for r in records:
-            await db.sftp_logs.insert_one(r)
+            await get_db().sftp_logs.insert_one(r)
         return {
             "message": f"Demo cycle: processed {len(records)} files",
             "total": len(records),
@@ -2730,7 +2758,7 @@ async def trigger_sftp_processing():
 @api_router.post("/admin/sftp/scheduler/start")
 async def start_sftp_scheduler():
     """Start the SFTP polling scheduler"""
-    config_doc = await db.sftp_config.find_one({"_id": "main"}, {"_id": 0})
+    config_doc = await get_db().sftp_config.find_one({"_id": "main"}, {"_id": 0})
     interval = 30
     if config_doc:
         sftp_service.load_config(config_doc)
@@ -2762,7 +2790,7 @@ async def get_sftp_logs(
     if file_type:
         query["file_type"] = file_type
 
-    logs = await db.sftp_logs.find(query, {"_id": 0}).sort("processed_at", -1).to_list(limit)
+    logs = await get_db().sftp_logs.find(query, {"_id": 0}).sort("processed_at", -1).to_list(limit)
     return logs
 
 
@@ -2774,12 +2802,12 @@ async def get_sftp_stats():
     prev_week_start = (now - timedelta(days=14)).isoformat()
 
     # Current week logs
-    logs = await db.sftp_logs.find(
+    logs = await get_db().sftp_logs.find(
         {"processed_at": {"$gte": week_ago}}, {"_id": 0}
     ).to_list(2000)
 
     # Previous week logs for comparison
-    prev_logs = await db.sftp_logs.find(
+    prev_logs = await get_db().sftp_logs.find(
         {"processed_at": {"$gte": prev_week_start, "$lt": week_ago}}, {"_id": 0}
     ).to_list(2000)
 
@@ -2845,9 +2873,9 @@ async def seed_demo_data():
     """Seed SFTP logs with 7 days of demo data"""
     records = sftp_service.generate_demo_history(days=7)
     if records:
-        await db.sftp_logs.delete_many({})
+        await get_db().sftp_logs.delete_many({})
         for r in records:
-            await db.sftp_logs.insert_one(r)
+            await get_db().sftp_logs.insert_one(r)
     return {"message": f"Seeded {len(records)} demo records", "count": len(records)}
 
 
@@ -2855,14 +2883,14 @@ async def seed_demo_data():
 async def retry_failed_files():
     """Retry recently failed files"""
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    failed = await db.sftp_logs.find(
+    failed = await get_db().sftp_logs.find(
         {"status": "error", "processed_at": {"$gte": cutoff}}, {"_id": 0}
     ).to_list(100)
 
     retried = 0
     for log in failed:
         if sftp_service.demo_mode and random.random() < 0.7:
-            await db.sftp_logs.insert_one({
+            await get_db().sftp_logs.insert_one({
                 **log,
                 'status': 'success',
                 'rows_processed': random.randint(500, 3000),
@@ -2907,13 +2935,13 @@ QUALITY_ISSUES_POOL = [
 async def get_store_uploads(date: str):
     """Get per-store upload status with quality scores for a given date."""
     # Find logs for the requested date
-    logs = await db.sftp_logs.find(
+    logs = await get_db().sftp_logs.find(
         {"file_date": date}, {"_id": 0}
     ).to_list(2000)
 
     # Also check logs by processed_at date if file_date yields nothing
     if not logs:
-        logs = await db.sftp_logs.find(
+        logs = await get_db().sftp_logs.find(
             {"processed_at": {"$regex": f"^{date}"}}, {"_id": 0}
         ).to_list(2000)
 
@@ -2926,7 +2954,7 @@ async def get_store_uploads(date: str):
 
     # Get 7-day history for quality scoring
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    history = await db.sftp_logs.find(
+    history = await get_db().sftp_logs.find(
         {"processed_at": {"$gte": week_ago}}, {"_id": 0}
     ).to_list(5000)
 
@@ -3026,14 +3054,14 @@ async def get_sla_metrics():
     prev_week = (now - timedelta(days=14)).isoformat()
 
     # Today's logs
-    today_logs = await db.sftp_logs.find(
+    today_logs = await get_db().sftp_logs.find(
         {"processed_at": {"$regex": f"^{today}"}}, {"_id": 0}
     ).to_list(500)
 
     # Also check by file_date
     if not today_logs:
         yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
-        today_logs = await db.sftp_logs.find(
+        today_logs = await get_db().sftp_logs.find(
             {"file_date": yesterday}, {"_id": 0}
         ).to_list(500)
 
@@ -3062,10 +3090,10 @@ async def get_sla_metrics():
         })
 
     # Week-over-week trend
-    this_week = await db.sftp_logs.find(
+    this_week = await get_db().sftp_logs.find(
         {"processed_at": {"$gte": week_ago}}, {"_id": 0}
     ).to_list(2000)
-    prev_week_logs = await db.sftp_logs.find(
+    prev_week_logs = await get_db().sftp_logs.find(
         {"processed_at": {"$gte": prev_week, "$lt": week_ago}}, {"_id": 0}
     ).to_list(2000)
 
@@ -3090,7 +3118,7 @@ async def get_sla_metrics():
 async def get_quality_scorecard():
     """Get data quality scorecard across all dimensions."""
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    logs = await db.sftp_logs.find(
+    logs = await get_db().sftp_logs.find(
         {"processed_at": {"$gte": week_ago}}, {"_id": 0}
     ).to_list(5000)
 
@@ -3162,7 +3190,10 @@ async def get_quality_scorecard():
 
 # Include the router in the main app
 app.include_router(api_router)
+app.include_router(auth_router)
+app.include_router(tenant_router)
 
+# CORS must be added BEFORE tenant middleware (Starlette processes middleware LIFO)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -3170,6 +3201,65 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Tenant middleware — identifies tenant from header / JWT / subdomain
+app.add_middleware(TenantMiddleware)
+
+
+# ==================== STARTUP / SHUTDOWN ====================
+
+async def _ensure_default_tenant():
+    """Create a default 'demo' tenant so existing data keeps working."""
+    shared = client[SHARED_DB_NAME]
+    existing = await shared.tenants.find_one({"tenant_id": "demo"})
+    if existing:
+        return
+    logger.info("Creating default 'demo' tenant…")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await shared.tenants.insert_one({
+        "tenant_id": "demo",
+        "company_name": "Demo Company",
+        "db_name": _default_db_name,   # point demo tenant at existing DB
+        "subdomain": "demo",
+        "plan_type": "enterprise",
+        "status": "active",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    })
+    # Create demo admin user
+    import bcrypt
+    hashed = bcrypt.hashpw(b"demo1234", bcrypt.gensalt()).decode()
+    await shared.users.update_one(
+        {"email": "admin@demo.com"},
+        {"$set": {
+            "email": "admin@demo.com",
+            "username": "admin",
+            "hashed_password": hashed,
+            "full_name": "Demo Admin",
+            "created_at": now_iso,
+        }},
+        upsert=True,
+    )
+    await shared.user_tenants.update_one(
+        {"email": "admin@demo.com", "tenant_id": "demo"},
+        {"$set": {
+            "email": "admin@demo.com",
+            "user_id": "demo_admin",
+            "tenant_id": "demo",
+            "role": "admin",
+            "is_active": True,
+            "assigned_at": now_iso,
+        }},
+        upsert=True,
+    )
+    logger.info("Default 'demo' tenant created (DB: %s)", _default_db_name)
+
+
+@app.on_event("startup")
+async def startup():
+    await ensure_shared_indexes()
+    await _ensure_default_tenant()
+    logger.info("Multi-tenant startup complete")
 
 
 @app.on_event("shutdown")
