@@ -1,7 +1,7 @@
 # Fashion Retail Gap Analysis Platform - PRD
 
 ## Original Problem Statement
-Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, Data Quality & SLA Dashboard, and PRD-based ROS Gap Analysis.
+Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, Data Quality & SLA Dashboard, PRD-based ROS Gap Analysis, and Stock-Out Analysis.
 
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme)
@@ -11,7 +11,7 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 - **Charts**: Chart.js + react-chartjs-2
 - **SFTP**: paramiko + apscheduler (demo mode when unconfigured)
 
-## Pages & Routes (10 total)
+## Pages & Routes (11 total)
 | Route | Page | Description |
 |-------|------|-------------|
 | / | Getting Started | App overview |
@@ -19,6 +19,7 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 | /config | Configuration | Analysis config |
 | /core-logics | Core Logics | TrueROS + Store-Style with charts |
 | /gap-analysis | Gap Analysis | NOOS + Size Gap + ROS Gap with charts |
+| /stock-out | Stock-Out Analysis | PRD stock-out formulas, risk analysis |
 | /bi-dashboards | BI Dashboards | Revenue, units, store/style analytics |
 | /warehouse | Warehouse | Inventory, velocity, fulfillment |
 | /sftp-monitor | SFTP Monitor | Data pipeline monitoring |
@@ -52,20 +53,29 @@ Build the same app as the Streamlit Merchandising Gap Analysis app with better U
 - [x] Backend APIs for quality metrics
 
 ### Phase 8 — ROS Gap Analysis (Feb 2026)
-- [x] **New Backend Endpoint** `/api/analytics/ros-gap` — Computes PRD formulas using real CSV data:
-  - Raw ROS = Net Sales Qty / True Live Days
-  - Healthy Size Set = >=75% sizes available per store-style-day
-  - Sales Loss = (Healthy ROS x Broken Days) - Actual Broken Sales
-  - NOOS = Sales >80% + Inventory >80% of period days
-- [x] **PRD Formula Cards** — 4 prominent cards displaying each formula
-- [x] **KPI Summary Cards** — Avg ROS Gap, Total Sales Loss, Healthy Coverage %, NOOS Qualified Styles
-- [x] **Charts** — Style Health Distribution (Doughnut), Top 10 Sales Loss by Style (Bar), Store-wise Size Set Health (Stacked Bar)
-- [x] **Style-wise ROS Gap Table** — Style, Healthy ROS, Actual ROS, Gap, Sales Loss, Stores, Status
-- [x] **Store-wise Size Set Health Table** — Store, Healthy %, Broken %, Sales Loss, Styles
-- [x] **NOOS Style Analysis Table** — Style, Stores, NOOS Stores, Sales/Inv Consistency, NOOS %, Status
-- [x] **Persona Views** — CXO Executive Insight, Merchandiser detail tables, Consultant methodology cards
-- [x] **Full Filter Integration** — Date, Category, Channel, Region filters work with ROS Gap tab
-- [x] **Testing** — 100% pass rate (Iteration 8: 11 backend + all frontend tests passed)
+- [x] Backend endpoint `/api/analytics/ros-gap` with PRD formulas (Raw ROS, Healthy Size Set, Sales Loss, NOOS)
+- [x] PRD Formula Cards, KPI Cards, Charts, Tables
+- [x] Persona views (CXO, Merchandiser, Consultant)
+- [x] Testing: 100% pass (Iteration 8)
+
+### Phase 9 — Stock-Out Analysis (Feb 2026)
+- [x] **Backend endpoint** `/api/analytics/stock-out` computing all PRD formulas from real CSV data:
+  - Stock-Out: SOH = 0 AND Last 30 Days ROS > 0
+  - Daily Sales Loss: ((ROS x 1) - SOH) x ASP
+  - Stock-Out Rate: (Stockouts / Total SKUs) x 100
+  - Severity: LostSales x Duration x Importance
+- [x] **PRD Formula Cards** — 4 cards (Stock-Out, Daily Sales Loss, Stock-Out Rate, Severity)
+- [x] **KPI Cards** — Total Stock-Outs, Stock-Out Rate, Est. Daily Sales Loss, Stores Impacted
+- [x] **Stock-Out Trend** — Line chart of daily stock-out counts
+- [x] **Top Impacted Stores** — Bar chart ranked by severity score
+- [x] **Top Stock-Out SKUs Table** — SKU, Style, Stores Affected, Avg ROS, Avg ASP, Daily Loss
+- [x] **Store-wise Impact Table** — Store, Stock-Out SKUs, Avg Duration, Daily Loss, Severity
+- [x] **High-Risk SKUs Table** — Predictive: SKUs approaching stock-out within 7 days (ROS vs SOH)
+- [x] **SKU Detail Modal** — PRD calculation breakdown with SOH, ROS, ASP
+- [x] **Actionable Recommendations** — Urgent replenishment, preventive monitoring, safety stock
+- [x] **FilterPanel integration** — Date, Category, Channel, Region filters
+- [x] **Navigation** — New /stock-out route in sidebar
+- [x] **Testing** — 100% pass rate (Iteration 9: 14 backend + all frontend tests)
 
 ## Prioritized Backlog
 ### P1
