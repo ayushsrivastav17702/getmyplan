@@ -1,7 +1,7 @@
 # Fashion Retail Gap Analysis Platform - PRD
 
 ## Original Problem Statement
-Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV data uploading, multiple analytics dashboards with PRD formulas, dynamic filtering with presets, Chart.js visualizations, GPT-5.2 FAQ Chatbot, multi-tenant architecture, and role-based access control integrated across all pages.
+Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, GPT-5.2 FAQ Chatbot, multi-tenant architecture, and role-based access control.
 
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme)
@@ -9,63 +9,51 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **Database**: MongoDB (multi-tenant: separate DB per tenant, shared registry in merch_shared)
 - **AI**: GPT 5.2 via Emergent LLM Key
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
-- **Auth**: JWT with bcrypt, tenant-scoped tokens, RBAC with permission-guarded routes
+- **Auth**: JWT with bcrypt, RBAC with 8 built-in roles + custom roles + permission overrides
 
 ## Completed Phases
 
 ### Phase 1-16 (Previous sessions)
-- [x] Full MVP analytics, filters, presets
-- [x] Executive Dashboard with 6 module cards
-- [x] MongoDB Multi-Tenancy + RBAC + User Management
-- [x] Full RBAC integration across all 16 pages
-- [x] Tenant Admin Panel (UI + Backend)
+- Full MVP analytics, filters, presets, 6 analytics modules
+- Executive Dashboard with module cards
+- MongoDB Multi-Tenancy + RBAC + User Management
+- Full RBAC integration across all 16 pages
+- Tenant Admin Panel
 
-### Phase 17 — Executive Dashboard P0 Enhancements (Feb 2026)
-- [x] DASH-26: 401 Interceptor — expired tokens auto-redirect to login
-- [x] DASH-02/03: Revenue & Margin KPI cards with WoW growth indicators
-- [x] DASH-33: Week-over-Week comparison card
-- [x] DASH-34: Year-over-Year comparison card
-- [x] DASH-08: Quick date presets (7 presets)
-- [x] DASH-12: Date validation (end < start blocked)
-- [x] DASH-24: Auto-refresh toggle with 30s countdown
-- [x] New backend endpoint: /api/analytics/executive-kpis
-- [x] Testing: 100% (Iteration 17-18: all 35 test cases audited, 29 PASS, 3 known GAPs)
+### Phase 17 — Executive Dashboard P0 (Feb 2026)
+- 401 Interceptor, KPI cards (Revenue, Units, MRP Realisation), WoW/YoY, date presets, validation, auto-refresh
+- Testing: 100% (Iterations 17-18, 29/35 PASS, 3 known P1/P2 GAPs)
 
-### Phase 18 — Data Upload Validation Enhancements (Feb 2026)
-- [x] UPLOAD-05: File size limit (100MB) — backend + frontend
-- [x] UPLOAD-09: Data type validation (text in numeric field rejected)
-- [x] UPLOAD-11: Null validation on required columns
-- [x] UPLOAD-12: Deduplication with duplicate count in response
-- [x] UPLOAD-20: Future date rejection
-- [x] UPLOAD-23: Negative quantity/revenue rejection
-- [x] UPLOAD-32: Concurrent upload lock (asyncio.Lock per file_type)
-- [x] UPLOAD-35: Encoding detection via chardet (Latin1, UTF-8-BOM, CP1252)
-- [x] UPLOAD-34: BOM character handling
-- [x] UPLOAD-03 fix: 400 status (was 500) for unsupported format
-- [x] UPLOAD-08: Extra columns warning in response
-- [x] Frontend: Client-side file size + extension validation
-- [x] Response enhanced: warnings, duplicates_removed, encoding fields
-- [x] Testing: 100% (Iteration 20: all 35 test cases, 30 PASS, 4 PARTIAL, 3 known GAPs)
+### Phase 18 — Data Upload Validation (Feb 2026)
+- File size limit, data type validation, null check, dedup, future date rejection, negative qty rejection, encoding detection, concurrent upload lock
+- Testing: 100% (Iteration 20, 30/35 PASS, 3 known SFTP/browser GAPs)
 
-## Test Case Coverage Summary
+### Phase 19 — Configuration Module (Feb 2026)
+- **CONF-01–08**: 8 analysis parameters (PSA Benchmark, Cover Days, ROS Period, Ideal DOH, Topseller X Factor, Lead Time, Safety Days, Shelf Life) with full validation + persistence + analytics integration
+- **CONF-09–14**: Module toggles (NOOS, ROS, Size Gap, Lifecycle, Replenishment) that control Gap Analysis tabs + sidebar nav
+- **CONF-15–20**: Store Classification CRUD with priority ordering + filter integration
+- **CONF-21–26**: Category Hierarchy CRUD with parent-child nesting + delete protection
+- **CONF-27–29**: User role assign/change/remove
+- **CONF-30**: Custom role creation with configurable permissions
+- **CONF-31**: Role-based menu visibility verified
+- **CONF-32**: Per-user permission override (add/remove specific permissions)
+- Testing: **100% (Iteration 21, 32/32 PASS)**
 
-### Executive Dashboard (35 test cases)
-| Status | Count | % |
-|--------|-------|---|
-| PASS   | 29    | 83% |
-| PARTIAL| 1     | 3% |
-| GAP    | 3     | 9% |
+## Test Coverage Summary
 
-Remaining GAPs: DASH-15 (trend line chart), DASH-25 (offline detection), DASH-35 (PDF export)
+| Module | Total | PASS | PARTIAL | GAP | % |
+|--------|-------|------|---------|-----|---|
+| Executive Dashboard | 35 | 29 | 1 | 3 | 83% |
+| Data Upload | 35 | 30 | 4 | 3 | 86% |
+| Configuration | 32 | 32 | 0 | 0 | **100%** |
+| **Total** | **102** | **91** | **5** | **6** | **89%** |
 
-### Data Upload (35 test cases)
-| Status | Count | % |
-|--------|-------|---|
-| PASS   | 30    | 86% |
-| PARTIAL| 4     | 11% |
-| GAP    | 3     | 9% |
-
-Remaining GAPs: UPLOAD-26/28 (SFTP real connection — currently MOCKED), UPLOAD-33 (browser-level network retry)
+## Remaining Known Gaps
+- DASH-15: Revenue trend line chart (P1)
+- DASH-25: Offline detection UI (P1)
+- DASH-35: PDF export (P2)
+- UPLOAD-26/28: Real SFTP connection (MOCKED)
+- UPLOAD-33: Browser-level network retry
 
 ## Prioritized Backlog
 
@@ -73,16 +61,14 @@ Remaining GAPs: UPLOAD-26/28 (SFTP real connection — currently MOCKED), UPLOAD
 - [ ] Tenant Admin Panel formal testing
 
 ### P1
-- DASH-15: Revenue trend line chart
-- DASH-25: Offline detection UI
-- Real SFTP integration (replace demo mode)
+- Revenue trend line chart (DASH-15)
+- Offline detection UI (DASH-25)
+- Real SFTP integration
 - PDF report generation
 - Email alerts for SLA/SFTP
-- PermissionGate inside pages (hide edit/export for viewers)
 
 ### P2
-- DASH-35: PDF export for dashboard
-- Modularize server.py into route files (~3500+ lines)
+- PDF export (DASH-35)
+- Modularize server.py (~3700+ lines)
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
-- Team activity dashboard
