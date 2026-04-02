@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "merch-saas-secret-change-me")
+JWT_SECRET = os.environ.get("JWT_SECRET", "merch-saas-Kx9vQ2pR8wZm4jL7nY0dF5hT3bE6aU1c")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
 

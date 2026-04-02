@@ -31,7 +31,7 @@ PUBLIC_PATHS = {
     "/openapi.json",
 }
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "merch-saas-secret-change-me")
+JWT_SECRET = os.environ.get("JWT_SECRET", "merch-saas-Kx9vQ2pR8wZm4jL7nY0dF5hT3bE6aU1c")
 JWT_ALGORITHM = "HS256"
 
 
