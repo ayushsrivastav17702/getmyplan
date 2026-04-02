@@ -848,6 +848,204 @@ async def get_stock_out_analysis(
         return {"error": str(e), "data": {}}
 
 
+@api_router.get("/analytics/replenishment")
+async def get_replenishment_plan(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+    lead_time_days: int = 14,
+    safety_days: int = 7,
+    min_ros: float = 0.1
+):
+    """
+    Replenishment Planner using PRD formulas.
+    Reorder Qty = (ROS x Lead Time Days) + Safety Stock - Current SOH
+    Safety Stock = ROS x Safety Days
+    Projected Stock-Out Date = Current SOH / ROS
+    PO Value = Reorder Qty x ASP
+    """
+    sales_df = await get_cached_data('daily_sales')
+    inventory_df = await get_cached_data('store_inventory')
+    sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
+
+    if sales_df is None or inventory_df is None or sku_df is None:
+        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+
+    try:
+        # Apply filters
+        sales_filtered = apply_date_filter(sales_df.copy(), start_date, end_date, 'day')
+        inventory_filtered = apply_date_filter(inventory_df.copy(), start_date, end_date, 'day')
+
+        if channels:
+            channel_list = channels.split(',')
+            sales_filtered = apply_channel_filter(sales_filtered, channel_list)
+            inventory_filtered = apply_channel_filter(inventory_filtered, channel_list)
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_filtered = apply_region_filter(sales_filtered, region_list, store_df)
+            inventory_filtered = apply_region_filter(inventory_filtered, region_list, store_df)
+
+        sales_filtered['day'] = pd.to_datetime(sales_filtered['day'])
+        inventory_filtered['day'] = pd.to_datetime(inventory_filtered['day'])
+
+        # ================================================
+        # 1. ROS per store-SKU
+        # ================================================
+        ros_calc = sales_filtered.groupby(['store_code', 'sku']).agg(
+            total_qty=('quantity', 'sum'),
+            total_revenue=('revenue', 'sum'),
+            live_days=('day', 'nunique')
+        ).reset_index()
+        ros_calc['ros'] = (ros_calc['total_qty'] / ros_calc['live_days'].clip(lower=1)).round(3)
+
+        # Get ASP per SKU
+        if 'mrp' in sku_df.columns:
+            asp_map = sku_df.groupby('ean')['mrp'].first()
+            ros_calc['asp'] = ros_calc['sku'].map(asp_map).fillna(0)
+        else:
+            ros_calc['asp'] = np.where(
+                ros_calc['total_qty'] > 0,
+                (ros_calc['total_revenue'] / ros_calc['total_qty']).round(2),
+                0
+            )
+
+        # Filter to items with meaningful demand
+        ros_calc = ros_calc[ros_calc['ros'] >= min_ros]
+
+        if len(ros_calc) == 0:
+            return {"error": "No items with sufficient demand found for the selected filters", "data": {}}
+
+        # ================================================
+        # 2. Current SOH per store-SKU
+        # ================================================
+        latest_date = inventory_filtered['day'].max()
+        latest_inv = inventory_filtered[inventory_filtered['day'] == latest_date].copy()
+        soh_calc = latest_inv.groupby(['store_code', 'ean'])['quantity'].sum().reset_index()
+        soh_calc.columns = ['store_code', 'sku', 'current_soh']
+
+        # ================================================
+        # 3. Merge and compute replenishment
+        # ================================================
+        plan = ros_calc.merge(soh_calc, on=['store_code', 'sku'], how='left')
+        plan['current_soh'] = plan['current_soh'].fillna(0).clip(lower=0)
+
+        # PRD Formulas
+        plan['safety_stock'] = (plan['ros'] * safety_days).round(0)
+        plan['demand_during_lead'] = (plan['ros'] * lead_time_days).round(0)
+        plan['reorder_qty'] = (plan['demand_during_lead'] + plan['safety_stock'] - plan['current_soh']).clip(lower=0).round(0)
+        plan['po_value'] = (plan['reorder_qty'] * plan['asp']).round(2)
+        plan['days_to_stockout'] = np.where(
+            plan['ros'] > 0,
+            (plan['current_soh'] / plan['ros']).round(1),
+            999
+        )
+
+        # Priority classification
+        plan['priority'] = pd.cut(
+            plan['days_to_stockout'].astype(float),
+            bins=[-1, 0, 3, 7, 14, float('inf')],
+            labels=['Stock-Out', 'Critical', 'High', 'Medium', 'Low']
+        ).astype(str)
+
+        # Add style info
+        if 'style' in sku_df.columns:
+            sku_style_map = sku_df.groupby('ean')['style'].first()
+            plan['style'] = plan['sku'].map(sku_style_map).fillna('Unknown')
+        else:
+            plan['style'] = 'Unknown'
+
+        # Add size info
+        if 'size' in sku_df.columns:
+            sku_size_map = sku_df.groupby('ean')['size'].first()
+            plan['size'] = plan['sku'].map(sku_size_map).fillna('-')
+        else:
+            plan['size'] = '-'
+
+        # Apply category filter
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            if 'style_code' in style_df.columns and 'style' in plan.columns:
+                filtered_styles = style_df[style_df['category'].isin(category_list)]['style_code'].tolist()
+                plan = plan[plan['style'].isin(filtered_styles)]
+
+        # Only include items that need reorder
+        needs_reorder = plan[plan['reorder_qty'] > 0].copy()
+        needs_reorder = needs_reorder.sort_values('days_to_stockout')
+
+        # ================================================
+        # 4. Summary KPIs
+        # ================================================
+        total_po_value = float(needs_reorder['po_value'].sum())
+        total_reorder_units = int(needs_reorder['reorder_qty'].sum())
+        skus_needing_reorder = int(needs_reorder['sku'].nunique())
+        stores_needing_reorder = int(needs_reorder['store_code'].nunique())
+        stockout_count = int((needs_reorder['priority'] == 'Stock-Out').sum())
+        critical_count = int((needs_reorder['priority'] == 'Critical').sum())
+        high_count = int((needs_reorder['priority'] == 'High').sum())
+
+        # ================================================
+        # 5. Aggregated views
+        # ================================================
+        # By priority
+        by_priority = needs_reorder.groupby('priority').agg(
+            count=('sku', 'count'),
+            total_units=('reorder_qty', 'sum'),
+            total_value=('po_value', 'sum')
+        ).reset_index()
+        priority_order = {'Stock-Out': 0, 'Critical': 1, 'High': 2, 'Medium': 3, 'Low': 4}
+        by_priority['sort_key'] = by_priority['priority'].map(priority_order)
+        by_priority = by_priority.sort_values('sort_key').drop(columns=['sort_key'])
+
+        # By store
+        by_store = needs_reorder.groupby('store_code').agg(
+            sku_count=('sku', 'nunique'),
+            total_units=('reorder_qty', 'sum'),
+            total_value=('po_value', 'sum'),
+            urgent_count=('priority', lambda x: ((x == 'Stock-Out') | (x == 'Critical')).sum())
+        ).reset_index().sort_values('total_value', ascending=False)
+
+        # By style
+        by_style = needs_reorder.groupby('style').agg(
+            sku_count=('sku', 'nunique'),
+            total_units=('reorder_qty', 'sum'),
+            total_value=('po_value', 'sum'),
+            avg_days=('days_to_stockout', 'mean')
+        ).reset_index().sort_values('total_value', ascending=False).head(20)
+        by_style['avg_days'] = by_style['avg_days'].round(1)
+
+        # Detail rows for table (cap at 200)
+        detail_cols = ['sku', 'style', 'size', 'store_code', 'current_soh', 'ros',
+                       'days_to_stockout', 'safety_stock', 'demand_during_lead',
+                       'reorder_qty', 'asp', 'po_value', 'priority']
+        detail = needs_reorder[detail_cols].head(200)
+
+        return {
+            "summary": {
+                "total_po_value": round(total_po_value, 2),
+                "total_reorder_units": total_reorder_units,
+                "skus_needing_reorder": skus_needing_reorder,
+                "stores_needing_reorder": stores_needing_reorder,
+                "stockout_count": stockout_count,
+                "critical_count": critical_count,
+                "high_count": high_count,
+                "lead_time_days": lead_time_days,
+                "safety_days": safety_days,
+                "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
+            },
+            "by_priority": by_priority.round(2).fillna(0).to_dict('records'),
+            "by_store": by_store.round(2).fillna(0).to_dict('records'),
+            "by_style": by_style.round(2).fillna(0).to_dict('records'),
+            "detail": detail.round(2).fillna(0).to_dict('records'),
+        }
+    except Exception as e:
+        logger.error(f"Replenishment plan error: {str(e)}")
+        return {"error": str(e), "data": {}}
+
+
 @api_router.get("/analytics/ros")
 async def get_ros_analysis(
     start_date: str = None,

@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import axios from "axios";
 import { 
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart
 } from "lucide-react";
 
 // Pages
@@ -19,6 +19,7 @@ import WarehouseAnalysis from "./pages/WarehouseAnalysis";
 import SFTPMonitor from "./pages/SFTPMonitor";
 import DataQuality from "./pages/DataQuality";
 import StockOutAnalysis from "./pages/StockOutAnalysis";
+import ReplenishmentPlanner from "./pages/ReplenishmentPlanner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -31,6 +32,7 @@ const navItems = [
   { path: "/core-logics", label: "Core Logics", icon: BarChart3 },
   { path: "/gap-analysis", label: "Gap Analysis", icon: PieChart },
   { path: "/stock-out", label: "Stock-Out Analysis", icon: XCircle },
+  { path: "/replenishment", label: "Replenishment Planner", icon: ShoppingCart },
   { path: "/bi-dashboards", label: "BI Dashboards", icon: TrendingUp },
   { path: "/warehouse", label: "Warehouse", icon: Warehouse },
   { path: "/sftp-monitor", label: "SFTP Monitor", icon: Server },
@@ -194,6 +196,7 @@ function App() {
               <Route path="/core-logics" element={<CoreLogics />} />
               <Route path="/gap-analysis" element={<GapAnalysis />} />
               <Route path="/stock-out" element={<StockOutAnalysis />} />
+              <Route path="/replenishment" element={<ReplenishmentPlanner />} />
               <Route path="/bi-dashboards" element={<BIDashboards />} />
               <Route path="/warehouse" element={<WarehouseAnalysis />} />
               <Route path="/sftp-monitor" element={<SFTPMonitor />} />
