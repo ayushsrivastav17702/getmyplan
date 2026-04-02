@@ -6,7 +6,7 @@ import {
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp,
   MessageSquare, Menu, X, ChevronRight, Check, AlertCircle,
   Warehouse, Server, Award, XCircle, ShoppingCart, Clock,
-  Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users
+  Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users, Shield
 } from "lucide-react";
 
 // Auth
@@ -31,6 +31,7 @@ import ReplenishmentPlanner from "./pages/ReplenishmentPlanner";
 import DOHAnalysis from "./pages/DOHAnalysis";
 import PlanogramFillRate from "./pages/PlanogramFillRate";
 import UserManagement from "./pages/UserManagement";
+import TenantAdminPanel from "./pages/TenantAdminPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -55,6 +56,7 @@ const navItems = [
   { path: "/data-quality",  label: "Data Quality",         icon: Award,           permission: "data.quality.view" },
   { path: "/chatbot",       label: "FAQ Chatbot",          icon: MessageSquare,   permission: "chatbot.faq.view" },
   { path: "/users",         label: "User Management",      icon: Users,           permission: "users.list.view" },
+  { path: "/tenant-admin",  label: "Tenant Admin",         icon: Shield,          permission: "settings.tenant.view" },
 ];
 
 // ─── Route guard: renders child only if the user has the required permission ───
@@ -254,6 +256,7 @@ const AuthenticatedApp = () => {
             <Route path="/data-quality"  element={<ProtectedRoute permission="data.quality.view"><DataQuality /></ProtectedRoute>} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
+            <Route path="/tenant-admin"  element={<ProtectedRoute permission="settings.tenant.view"><TenantAdminPanel /></ProtectedRoute>} />
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />

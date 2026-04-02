@@ -3,7 +3,7 @@ Tenant management API — create, list, status, suspend, delete tenants.
 These endpoints bypass the tenant middleware (PUBLIC_PATHS) for creation,
 and require admin auth for management operations.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime, timezone
@@ -15,7 +15,10 @@ from .tenant_db import (
     get_shared_db,
     get_mongo_client,
     clear_tenant_cache,
+    tenant_context,
 )
+from .auth import get_current_user
+from .rbac import require_role
 
 logger = logging.getLogger(__name__)
 
@@ -227,3 +230,110 @@ async def delete_tenant(tenant_id: str):
 
     clear_tenant_cache(tenant_id)
     return {"message": f"Tenant '{tenant_id}' deleted"}
+
+
+# ──────────── Tenant Admin: Metrics ────────────
+
+@tenant_router.get("/{tenant_id}/metrics")
+async def tenant_metrics(tenant_id: str, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Return rich usage metrics for the tenant admin panel."""
+    shared = get_shared_db()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    tdb = get_mongo_client()[tenant["db_name"]]
+    total_users = await shared.user_tenants.count_documents({"tenant_id": tenant_id, "is_active": True})
+    uploaded = await tdb.uploaded_files.count_documents({})
+    presets = await tdb.filter_presets.count_documents({})
+    api_calls = await shared.audit_logs.count_documents({"tenant_id": tenant_id})
+
+    plan = tenant.get("plan_type", "starter")
+    storage_limit = {"starter": 10, "professional": 50, "enterprise": 100}.get(plan, 10)
+
+    return {
+        "tenant_id": tenant_id,
+        "company_name": tenant["company_name"],
+        "subdomain": tenant["subdomain"],
+        "plan": plan,
+        "total_users": total_users,
+        "uploaded_files": uploaded,
+        "presets": presets,
+        "api_calls": api_calls,
+        "storage_used": round(uploaded * 0.3, 1),
+        "storage_limit": storage_limit,
+        "created_at": tenant.get("created_at"),
+    }
+
+
+# ──────────── Tenant Admin: API Keys ────────────
+
+@tenant_router.get("/admin/api-keys")
+async def list_api_keys(current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    ctx = tenant_context.get()
+    if not ctx:
+        raise HTTPException(400, "Tenant context required")
+    shared = get_shared_db()
+    keys = await shared.api_keys.find(
+        {"tenant_id": ctx.tenant_id, "is_active": True},
+        {"_id": 0},
+    ).to_list(100)
+    for k in keys:
+        full = k.get("key", "")
+        k["key_masked"] = full[:8] + "..." + full[-4:] if len(full) > 12 else full
+    return {"keys": keys}
+
+
+@tenant_router.post("/admin/api-keys")
+async def generate_api_key(name: str = "ERP Integration Key", current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    ctx = tenant_context.get()
+    if not ctx:
+        raise HTTPException(400, "Tenant context required")
+    shared = get_shared_db()
+    key = f"mct_{secrets.token_urlsafe(32)}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await shared.api_keys.insert_one({
+        "tenant_id": ctx.tenant_id,
+        "name": name,
+        "key": key,
+        "created_by": current_user["email"],
+        "created_at": now_iso,
+        "last_used": None,
+        "is_active": True,
+    })
+    return {"key": key, "name": name, "created_at": now_iso}
+
+
+@tenant_router.delete("/admin/api-keys/{key_prefix}")
+async def revoke_api_key(key_prefix: str, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    ctx = tenant_context.get()
+    if not ctx:
+        raise HTTPException(400, "Tenant context required")
+    shared = get_shared_db()
+    result = await shared.api_keys.update_one(
+        {"tenant_id": ctx.tenant_id, "key": {"$regex": f"^{key_prefix}"}},
+        {"$set": {"is_active": False, "revoked_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "API key not found")
+    return {"message": "API key revoked"}
+
+
+# ──────────── Tenant Admin: Settings ────────────
+
+@tenant_router.put("/{tenant_id}/settings")
+async def update_tenant_settings(tenant_id: str, body: dict, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    shared = get_shared_db()
+    update = {}
+    if "company_name" in body:
+        update["company_name"] = body["company_name"]
+    if "timezone" in body:
+        update["timezone"] = body["timezone"]
+    if not update:
+        raise HTTPException(400, "No settings to update")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await shared.tenants.update_one({"tenant_id": tenant_id}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(404, "Tenant not found")
+    clear_tenant_cache(tenant_id)
+    return {"message": "Settings updated"}
