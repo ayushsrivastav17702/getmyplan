@@ -212,6 +212,17 @@ async def upload_file(file_type: str, file: UploadFile = File(...)):
         if validation['valid']:
             await cache_data(file_type, df, validation)
         
+        # Log to upload history
+        await db.upload_history.insert_one({
+            "file_type": file_type,
+            "file_name": file.filename,
+            "status": "success" if validation['valid'] else "failed",
+            "rows_processed": validation['rows'],
+            "columns": validation['columns'],
+            "errors": validation['errors'],
+            "uploaded_at": datetime.now(timezone.utc).isoformat()
+        })
+        
         preview = df.head(5).fillna('').to_dict('records')
         
         return FileUploadResponse(
@@ -224,6 +235,15 @@ async def upload_file(file_type: str, file: UploadFile = File(...)):
         )
     except Exception as e:
         logger.error(f"Error processing file: {str(e)}")
+        # Log failure
+        await db.upload_history.insert_one({
+            "file_type": file_type,
+            "file_name": file.filename if file else "unknown",
+            "status": "failed",
+            "rows_processed": 0,
+            "errors": [str(e)],
+            "uploaded_at": datetime.now(timezone.utc).isoformat()
+        })
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 
@@ -260,6 +280,44 @@ async def delete_all_files():
     """Delete all uploaded files"""
     await db.uploaded_files.delete_many({})
     return {"message": "All files deleted"}
+
+
+@api_router.get("/upload/history")
+async def get_upload_history(limit: int = 50):
+    """Get upload history log"""
+    history = await db.upload_history.find(
+        {}, {"_id": 0}
+    ).sort("uploaded_at", -1).to_list(limit)
+    return history
+
+
+@api_router.get("/upload/template/{file_type}")
+async def get_template(file_type: str):
+    """Get CSV template for a file type"""
+    if file_type not in REQUIRED_COLUMNS:
+        raise HTTPException(status_code=400, detail=f"Unknown file type: {file_type}")
+    
+    columns = REQUIRED_COLUMNS[file_type]
+    csv_content = ",".join(columns) + "\n"
+    
+    # Add example row
+    examples = {
+        "style_master": "ST0001,Brand_A,Shirts,Male,SS26",
+        "sku_ean_master": "1000001,ST0001,M,1499",
+        "store_master": "STORE001,Store Name,Mall,North,Metro",
+        "warehouse_master": "WH001,Central Warehouse,North,Yes",
+        "daily_sales": "STORE001,1000001,2026-01-15,5,7495,Online",
+        "store_inventory": "STORE001,1000001,2026-01-15,25",
+        "warehouse_inventory": "WH001,1000001,2026-01-15,500",
+    }
+    csv_content += examples.get(file_type, ",".join(["example"] * len(columns)))
+    
+    from starlette.responses import Response
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={file_type}_template.csv"}
+    )
 
 
 # ==================== CONFIGURATION ====================
