@@ -233,10 +233,13 @@ const FilterPanel = ({
       )}
 
       {/* Filter Trigger */}
-      <button
+      <div
         data-testid="filter-toggle-btn"
         onClick={() => setIsOpen(!isOpen)}
-        className="filter-panel-trigger"
+        className="filter-panel-trigger cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && setIsOpen(!isOpen)}
       >
         <div className="flex items-center gap-3">
           <Filter size={18} className="text-slate-500" />
@@ -265,7 +268,7 @@ const FilterPanel = ({
             <ChevronDown size={20} className="text-slate-400" />
           )}
         </div>
-      </button>
+      </div>
 
       {/* Presets Dropdown */}
       <AnimatePresence>
