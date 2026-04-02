@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router
 import axios from "axios";
 import { 
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp, 
-  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock
+  MessageSquare, Menu, X, ChevronRight, Check, AlertCircle, Warehouse, Server, Award, XCircle, ShoppingCart, Clock, Layout as LayoutIcon
 } from "lucide-react";
 
 // Pages
@@ -21,6 +21,7 @@ import DataQuality from "./pages/DataQuality";
 import StockOutAnalysis from "./pages/StockOutAnalysis";
 import ReplenishmentPlanner from "./pages/ReplenishmentPlanner";
 import DOHAnalysis from "./pages/DOHAnalysis";
+import PlanogramFillRate from "./pages/PlanogramFillRate";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -35,6 +36,7 @@ const navItems = [
   { path: "/stock-out", label: "Stock-Out Analysis", icon: XCircle },
   { path: "/replenishment", label: "Replenishment Planner", icon: ShoppingCart },
   { path: "/doh", label: "DOH Analysis", icon: Clock },
+  { path: "/planogram", label: "Planogram Fill Rate", icon: LayoutIcon },
   { path: "/bi-dashboards", label: "BI Dashboards", icon: TrendingUp },
   { path: "/warehouse", label: "Warehouse", icon: Warehouse },
   { path: "/sftp-monitor", label: "SFTP Monitor", icon: Server },
@@ -200,6 +202,7 @@ function App() {
               <Route path="/stock-out" element={<StockOutAnalysis />} />
               <Route path="/replenishment" element={<ReplenishmentPlanner />} />
               <Route path="/doh" element={<DOHAnalysis />} />
+              <Route path="/planogram" element={<PlanogramFillRate />} />
               <Route path="/bi-dashboards" element={<BIDashboards />} />
               <Route path="/warehouse" element={<WarehouseAnalysis />} />
               <Route path="/sftp-monitor" element={<SFTPMonitor />} />

@@ -848,6 +848,266 @@ async def get_stock_out_analysis(
         return {"error": str(e), "data": {}}
 
 
+@api_router.get("/analytics/planogram-fill-rate")
+async def get_planogram_fill_rate(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+    target_fill_rate: int = 85
+):
+    """
+    Planogram Fill Rate Analysis using PRD formulas.
+    Fill Rate (%) = (Current Stock / Norm Allocated) x 100
+    Overall Fill Rate = (Sum Current Stock / Sum Norm Allocated) x 100
+    Lost Sales = Missing Facings x ROS per Facing x ASP
+    Compliance: >=90% Good, 80-90% Moderate, <80% Critical
+    """
+    sales_df = await get_cached_data('daily_sales')
+    inventory_df = await get_cached_data('store_inventory')
+    sku_df = await get_cached_data('sku_ean_master')
+    style_df = await get_cached_data('style_master')
+    store_df = await get_cached_data('store_master')
+
+    if sales_df is None or inventory_df is None or sku_df is None:
+        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+
+    try:
+        sales_filtered = apply_date_filter(sales_df.copy(), start_date, end_date, 'day')
+        inventory_filtered = apply_date_filter(inventory_df.copy(), start_date, end_date, 'day')
+
+        if channels:
+            channel_list = channels.split(',')
+            sales_filtered = apply_channel_filter(sales_filtered, channel_list)
+            inventory_filtered = apply_channel_filter(inventory_filtered, channel_list)
+        if regions and store_df is not None:
+            region_list = regions.split(',')
+            sales_filtered = apply_region_filter(sales_filtered, region_list, store_df)
+            inventory_filtered = apply_region_filter(inventory_filtered, region_list, store_df)
+
+        sales_filtered['day'] = pd.to_datetime(sales_filtered['day'])
+        inventory_filtered['day'] = pd.to_datetime(inventory_filtered['day'])
+
+        # Merge with SKU master
+        sku_cols = ['ean']
+        if 'style' in sku_df.columns:
+            sku_cols.append('style')
+        if 'mrp' in sku_df.columns:
+            sku_cols.append('mrp')
+
+        inv_sku = inventory_filtered.merge(sku_df[sku_cols], on='ean', how='left')
+        sales_sku = sales_filtered.merge(sku_df[sku_cols], left_on='sku', right_on='ean', how='left')
+
+        if categories and style_df is not None:
+            category_list = categories.split(',')
+            inv_sku = apply_category_filter(inv_sku, category_list, style_df)
+            sales_sku = apply_category_filter(sales_sku, category_list, style_df)
+
+        if len(inv_sku) == 0:
+            return {"error": "No data matches the selected filters", "data": {}}
+
+        # ================================================
+        # 1. Norm Allocated = peak/avg inventory per store-SKU (proxy for planogram)
+        # ================================================
+        norm_calc = inv_sku.groupby(['store_code', 'ean']).agg(
+            max_qty=('quantity', 'max'),
+            avg_qty=('quantity', 'mean')
+        ).reset_index()
+        # Use max observed inventory as norm (represents full planogram fill)
+        norm_calc['norm_allocated'] = norm_calc['max_qty'].clip(lower=1)
+
+        # ================================================
+        # 2. Current Stock (latest date SOH)
+        # ================================================
+        latest_date = inventory_filtered['day'].max()
+        latest_inv = inventory_filtered[inventory_filtered['day'] == latest_date].copy()
+        soh_df = latest_inv.groupby(['store_code', 'ean'])['quantity'].sum().reset_index()
+        soh_df.columns = ['store_code', 'ean', 'current_stock']
+
+        # ================================================
+        # 3. Merge and calculate fill rate per store-SKU
+        # ================================================
+        fill_df = norm_calc.merge(soh_df, on=['store_code', 'ean'], how='left')
+        fill_df['current_stock'] = fill_df['current_stock'].fillna(0).clip(lower=0)
+        fill_df['fill_rate'] = (fill_df['current_stock'] / fill_df['norm_allocated'].clip(lower=1) * 100).round(1)
+        fill_df['missing_facings'] = (fill_df['norm_allocated'] - fill_df['current_stock']).clip(lower=0)
+
+        # Compliance classification
+        def classify_fill(rate):
+            if rate >= 90:
+                return 'GOOD'
+            elif rate >= 80:
+                return 'MODERATE'
+            return 'CRITICAL'
+
+        fill_df['status'] = fill_df['fill_rate'].apply(classify_fill)
+
+        # Add style/mrp info
+        if 'style' in sku_df.columns:
+            sku_style = sku_df.groupby('ean')['style'].first()
+            fill_df['style'] = fill_df['ean'].map(sku_style).fillna('Unknown')
+        else:
+            fill_df['style'] = 'Unknown'
+        if 'mrp' in sku_df.columns:
+            sku_mrp = sku_df.groupby('ean')['mrp'].first()
+            fill_df['asp'] = fill_df['ean'].map(sku_mrp).fillna(0)
+        else:
+            fill_df['asp'] = 0
+
+        # ================================================
+        # 4. ROS per store-SKU for lost sales
+        # ================================================
+        ros_calc = sales_sku.groupby(['store_code', 'sku']).agg(
+            total_qty=('quantity', 'sum'),
+            total_rev=('revenue', 'sum'),
+            live_days=('day', 'nunique')
+        ).reset_index()
+        ros_calc['ros'] = (ros_calc['total_qty'] / ros_calc['live_days'].clip(lower=1)).round(3)
+        ros_calc = ros_calc[['store_code', 'sku', 'ros']]
+
+        fill_df = fill_df.merge(ros_calc, left_on=['store_code', 'ean'], right_on=['store_code', 'sku'], how='left')
+        fill_df['ros'] = fill_df['ros'].fillna(0)
+        # Lost Sales = Missing Facings x ROS x ASP
+        fill_df['lost_sales'] = (fill_df['missing_facings'] * fill_df['ros'] * fill_df['asp']).round(2)
+
+        # ================================================
+        # 5. Store-level aggregation
+        # ================================================
+        store_agg = fill_df.groupby('store_code').agg(
+            current_stock=('current_stock', 'sum'),
+            norm_allocated=('norm_allocated', 'sum'),
+            lost_sales=('lost_sales', 'sum'),
+            sku_count=('ean', 'nunique'),
+            good_count=('status', lambda x: (x == 'GOOD').sum()),
+            moderate_count=('status', lambda x: (x == 'MODERATE').sum()),
+            critical_count=('status', lambda x: (x == 'CRITICAL').sum()),
+        ).reset_index()
+        store_agg['fill_rate'] = (store_agg['current_stock'] / store_agg['norm_allocated'].clip(lower=1) * 100).round(1)
+        store_agg['status'] = store_agg['fill_rate'].apply(classify_fill)
+        store_agg = store_agg.sort_values('fill_rate')
+        store_data = store_agg.fillna(0).to_dict('records')
+
+        # ================================================
+        # 6. Category-level aggregation
+        # ================================================
+        category_data = []
+        if style_df is not None and 'category' in style_df.columns:
+            if 'style_code' in style_df.columns:
+                style_cat = style_df[['style_code', 'category']].drop_duplicates()
+                fill_cat = fill_df.merge(style_cat, left_on='style', right_on='style_code', how='left')
+            else:
+                fill_cat = fill_df.copy()
+                fill_cat['category'] = 'Unknown'
+
+            cat_agg = fill_cat.groupby('category').agg(
+                current_stock=('current_stock', 'sum'),
+                norm_allocated=('norm_allocated', 'sum'),
+                lost_sales=('lost_sales', 'sum'),
+                sku_count=('ean', 'nunique'),
+            ).reset_index()
+            cat_agg['fill_rate'] = (cat_agg['current_stock'] / cat_agg['norm_allocated'].clip(lower=1) * 100).round(1)
+            cat_agg['status'] = cat_agg['fill_rate'].apply(classify_fill)
+            cat_agg = cat_agg.sort_values('fill_rate')
+            category_data = cat_agg.fillna(0).to_dict('records')
+
+        # ================================================
+        # 7. Weekly trend
+        # ================================================
+        inv_daily_sum = inventory_filtered.groupby('day')['quantity'].sum().reset_index()
+        inv_daily_sum.columns = ['day', 'total_stock']
+        # Use overall norm from peak
+        total_norm = float(fill_df['norm_allocated'].sum())
+        inv_daily_sum['fill_rate'] = (inv_daily_sum['total_stock'] / max(total_norm, 1) * 100).round(1)
+        inv_daily_sum = inv_daily_sum.set_index('day')
+        weekly = inv_daily_sum.resample('W').agg({'fill_rate': 'mean'}).reset_index()
+        weekly['fill_rate'] = weekly['fill_rate'].round(1)
+        weekly['week_label'] = weekly['day'].dt.strftime('%b %d')
+        weekly['target'] = target_fill_rate
+        trend_data = weekly[['week_label', 'fill_rate', 'target']].tail(8).fillna(0).to_dict('records')
+
+        # ================================================
+        # 8. Detail table (top 200 lowest fill rate)
+        # ================================================
+        detail_cols = ['store_code', 'ean', 'style', 'current_stock', 'norm_allocated',
+                       'fill_rate', 'missing_facings', 'ros', 'asp', 'lost_sales', 'status']
+        detail = fill_df[detail_cols].sort_values('fill_rate').head(200).round(2).fillna(0).to_dict('records')
+
+        # ================================================
+        # 9. Summary KPIs
+        # ================================================
+        overall_current = float(fill_df['current_stock'].sum())
+        overall_norm = float(fill_df['norm_allocated'].sum())
+        overall_fill = round(overall_current / max(overall_norm, 1) * 100, 1)
+        overall_lost = float(fill_df['lost_sales'].sum())
+
+        status_counts = fill_df['status'].value_counts().to_dict()
+        good_total = int(status_counts.get('GOOD', 0))
+        moderate_total = int(status_counts.get('MODERATE', 0))
+        critical_total = int(status_counts.get('CRITICAL', 0))
+
+        overall_status = classify_fill(overall_fill)
+
+        # Recommendations
+        recommendations = []
+        critical_stores = [s for s in store_data if s['status'] == 'CRITICAL']
+        moderate_stores = [s for s in store_data if s['status'] == 'MODERATE']
+
+        if critical_stores:
+            recommendations.append({
+                "priority": "high",
+                "title": f"Critical fill rate in {len(critical_stores)} stores",
+                "description": f"These stores have fill rate below 80%. Missing facings are causing estimated lost sales of {formatCurrencyPy(sum(s['lost_sales'] for s in critical_stores))}.",
+                "stores": [s['store_code'] for s in critical_stores[:5]]
+            })
+        if moderate_stores:
+            recommendations.append({
+                "priority": "medium",
+                "title": f"Moderate risk in {len(moderate_stores)} stores",
+                "description": f"These stores have fill rate between 80-90%. Review planogram compliance and replenishment cycle.",
+                "stores": [s['store_code'] for s in moderate_stores[:5]]
+            })
+        if critical_total > 0:
+            recommendations.append({
+                "priority": "high",
+                "title": f"{critical_total} store-SKU combinations critically low",
+                "description": f"At the SKU level, {critical_total} combinations have fill rate below 80%. Prioritize replenishment for highest lost-sales items."
+            })
+
+        return {
+            "summary": {
+                "overall_fill_rate": overall_fill,
+                "overall_status": overall_status,
+                "target_fill_rate": target_fill_rate,
+                "total_lost_sales": round(overall_lost, 2),
+                "total_store_skus": len(fill_df),
+                "good_count": good_total,
+                "moderate_count": moderate_total,
+                "critical_count": critical_total,
+                "total_stores": len(store_data),
+                "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
+            },
+            "store_data": store_data,
+            "category_data": category_data,
+            "trend_data": trend_data,
+            "detail": detail,
+            "recommendations": recommendations,
+        }
+    except Exception as e:
+        logger.error(f"Planogram fill rate error: {str(e)}")
+        return {"error": str(e), "data": {}}
+
+
+def formatCurrencyPy(value):
+    if value >= 10000000:
+        return f"Rs.{value/10000000:.1f}Cr"
+    if value >= 100000:
+        return f"Rs.{value/100000:.1f}L"
+    if value >= 1000:
+        return f"Rs.{value/1000:.0f}K"
+    return f"Rs.{round(value)}"
+
+
 @api_router.get("/analytics/doh")
 async def get_doh_analysis(
     start_date: str = None,
