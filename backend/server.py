@@ -859,7 +859,6 @@ async def get_executive_dashboard(
     """Aggregated executive dashboard pulling top KPIs from all analytics modules."""
     modules = {}
     alerts = []
-    query = f"start_date={start_date or ''}&end_date={end_date or ''}&categories={categories or ''}&channels={channels or ''}&regions={regions or ''}"
 
     # --- ROS Gap ---
     try:

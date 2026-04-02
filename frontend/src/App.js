@@ -30,6 +30,7 @@ export const API = `${BACKEND_URL}/api`;
 // Navigation items
 const navItems = [
   { path: "/", label: "Getting Started", icon: Home },
+  { path: "/dashboard", label: "Executive Dashboard", icon: LayoutDashboard },
   { path: "/upload", label: "Data Upload", icon: Upload },
   { path: "/config", label: "Configuration", icon: Settings },
   { path: "/core-logics", label: "Core Logics", icon: BarChart3 },
@@ -196,6 +197,7 @@ function App() {
           <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
             <Routes>
               <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
+              <Route path="/dashboard" element={<ExecutiveDashboard />} />
               <Route path="/upload" element={<DataUpload onUploadComplete={fetchUploadStatus} />} />
               <Route path="/config" element={<Configuration />} />
               <Route path="/core-logics" element={<CoreLogics />} />
