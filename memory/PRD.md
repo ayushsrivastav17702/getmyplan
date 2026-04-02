@@ -1,95 +1,81 @@
 # Fashion Retail Gap Analysis Platform - PRD
 
 ## Original Problem Statement
-Build the same app as the Streamlit Merchandising Gap Analysis app with better UI/UX using React + FastAPI. Features include CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, warehouse analysis, a GPT-5.2 FAQ Chatbot, redesigned data upload workflow, SFTP Data Pipeline Monitor, Data Quality & SLA Dashboard, PRD-based ROS Gap Analysis, Stock-Out Analysis, Replenishment Planner, and DOH Analysis.
+Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV data uploading, multiple analytics dashboards with PRD formulas, dynamic filtering with presets, Chart.js visualizations, and a GPT-5.2 FAQ Chatbot.
 
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme)
-- **Backend**: FastAPI with Python
-- **Database**: MongoDB (data, presets, upload history, SFTP logs/config)
+- **Backend**: FastAPI with Python/Pandas
+- **Database**: MongoDB
 - **AI**: GPT 5.2 via Emergent LLM Key
-- **Charts**: Chart.js + react-chartjs-2
-- **SFTP**: paramiko + apscheduler (demo mode when unconfigured)
+- **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 
-## Pages & Routes (13 total)
+## Pages & Routes (14 total)
 | Route | Page | Description |
 |-------|------|-------------|
 | / | Getting Started | App overview |
-| /upload | Data Upload | Master vs Daily file upload with history |
+| /upload | Data Upload | Master vs Daily file upload |
 | /config | Configuration | Analysis config |
-| /core-logics | Core Logics | TrueROS + Store-Style with charts |
-| /gap-analysis | Gap Analysis | NOOS + Size Gap + ROS Gap (3 tabs) |
-| /stock-out | Stock-Out Analysis | PRD stock-out formulas, risk analysis |
-| /replenishment | Replenishment Planner | PO suggestions, lead time/safety config |
-| /doh | DOH Analysis | Days on Hand, classification, trend |
-| /bi-dashboards | BI Dashboards | Revenue, units, store/style analytics |
-| /warehouse | Warehouse | Inventory, velocity, fulfillment |
+| /core-logics | Core Logics | TrueROS + Store-Style |
+| /gap-analysis | Gap Analysis | NOOS + Size Gap + ROS Gap |
+| /stock-out | Stock-Out Analysis | PRD stock-out formulas |
+| /replenishment | Replenishment Planner | PO suggestions |
+| /doh | DOH Analysis | Days on Hand classification |
+| /planogram | Planogram Fill Rate | Fill rate compliance |
+| /bi-dashboards | BI Dashboards | Revenue/units analytics |
+| /warehouse | Warehouse | Inventory/velocity |
 | /sftp-monitor | SFTP Monitor | Data pipeline monitoring |
-| /data-quality | Data Quality | Store SLA, quality scorecards |
-| /chatbot | FAQ Chatbot | GPT-5.2 powered Q&A |
+| /data-quality | Data Quality | Store SLA scorecards |
+| /chatbot | FAQ Chatbot | GPT-5.2 Q&A |
 
-## What's Been Implemented
+## Completed Phases
 
-### Phase 1-3 — MVP, Filtering, Presets
-- [x] Full backend API with all analytics endpoints
-- [x] 7-file CSV upload with validation
-- [x] GPT-5.2 FAQ Chatbot
-- [x] Salesforce light theme
-- [x] Dynamic filter panels + Personal/Team presets with import/export
-
-### Phase 4 — Charts & Warehouse
-- [x] Chart.js on all analytics pages
-- [x] Warehouse Analysis page with 4 tabs
-
-### Phase 5 — Data Upload Redesign
-- [x] Master vs Daily separation, upload history, template downloads
-
-### Phase 6 — SFTP Data Pipeline
-- [x] Backend SFTP module with paramiko + apscheduler
-- [x] 11 admin API endpoints, SFTP Monitor Dashboard with demo mode
-
-### Phase 7 — Data Quality & SLA
-- [x] Store Upload Tracker, SLA Monitor, Data Quality Scorecard
+### Phase 1-7 (Previous sessions)
+- [x] Full MVP with 7-file CSV upload, GPT chatbot, Salesforce theme
+- [x] Dynamic filters + Presets with import/export
+- [x] Chart.js migration, Warehouse Analysis, Data Upload redesign
+- [x] SFTP Monitor + Data Quality dashboards
 
 ### Phase 8 — ROS Gap Analysis
-- [x] `/api/analytics/ros-gap` with PRD formulas
-- [x] Testing: 100% pass (Iteration 8)
+- [x] `/api/analytics/ros-gap` - Raw ROS, Healthy Size Set, Sales Loss, NOOS
+- [x] Testing: 100% (Iteration 8)
 
 ### Phase 9 — Stock-Out Analysis
-- [x] `/api/analytics/stock-out` with PRD formulas
-- [x] Testing: 100% pass (Iteration 9)
+- [x] `/api/analytics/stock-out` - SOH=0 AND ROS>0, Sales Loss, Severity
+- [x] Testing: 100% (Iteration 9)
 
 ### Phase 10 — Replenishment Planner
-- [x] `/api/analytics/replenishment` with configurable sliders
-- [x] Testing: 100% pass (Iteration 10)
+- [x] `/api/analytics/replenishment` - Reorder Qty, Safety Stock, PO Value
+- [x] Testing: 100% (Iteration 10)
 
-### Phase 11 — DOH Analysis (Feb 2026)
-- [x] **Backend endpoint** `/api/analytics/doh` computing PRD formulas from real CSV data:
-  - DOH(store,sku) = Inventory / Daily Raw ROS
-  - Channel DOH = Sum(DOH x Inventory) / Sum(Inventory)
-  - Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
-- [x] **Configurable Ideal DOH slider** (1-60 days) with dynamic optimal range display
-- [x] **PRD Formula Cards** — 3 cards + config panel
-- [x] **KPI Cards** — Overall DOH, Optimal count, At Risk count, Stocked Out count
-- [x] **DOH Trend & Stock-Outs** — Weekly line chart with dual-axis
-- [x] **DOH Status Distribution** — Doughnut chart with legend
-- [x] **Recommendations** — Context-aware action items based on store status
-- [x] **Store/Category View Toggle** — Switch between store-level and category-level analysis
-- [x] **DOH Bar Chart** — Current DOH vs Ideal DOH per store/category
-- [x] **Summary Table** — Store/Category, Inventory, DOH, Ideal DOH, SKUs, Status
-- [x] **Detail Table** — Store-SKU level data sorted by most urgent (lowest DOH)
-- [x] **CSV Export** — Downloads full detail with ideal DOH in filename
-- [x] **FilterPanel + Navigation** — Full filter integration, new sidebar item
-- [x] **Testing** — 100% pass rate (Iteration 11: 19 backend + all frontend tests)
+### Phase 11 — DOH Analysis
+- [x] `/api/analytics/doh` - DOH=Inv/ROS, Classification ±20%, Weighted avg
+- [x] Testing: 100% (Iteration 11)
+
+### Phase 12 — Planogram Fill Rate (Feb 2026)
+- [x] `/api/analytics/planogram-fill-rate` with PRD formulas:
+  - Fill Rate = (Current Stock / Norm Allocated) x 100
+  - Overall Fill Rate = (Sum Stock / Sum Norm) x 100
+  - Lost Sales = Missing Facings x ROS x ASP
+  - Compliance: >=90% Good, 80-90% Moderate, <80% Critical
+- [x] PRD Formula Cards + compliance legend
+- [x] KPI Cards: Overall Fill Rate, Good Compliance, Critical count, Est. Lost Sales
+- [x] Fill Rate Trend line chart with target line
+- [x] Compliance Distribution doughnut chart
+- [x] Recommendations with store-level actions
+- [x] Store/Category view toggle with bar charts
+- [x] Summary + Detail tables with progress bars
+- [x] CSV Export, FilterPanel, Navigation
+- [x] Testing: 100% (Iteration 12: 21 backend + all frontend)
 
 ## Prioritized Backlog
 ### P1
-- Real SFTP integration (when credentials available)
+- Real SFTP integration
 - PDF report generation
-- Email alerts for SFTP failures + SLA reminders
+- Email alerts for SLA/SFTP
 
 ### P2
 - Scheduled analysis jobs
-- Product lifecycle timeline visualization
+- Migrate Pandas to persistent MongoDB
+- Product lifecycle timeline
 - Preset sharing via URL
-- Migrate in-memory Pandas to persistent MongoDB collections
