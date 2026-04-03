@@ -10,91 +10,55 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **AI**: GPT 5.2 via Emergent LLM Key
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 - **Auth**: JWT with bcrypt, RBAC with 8 built-in roles + custom roles + permission overrides
+- **Service Layer**: TenantDataProvider (`/backend/services/tenant_data_provider.py`) — single source of truth for tenant-uploaded data
 
 ## Completed Phases
 
-### Phase 1-16 (Previous sessions)
-- Full MVP analytics, filters, presets, 6 analytics modules
-- Executive Dashboard with module cards
+### Phase 1-32 (Previous sessions)
+- Full MVP analytics, filters, presets, 16+ analytics modules
 - MongoDB Multi-Tenancy + RBAC + User Management
-- Full RBAC integration across all 16 pages
-- Tenant Admin Panel
-
-### Phase 17 — Executive Dashboard P0 (Feb 2026)
-- 401 Interceptor, KPI cards (Revenue, Units, MRP Realisation), WoW/YoY, date presets, validation, auto-refresh
-
-### Phase 18 — Data Upload Validation (Feb 2026)
-- File size limit, data type validation, null check, dedup, future date rejection, negative qty rejection, encoding detection, concurrent upload lock
-
-### Phase 19 — Configuration Module (Feb 2026)
-- CONF-01–32: Analysis parameters, module toggles, store classes, category hierarchies, custom roles, permission overrides
-
-### Phase 20 — Core Logic Module (Feb 2026)
-- CORE-01–35: ROS, Healthy Size Set, TrueROS, Attribute Grouping, Store-Style Ranking
-
-### Phase 21 — Gap Analysis Module (Feb 2026)
-- GAP-01–35: ROS Gap, Size Set Gap, NOOS Analysis, Dashboard
-
-### Phase 22 — Stock-Out Analysis Module (Feb 2026)
-- SO-01–35: Period trends, heatmaps, moving averages, predictive analysis, reorder recommendations
-
-### Phase 23 — Replenishment Planner Module (Apr 2026)
-- REP-01–32: Reorder Point Calculation, Order Quantity, IST Inter-Store Transfer
-
-### Phase 24 — DOH Analysis Module (Apr 2026)
-- DOH-01–35: DOH Calculation, Classification, Heatmap, Correlation, Recommendations
-
-### Phase 25 — Planogram Fill Rate Module (Apr 2026)
-- PLAN-01–32: Fill Rate Calculation, Store/Category Performance, Gap Analysis
-
-### Phase 26 — BI Dashboards Module (Apr 2026)
-- BI-01–35: Revenue Analytics, Category Analytics, Store Analytics, Trend Analysis
-
-### Phase 27 — SFTP Monitor Enhancement (Apr 2026)
-- 19 gap test cases: Connection pool, retry, SSL/TLS, batch upload, malformed detection (DEMO MODE)
-
-### Phase 28 — Warehouse Module (Apr 2026)
-- 30/30: Stock, Movements, Transfers, Performance, Dashboard
-
-### Phase 29 — DASH-15 & DASH-25 (Apr 2026)
-- Revenue Trend Line Chart, Offline Detection UI
-
-### Phase 30 — 51-Gap Fix (Apr 2026)
-- Data Quality (17), FAQ Chatbot (4), User Management (16), Tenant Management (14)
-
-### Phase 31 — AI Demand Planning System (Apr 2026)
-- ML Forecast Engine (Holt-Winters, Random Forest, Seasonal Decomposition)
-- Stockout Prediction, Reorder Optimization, Demand Plan Generation
-- 25-Point Design Compliance
-
-### Phase 32 — DASH-35 & TENANT-20 (Apr 2026)
-- DASH-35: PDF Export for Executive Dashboard (html2canvas + jsPDF)
-- TENANT-20: Tenant Branding (Logo, Colors) with dynamic sidebar theming
+- Executive Dashboard, Data Upload, Configuration, Core Logics, Gap Analysis, Stock-Out, Replenishment, DOH, Planogram, BI Dashboards, Warehouse, SFTP, Data Quality, FAQ Chatbot
+- AI Demand Planning System (ML Forecast Engine)
+- DASH-35 PDF Export, TENANT-20 Tenant Branding
 
 ### Phase 33 — AI Buy Plan Generator (Apr 2026)
-- **4-step Configuration Wizard**: Revenue Target → Categories → Channels → Parameters
-- **ML-powered Plan Generation**: Revenue-to-units conversion, seasonal phasing, channel splits, dynamic safety stock calculation
-- **Interactive Results Dashboard**: KPI cards, Line chart (monthly forecast by category), Bar charts (required vs buy, channel breakdown)
-- **Expandable Category Table**: ASP, contribution, required units, buy qty with channel/monthly drilldown
-- **Editable Excel Workbook**: 5-sheet export (Executive Summary, Category, Monthly Plan, Buy Plan Editable, Instructions), upload with user overrides
-- **Plan History**: Saved plans with timestamps, audit trail
-- **Backend**: 5 endpoints (/generate, /export-excel, /upload-edited-plan, /history, /summary) with auth, rate limiting, tenant isolation
+- 4-step Wizard, ML-powered Plan Generation, Charts, Tables, Excel Workbook, History
 - Testing: **100% (Iteration 35, 28/28 PASS)**
 
-## Key API Endpoints (Buy Plan)
-- `POST /api/buy-plan/generate` — Generate complete buy plan
-- `POST /api/buy-plan/export-excel` — Export as multi-sheet Excel
-- `POST /api/buy-plan/upload-edited-plan` — Upload edited Excel with overrides
-- `GET /api/buy-plan/history` — Get saved plan history
-- `GET /api/buy-plan/summary` — Get categories, channels, defaults
+### Phase 34 — TenantDataProvider Refactoring (Apr 2026)
+- **Phase 1: Core Infrastructure** — Created `TenantDataProvider` service layer (`/backend/services/tenant_data_provider.py`)
+  - `get_categories()`, `get_channels()`, `get_asp_by_category()`, `get_seasonality_factors()`, `get_channel_splits()`, `get_revenue_by_category/channel()`, `validate_data_availability()`
+  - Initialised in `server.py` via `init_tenant_provider(get_cached_data, get_db)`
+- **Phase 2: Buy Plan Generator Refactored** — Replaced ALL hardcoded data with TenantDataProvider
+  - New `GET /api/buy-plan/options` endpoint: returns dynamic categories, channels, ASP, seasonality, channel splits from uploaded CSV data
+  - `POST /api/buy-plan/generate`: `data_source` field shows "uploaded" vs "defaults"; version bumped to 1.1
+  - Frontend: data-source-indicator banner (green=uploaded data, amber=defaults), dynamic categoriesList/channelsList props in wizard steps
+  - Old hardcoded values (Jeans/Shirts/STORE_A/AMAZON) only used as fallback when no data exists
+- Testing: **100% (Iteration 36, 30/30 PASS)**
+
+## Key API Endpoints (Buy Plan — Refactored)
+- `GET /api/buy-plan/options` — Dynamic categories, channels, ASP from uploaded data
+- `POST /api/buy-plan/generate` — Generate buy plan (uses TenantDataProvider)
+- `POST /api/buy-plan/export-excel` — Export multi-sheet Excel
+- `POST /api/buy-plan/upload-edited-plan` — Upload edited plan with overrides
+- `GET /api/buy-plan/history` — Saved plan history
+- `GET /api/buy-plan/summary` — Dynamic summary with data status
+
+## Incremental Refactoring Roadmap (TenantDataProvider)
+- [x] Phase 1: Core Infrastructure (TenantDataProvider)
+- [x] Phase 2: Buy Plan Generator
+- [ ] Phase 3: AI Demand Planning
+- [ ] Phase 4: Gap Analysis
+- [ ] Phase 5: Stock-Out, DOH, Replenishment, Planogram, BI Dashboards
 
 ## Prioritized Backlog
 
 ### P1
+- Phase 3-5: Continue TenantDataProvider refactoring (AI Demand → Gap Analysis → remaining modules)
 - SFTP alert/notification system (SFTP-31 to SFTP-34)
 
 ### P2
-- USER-05: Email change, USER-17: Force password change
+- USER-17: Force password change on first login
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
 
