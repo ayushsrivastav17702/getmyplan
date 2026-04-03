@@ -22,6 +22,7 @@ from routes.replenishment import router as replenishment_router, init_replenishm
 from routes.doh_analysis import router as doh_router, init_doh
 from routes.planogram import router as planogram_router, init_planogram
 from routes.bi_dashboard import router as bi_router, init_bi
+from routes.sftp_routes import router as sftp_ext_router, init_sftp_routes
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -3612,6 +3613,11 @@ class SFTPConfigModel(BaseModel):
     failed_path: str = "/failed"
     poll_interval_minutes: int = 30
     max_retries: int = 3
+    retry_base_delay: float = 1.0
+    retry_max_delay: float = 30.0
+    pool_size: int = 5
+    ssl_mode: str = "auto"
+    timeout: int = 30
     alert_emails: str = ""
 
 
@@ -3621,11 +3627,15 @@ async def get_sftp_status():
     config_doc = await get_db().sftp_config.find_one({"_id": "main"}, {"_id": 0})
     if config_doc:
         sftp_service.load_config(config_doc)
+    conn_info = sftp_service.test_connection()
     return {
         "demo_mode": sftp_service.demo_mode,
         "host": sftp_service.host or "Not configured",
         "scheduler": sftp_scheduler.status,
-        "connection": sftp_service.test_connection(),
+        "connection": conn_info,
+        "pool": sftp_service.pool_stats,
+        "ssl_mode": sftp_service.ssl_mode,
+        "retry_config": sftp_service.retry_config,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -3701,11 +3711,20 @@ async def get_sftp_logs(
     days: int = 7,
     status: Optional[str] = None,
     file_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     limit: int = 200,
 ):
-    """Get SFTP processing logs"""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    query: Dict[str, Any] = {"processed_at": {"$gte": cutoff}}
+    """Get SFTP processing logs with optional date range filter"""
+    query: Dict[str, Any] = {}
+    if start_date:
+        ts_q: Dict[str, str] = {"$gte": start_date}
+        if end_date:
+            ts_q["$lte"] = end_date + "T23:59:59"
+        query["processed_at"] = ts_q
+    else:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        query["processed_at"] = {"$gte": cutoff}
     if status:
         query["status"] = status
     if file_type:
@@ -3775,10 +3794,21 @@ async def get_sftp_stats():
     today_logs = [l for l in logs if l.get('processed_at', '').startswith(today)]
     stores_uploaded = set(l.get('store_code') for l in today_logs if l.get('store_code'))
 
+    # Speed metrics
+    speeds = [l.get('speed_mbps', 0) for l in logs if l.get('speed_mbps', 0) > 0]
+    avg_speed = round(sum(speeds) / len(speeds), 2) if speeds else 0
+    total_size_mb = round(sum(l.get('file_size', 0) for l in logs) / 1_000_000, 2)
+
+    # Malformed and duplicate counts
+    malformed_count = sum(1 for l in logs if l.get('status') == 'malformed')
+    duplicate_count = sum(1 for l in logs if l.get('status') == 'duplicate')
+
     return {
         "total": total,
         "success": success,
         "failed": failed,
+        "malformed": malformed_count,
+        "duplicates": duplicate_count,
         "total_rows": total_rows,
         "success_rate": round(curr_rate, 1),
         "success_rate_change": round(curr_rate - prev_rate, 1),
@@ -3786,6 +3816,8 @@ async def get_sftp_stats():
         "trend": sorted(by_day.values(), key=lambda x: x['date']),
         "stores_uploaded_today": sorted(list(stores_uploaded)),
         "stores_total": 10,
+        "avg_speed_mbps": avg_speed,
+        "total_size_mb": total_size_mb,
     }
 
 
@@ -4115,6 +4147,7 @@ api_router.include_router(replenishment_router)
 api_router.include_router(doh_router)
 api_router.include_router(planogram_router)
 api_router.include_router(bi_router)
+api_router.include_router(sftp_ext_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -4192,6 +4225,7 @@ async def startup():
     init_doh(client)
     init_planogram(client)
     init_bi(client)
+    init_sftp_routes(get_db, sftp_service)
     logger.info("Multi-tenant startup complete")
 
 

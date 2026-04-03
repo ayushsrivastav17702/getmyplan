@@ -1,0 +1,142 @@
+{
+  "summary": "SFTP Monitor Enhancement Testing - 19 gap test cases. Backend: 20/20 pytest tests PASSED (100%). Frontend: All 5 tabs verified working (Overview, Transfers, Logs, Speed Metrics, Daily Summary). All SFTP features working in demo mode.",
+
+  "test_case_matrix": {
+    "SFTP_CONNECTION_POOL": {
+      "SFTP-03": {"status": "PASS", "notes": "GET /api/admin/sftp/status returns retry_config with max_retries=3, base_delay=1.0, max_delay=30.0. GET /api/admin/sftp/connection-pool also returns retry_config"},
+      "SFTP-04": {"status": "PASS", "notes": "GET /api/admin/sftp/status returns pool stats (max_size=5, available=0, active=0) showing auto-reconnect readiness"},
+      "SFTP-07": {"status": "PASS", "notes": "GET /api/admin/sftp/connection-pool returns pool stats with max_size, available, active, total_created, ssl_mode"},
+      "SFTP-08": {"status": "PASS", "notes": "GET /api/admin/sftp/connection-pool returns ssl_mode='auto'. Config page has SSL Mode select with auto/strict/reject options"}
+    },
+    "SFTP_FILE_TRANSFER": {
+      "SFTP-09": {"status": "PASS", "notes": "POST /api/admin/sftp/upload returns status=success with speed_mbps and file_hash. Tested with valid CSV file"},
+      "SFTP-10": {"status": "PASS", "notes": "POST /api/admin/sftp/download returns status=success with bytes, speed_mbps, resumed_from fields"},
+      "SFTP-11": {"status": "PASS", "notes": "GET /api/admin/sftp/transfer-progress/{id} returns progress with transferred_bytes and total_bytes"},
+      "SFTP-12": {"status": "PASS", "notes": "POST /api/admin/sftp/resume/{id} endpoint exists and handles failed transfer resume"},
+      "SFTP-14": {"status": "PASS", "notes": "POST /api/admin/sftp/upload with overwrite=false returns overwrite_protected field. Auto-versioning works"}
+    },
+    "SFTP_BATCH_AND_VALIDATION": {
+      "SFTP-15": {"status": "PASS", "notes": "POST /api/admin/sftp/batch-upload returns total, uploaded, failed, malformed, duplicates counts"},
+      "SFTP-20": {"status": "PASS", "notes": "POST /api/admin/sftp/upload with malformed CSV returns status=malformed with error and archive_path containing /failed/"},
+      "SFTP-22": {"status": "PASS", "notes": "Upload same file twice - second upload returns status=duplicate with file_hash"},
+      "SFTP-23": {"status": "PASS", "notes": "Logs include archive_path field showing /archive/processed/ or /archive/failed/ paths"}
+    },
+    "SFTP_LOGS_AND_FILTERING": {
+      "SFTP-25": {"status": "PASS", "notes": "GET /api/admin/sftp/logs?start_date=2026-03-28&end_date=2026-04-03 returns filtered results. Frontend has date inputs"},
+      "SFTP-29": {"status": "PASS", "notes": "GET /api/admin/sftp/error-log/download returns CSV with Content-Type: text/csv"}
+    },
+    "SFTP_SCHEDULER": {
+      "SFTP-16": {"status": "PASS", "notes": "POST /api/admin/sftp/scheduler/start and /stop work. GET /api/admin/sftp/status returns scheduler.running status"}
+    },
+    "SFTP_METRICS_AND_SUMMARY": {
+      "SFTP-30": {"status": "PASS", "notes": "GET /api/admin/sftp/speed-metrics returns avg_speed_mbps=15.39, max_speed_mbps=25.64, daily_metrics array with 7 days"},
+      "SFTP-35": {"status": "PASS", "notes": "GET /api/admin/sftp/daily-summary returns date, total_files, success, failed, malformed, duplicates, success_rate, by_type, store_coverage, top_errors"}
+    },
+    "FRONTEND_UI": {
+      "5_TABS": {"status": "PASS", "notes": "SFTP Monitor page loads with 5 tabs: Overview, Transfers, Logs, Speed Metrics, Daily Summary"},
+      "CONNECTION_BANNER": {"status": "PASS", "notes": "Connection banner shows Pool badge (0/5), SSL badge (auto), Retries badge (3)"},
+      "OVERVIEW_TAB": {"status": "PASS", "notes": "KPIs: Total Files (170), Success Rate (92.4%), Records (488.7K), Failed (13), Malformed (3), Duplicates (2), Avg Speed (15.49 MB/s), Total Size (45.56 MB), Stores Today (10/10)"},
+      "TRANSFERS_TAB": {"status": "PASS", "notes": "Upload form, Batch upload form, Download form, Processing Pipeline info all present"},
+      "LOGS_TAB": {"status": "PASS", "notes": "Date range inputs (start_date, end_date), status filter with malformed/duplicate options, Error Log CSV download button"},
+      "SPEED_METRICS_TAB": {"status": "PASS", "notes": "Speed KPIs (Avg, Max, Total Transferred, Total Transfers) and Daily Speed Trend chart"},
+      "DAILY_SUMMARY_TAB": {"status": "PASS", "notes": "Summary KPIs, Store Coverage (10/10), Top Errors, By File Type breakdown, Download CSV button"},
+      "CONFIG_PANEL": {"status": "PASS", "notes": "SSL Mode select with auto/strict/reject options, Pool Size, Max Retries, Timeout inputs"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 25,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "GAP": 0,
+    "TOTAL": 25
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_sftp_iter28.py",
+    "/app/test_reports/pytest/pytest_results_iter28.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "All 19 SFTP gap test cases PASS plus 6 additional frontend UI tests",
+    "SFTP operations run in DEMO MODE (MOCKED) - no real SFTP server connected",
+    "Connection pool with retry backoff (max_retries=3, base_delay=1.0, max_delay=30.0)",
+    "SSL/TLS verification modes: auto, strict, reject",
+    "File validation: malformed detection, duplicate detection (SHA-256 hash), overwrite protection",
+    "Archive paths: /archive/processed/ for success, /archive/failed/ for errors",
+    "Speed metrics tracked per transfer with daily aggregation",
+    "Daily summary includes store coverage and top errors"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_sftp_iter28.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 20/20 tests passed",
+    "frontend": "100% - All 5 tabs and config panel verified working"
+  },
+
+  "test_credentials": {
+    "admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin"}
+  },
+
+  "seed_data_creation": "POST /api/admin/sftp/seed-demo seeds 154 demo records (7 days of SFTP logs). Demo data includes daily_sales, store_inventory, warehouse_inventory files with success/error/malformed/duplicate statuses.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "All 19 SFTP gap test cases verified PASS. Backend endpoints: /api/admin/sftp/status (enhanced with pool/SSL/retry), /api/admin/sftp/connection-pool, /api/admin/sftp/upload, /api/admin/sftp/download, /api/admin/sftp/batch-upload, /api/admin/sftp/transfer-progress/{id}, /api/admin/sftp/resume/{id}, /api/admin/sftp/logs (with date filtering), /api/admin/sftp/error-log/download, /api/admin/sftp/speed-metrics, /api/admin/sftp/daily-summary, /api/admin/sftp/scheduler/start|stop. Frontend: /sftp-monitor page with 5 tabs. IMPORTANT: All SFTP operations are MOCKED in demo mode.",
+
+  "mocked_api": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "All SFTP upload/download/batch operations use demo simulation (no real SFTP server)",
+      "File transfers return simulated success with random speed metrics",
+      "Scheduler runs demo cycle generation instead of real SFTP polling"
+    ]
+  },
+
+  "data_observations": {
+    "sftp_stats": {
+      "total_files_7d": 170,
+      "success_rate": "92.4%",
+      "records_processed": "488.7K",
+      "failed": 13,
+      "malformed": 3,
+      "duplicates": 2,
+      "avg_speed_mbps": 15.49,
+      "total_size_mb": 45.56,
+      "stores_today": "10/10"
+    },
+    "speed_metrics": {
+      "avg_speed_mbps": 15.39,
+      "max_speed_mbps": 25.64,
+      "min_speed_mbps": 5.14,
+      "total_transferred_mb": 41.97,
+      "total_transfers": 145
+    },
+    "daily_summary": {
+      "total_files": 38,
+      "success": 32,
+      "failed": 2,
+      "malformed": 2,
+      "duplicates": 2,
+      "success_rate": "84.2%",
+      "store_coverage": "10/10"
+    }
+  }
+}
