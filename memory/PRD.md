@@ -47,81 +47,57 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### Phase 23 — Replenishment Planner Module (Apr 2026)
 - REP-01–32: Reorder Point Calculation, Order Quantity, IST Inter-Store Transfer, Replenishment Run, Orders Dashboard
-- New modular route file: `/backend/routes/replenishment.py`
 - Testing: **100% (Iteration 25, 32/32 PASS)**
 
 ### Phase 24 — DOH Analysis Module (Apr 2026)
 - DOH-01–35: DOH Calculation, Classification, Heatmap, DOH vs Stock-Out Correlation, Recommendations
-- New modular route file: `/backend/routes/doh_analysis.py`
 - Testing: **100% (Iteration 26, 35/35 PASS)**
 
 ### Phase 25 — Planogram Fill Rate Module (Apr 2026)
 - PLAN-01–32: Fill Rate Calculation, Store Performance, Category Performance, Gap Analysis, Dashboard
-- New modular route file: `/backend/routes/planogram.py`
 - Testing: **100% (Iteration 27, 32/32 PASS)**
 
 ### Phase 26 — BI Dashboards Module (Apr 2026)
 - BI-01–35: Revenue Analytics, Category Analytics, Store Analytics, Trend Analysis, Custom Dashboards
-- New modular route file: `/backend/routes/bi_dashboard.py`
 - Testing: **100% (Iteration 27, 35/35 PASS)**
 
 ### Phase 27 — SFTP Monitor Enhancement (Apr 2026)
 - 19 gap test cases resolved: Connection pool, retry backoff, SSL/TLS, upload/download, batch upload, malformed detection, duplicate handling, file archive, date filtering, error log CSV, speed metrics, daily summary
-- New route file: `/backend/routes/sftp_routes.py`
-- Enhanced: sftp_service.py (ConnectionPool, TransferTracker), sftp_scheduler.py
-- Frontend: 5-tab layout (Overview, Transfers, Logs, Speed Metrics, Daily Summary)
-- Testing: **100% (Iteration 28, 25/25 PASS)**
 - Note: SFTP operations in **DEMO MODE** (MOCKED)
+- Testing: **100% (Iteration 28, 25/25 PASS)**
 
 ### Phase 28 — Warehouse Module (Apr 2026)
-- **30/30 test cases PASS**:
-  - **WH-01..08 Stock**: View stock levels, filter by warehouse/category, search by SKU/style, stock value calculation (Qty x MRP), low stock alert (<50 units), out of stock (=0), overstock (>500)
-  - **WH-09..14 Movements**: Inbound/outbound tracking with timeline, daily stock change (opening vs closing), stock reconciliation (system vs physical), stock adjustment log (who changed what)
-  - **WH-15..20 Transfers**: Create transfer order, allocate stock, multi-step approval workflow, track in-transit inventory, receive transfer, transfer history audit trail
-  - **WH-21..25 Performance**: Order fulfillment rate (%), avg dispatch time (hours), warehouse turnover (COGS/Avg Inv), storage utilization (% capacity), slow-moving stock (90+ days no sales)
-  - **WH-26..30 Dashboard**: KPI cards (Total Stock, Stock Value, SKUs, Warehouses), stock by category chart, stock movement trend (inbound/outbound), CSV export, multi-warehouse comparison table
-- New route file: `/backend/routes/warehouse.py`
-- Frontend: 5-tab layout (Dashboard, Stock, Movements, Transfers, Performance)
+- 30/30 test cases PASS: Stock, Movements, Transfers, Performance, Dashboard
 - Testing: **100% (Iteration 29, 30/30 PASS)**
 
 ### Phase 29 — DASH-15 & DASH-25 (Apr 2026)
-- **DASH-15: Revenue Trend Line Chart** — Chart.js dual Y-axis line chart on Executive Dashboard showing daily revenue (₹ left axis) & units sold (right axis) over selected date range
-  - New backend endpoint: `/api/analytics/executive-revenue-trend` in `server.py`
-  - Frontend: `Line` from `react-chartjs-2` with interaction mode 'index', INR formatting, auto-skip labels
-- **DASH-25: Offline Detection UI** — Global `OfflineBanner` component in `App.js` using `navigator.onLine` + window event listeners, red banner at z-index 100
+- DASH-15: Revenue Trend Line Chart, DASH-25: Offline Detection UI
 - Testing: **100% (Iteration 30, 19/19 PASS)**
 
-### Phase 30 — 51-Gap Fix: Data Quality, FAQ Chatbot, User Mgmt, Tenant Mgmt (Apr 2026)
-- **Data Quality (17 gaps fixed)**: New `/backend/routes/data_quality.py` with comprehensive checks
-  - DQ-01..07: Completeness (missing fields, empty files, date coverage, store/SKU coverage)
-  - DQ-09..14: Accuracy (MRP validation, category mapping, negative values, outliers, store/style code validation)
-  - DQ-16..20: Consistency (date format, currency, UOM, naming, cross-file)
-  - DQ-08/30: Quality trend over time
-  - DQ-29: Category-level scorecard
-  - DQ-31: CSV export of quality report
-  - DQ-32: Improvement recommendations
-  - Frontend: 5-tab layout (Overview, Data Checks, Category Scorecard, Quality Trend, Store Tracker)
-- **FAQ Chatbot (4 gaps fixed)**:
-  - CHAT-29: Copy button on assistant messages
-  - CHAT-34: Rate limiting (10 msgs/min per IP)
-  - CHAT-35: Chat export to text file
-- **User Management (16 gaps fixed)**: Extended `/backend/multi_tenant/user_routes.py`
-  - USER-04: Edit profile (name update)
-  - USER-07: Reactivate deleted user
-  - USER-08: Bulk user import (JSON array)
-  - USER-09: Bulk role update
-  - USER-16: Admin-initiated password reset
-  - USER-23: Edit custom role permissions
-  - USER-24/25: Delete custom role with system role protection
-  - USER-29/30: Resend/cancel invitations
-  - Frontend: Edit profile modal, password reset modal, bulk import modal, bulk role mode
-- **Tenant Management (14 gaps fixed)**: Extended `/backend/multi_tenant/tenant_routes.py`
-  - TENANT-06/27/28/29: Plan upgrade/downgrade with limit enforcement
-  - TENANT-23: Currency setting
-  - TENANT-34: Filter tenants (status, search)
-  - TENANT-35: Export tenants CSV
-  - Frontend: Plan tab, All Tenants tab, currency in settings
-- Testing: **100% (Iteration 31, 24/24 backend + all frontend PASS)**
+### Phase 30 — 51-Gap Fix (Apr 2026)
+- Data Quality (17 gaps), FAQ Chatbot (4 gaps), User Management (16 gaps), Tenant Management (14 gaps)
+- Testing: **100% (Iteration 31, 24/24 PASS)**
+
+### Phase 31 — AI Demand Planning System (Apr 2026)
+- ML Forecast Engine (Holt-Winters, Random Forest, Seasonal Decomposition)
+- Stockout Prediction, Reorder Optimization, Demand Plan Generation
+- 4-tab React workflow using Chart.js
+- 25-Point Design Compliance: RBAC, Rate Limiting, Optimistic Locking, DOH, X-Factor
+- Testing: **100% (Iterations 32-33)**
+
+### Phase 32 — DASH-35 & TENANT-20 (Apr 2026)
+- **DASH-35: PDF Export for Executive Dashboard**
+  - `html2canvas` + `jsPDF` for client-side PDF generation
+  - Export PDF button in dashboard header, disabled when no data
+  - PDF includes header (title + timestamp), dashboard content, footer (confidential + page)
+- **TENANT-20: Tenant Branding (Logo, Colors)**
+  - Backend: `PUT/GET /api/tenants/{id}/branding` endpoints with hex validation
+  - Frontend: New "Branding" tab in Tenant Admin Panel with color pickers, hex inputs, logo URL, live preview
+  - Branding fetched during login and stored in AuthContext
+  - Sidebar header, active nav items, tenant info bar use dynamic branding colors
+  - Logo URL renders in sidebar header when set; company name shows when no logo
+  - Metrics endpoint includes branding data
+- Testing: **100% (Iteration 34, 20/20 PASS)**
 
 ## Test Coverage Summary
 
@@ -144,29 +120,27 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | User Management | 35 | 27 | **77%** |
 | Tenant Management | 35 | 21 | **60%** |
 | AI Demand Planning | 32 | 32 | **100%** |
-| **Total** | **595** | **533** | **90%** |
+| DASH-35 + TENANT-20 | 20 | 20 | **100%** |
+| **Total** | **615** | **553** | **90%** |
 
 ## Remaining Known Gaps
-- DASH-35: PDF export (P2)
 - SFTP-31/32/33/34: Email/Slack alerts, dashboard notifications, alert thresholds (P1-P2)
 - DQ-08: Completeness trend (basic, needs real historical data)
 - CHAT-21: Message length limit, CHAT-23: Multi-language
 - USER-05: Email change, USER-10: Profile image, USER-17: Force password change, USER-18: MFA, USER-34: IP whitelisting, USER-35: Session management
-- TENANT-10: Restore from backup, TENANT-17/18: Backup isolation/resource limits, TENANT-20/24/25: Branding/language/logo, TENANT-31: Invoice generation
+- TENANT-10: Restore from backup, TENANT-17/18: Backup isolation/resource limits, TENANT-24/25: Language, TENANT-31: Invoice generation
 
 ## Prioritized Backlog
 
 ### P1
 - SFTP alert/notification system (SFTP-31 to SFTP-34)
 
-### P1 (Done)
-- ~~Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/~~ (Done Apr 2026)
-- ~~AI Demand Planning System — ML Forecast, Stockout Prediction, Topseller, Reorder, Plan Generation~~ (Done Apr 2026)
-- ~~AI Demand 25-Point Compliance — RBAC, Rate Limiting, DOH, X-Factor, Editable Grid, Concurrent Locking, 3-Tab Workflow~~ (Done Apr 2026)
-
 ### P2
-- DASH-35: PDF export for Executive Dashboard
 - USER-05: Email change, USER-17: Force password change
-- TENANT-20: Tenant branding (logo, colors)
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
+
+### P3
+- USER-18: MFA
+- TENANT-10: Tenant backup/restore
+- TENANT-31: Invoice generation
