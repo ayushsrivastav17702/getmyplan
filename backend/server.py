@@ -28,6 +28,7 @@ from routes.data_quality import router as dq_router, init_data_quality
 from routes.stock_out import router as stock_out_router, init_stock_out, get_stock_out_analysis as _so_analysis
 from routes.gap_analysis import router as gap_analysis_router, init_gap_analysis, get_ros_gap_analysis as _ros_gap_analysis
 from routes.ai_demand import router as ai_demand_router, init_ai_demand
+from routes.buy_plan import router as buy_plan_router, init_buy_plan
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -3081,6 +3082,7 @@ api_router.include_router(dq_router)
 api_router.include_router(stock_out_router)
 api_router.include_router(gap_analysis_router)
 api_router.include_router(ai_demand_router)
+api_router.include_router(buy_plan_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -3164,6 +3166,7 @@ async def startup():
     init_stock_out(client, get_cached_data, get_db, apply_date_filter, apply_channel_filter, apply_region_filter, apply_category_filter)
     init_gap_analysis(client, get_cached_data, get_db, apply_date_filter, apply_channel_filter, apply_region_filter, apply_category_filter)
     init_ai_demand(client, get_cached_data, get_db, get_current_user, require_role)
+    init_buy_plan(client, get_db, get_current_user, require_role)
     logger.info("Multi-tenant startup complete")
 
 
