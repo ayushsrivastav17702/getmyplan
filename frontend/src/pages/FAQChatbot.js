@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { API } from "../App";
-import { Send, Bot, User, Loader2, Trash2, Info } from "lucide-react";
+import { Send, Bot, User, Loader2, Trash2, Info, Download, Copy, Check } from "lucide-react";
 
 const FAQChatbot = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [copiedIdx, setCopiedIdx] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -71,6 +72,29 @@ const FAQChatbot = () => {
     setSessionId(null);
   };
 
+  const handleCopy = (text, idx) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
+  };
+
+  const handleExport = async () => {
+    if (!sessionId) {
+      const lines = messages.map(m => `${m.role === "user" ? "You" : "Assistant"}: ${m.content}`).join("\n\n");
+      const blob = new Blob([lines], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "chat_export.txt"; a.click();
+      return;
+    }
+    try {
+      const resp = await axios.get(`${API}/chat/export/${sessionId}`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([resp.data]));
+      const a = document.createElement("a"); a.href = url; a.download = `chat_${sessionId.slice(0, 8)}.txt`; a.click();
+    } catch {
+      alert("Export failed");
+    }
+  };
+
   const suggestedQuestions = [
     "What is NOOS analysis?",
     "How is ROS calculated?",
@@ -111,14 +135,24 @@ const FAQChatbot = () => {
           </p>
         </div>
         
-        <button
-          data-testid="clear-chat-btn"
-          onClick={handleClear}
-          className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
-        >
-          <Trash2 size={16} />
-          Clear Chat
-        </button>
+        <div className="flex gap-2">
+          <button
+            data-testid="export-chat-btn"
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
+          >
+            <Download size={16} />
+            Export
+          </button>
+          <button
+            data-testid="clear-chat-btn"
+            onClick={handleClear}
+            className="flex items-center gap-2 px-4 py-2 text-sm border border-neutral-200 hover:border-neutral-400 transition-colors"
+          >
+            <Trash2 size={16} />
+            Clear Chat
+          </button>
+        </div>
       </div>
 
       {/* Chat Container */}
@@ -148,6 +182,12 @@ const FAQChatbot = () => {
                   <div className="text-sm space-y-2">
                     {formatMessage(msg.content)}
                   </div>
+                  {msg.role === 'assistant' && (
+                    <button data-testid={`copy-msg-${i}`} onClick={() => handleCopy(msg.content, i)}
+                      className="mt-2 flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-600 transition-colors">
+                      {copiedIdx === i ? <><Check size={12} className="text-green-500" /> Copied</> : <><Copy size={12} /> Copy</>}
+                    </button>
+                  )}
                 </div>
                 {msg.role === 'user' && (
                   <div className="w-8 h-8 flex items-center justify-center bg-neutral-900 flex-shrink-0">

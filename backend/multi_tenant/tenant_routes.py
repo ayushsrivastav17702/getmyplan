@@ -337,3 +337,113 @@ async def update_tenant_settings(tenant_id: str, body: dict, current_user: dict 
         raise HTTPException(404, "Tenant not found")
     clear_tenant_cache(tenant_id)
     return {"message": "Settings updated"}
+
+
+# ──────────── TENANT-06/27/28: Plan Management ────────────
+
+PLAN_LIMITS = {
+    "starter": {"max_users": 5, "storage_gb": 10, "api_calls": 1000},
+    "professional": {"max_users": 20, "storage_gb": 50, "api_calls": 10000},
+    "enterprise": {"max_users": 999, "storage_gb": 100, "api_calls": 100000},
+}
+
+@tenant_router.put("/{tenant_id}/plan")
+async def update_tenant_plan(tenant_id: str, body: dict, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Upgrade or downgrade tenant plan."""
+    new_plan = body.get("plan_type", "")
+    if new_plan not in PLAN_LIMITS:
+        raise HTTPException(400, f"Invalid plan. Must be one of: {list(PLAN_LIMITS.keys())}")
+
+    shared = get_shared_db()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    old_plan = tenant.get("plan_type", "starter")
+    is_downgrade = list(PLAN_LIMITS.keys()).index(new_plan) < list(PLAN_LIMITS.keys()).index(old_plan)
+
+    # TENANT-29: Enforce limits on downgrade
+    if is_downgrade:
+        active_users = await shared.user_tenants.count_documents({"tenant_id": tenant_id, "is_active": True})
+        if active_users > PLAN_LIMITS[new_plan]["max_users"]:
+            raise HTTPException(400, f"Cannot downgrade: {active_users} active users exceed {new_plan} limit of {PLAN_LIMITS[new_plan]['max_users']}")
+
+    await shared.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"plan_type": new_plan, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    clear_tenant_cache(tenant_id)
+
+    direction = "downgraded" if is_downgrade else "upgraded"
+    return {"message": f"Plan {direction} from {old_plan} to {new_plan}", "plan": new_plan, "limits": PLAN_LIMITS[new_plan]}
+
+
+# ──────────── TENANT-23: Currency Setting ────────────
+
+@tenant_router.put("/{tenant_id}/currency")
+async def update_tenant_currency(tenant_id: str, body: dict, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Set tenant currency."""
+    currency = body.get("currency", "INR")
+    valid = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"]
+    if currency not in valid:
+        raise HTTPException(400, f"Invalid currency. Must be one of: {valid}")
+
+    shared = get_shared_db()
+    result = await shared.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"currency": currency, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Tenant not found")
+    return {"message": f"Currency set to {currency}"}
+
+
+# ──────────── TENANT-34: Filter Tenants ────────────
+
+@tenant_router.get("/filtered")
+async def list_tenants_filtered(
+    status: Optional[str] = None,
+    plan_type: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    """List tenants with optional filters."""
+    shared = get_shared_db()
+    query: dict = {"status": {"$ne": "deleted"}}
+    if status:
+        query["status"] = status
+    if plan_type:
+        query["plan_type"] = plan_type
+
+    tenants = await shared.tenants.find(query, {"_id": 0, "api_key_hash": 0}).to_list(500)
+
+    if search:
+        search_lower = search.lower()
+        tenants = [t for t in tenants if search_lower in t.get("company_name", "").lower() or search_lower in t.get("tenant_id", "").lower()]
+
+    return {"tenants": tenants, "total": len(tenants)}
+
+
+# ──────────── TENANT-35: Export Tenant List ────────────
+
+@tenant_router.get("/export")
+async def export_tenants():
+    """Export all tenants as CSV."""
+    import io
+    import pandas as pd
+    from fastapi.responses import StreamingResponse
+
+    shared = get_shared_db()
+    tenants = await shared.tenants.find({"status": {"$ne": "deleted"}}, {"_id": 0, "api_key_hash": 0}).to_list(500)
+
+    if not tenants:
+        raise HTTPException(404, "No tenants found")
+
+    df = pd.DataFrame(tenants)
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    buf.seek(0)
+    return StreamingResponse(
+        io.BytesIO(buf.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=tenants_export.csv"},
+    )

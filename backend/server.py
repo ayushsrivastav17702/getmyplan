@@ -24,6 +24,7 @@ from routes.planogram import router as planogram_router, init_planogram
 from routes.bi_dashboard import router as bi_router, init_bi
 from routes.sftp_routes import router as sftp_ext_router, init_sftp_routes
 from routes.warehouse import router as warehouse_router, init_warehouse
+from routes.data_quality import router as dq_router, init_data_quality
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -3601,10 +3602,32 @@ COMMON USE CASES:
 """
 
 
+# ==================== CHAT RATE LIMITING (CHAT-34) ====================
+_chat_rate_limit: Dict[str, list] = {}  # ip -> [timestamps]
+
+def _check_chat_rate(client_ip: str, max_per_minute: int = 10) -> bool:
+    now = datetime.now(timezone.utc).timestamp()
+    if client_ip not in _chat_rate_limit:
+        _chat_rate_limit[client_ip] = []
+    _chat_rate_limit[client_ip] = [t for t in _chat_rate_limit[client_ip] if now - t < 60]
+    if len(_chat_rate_limit[client_ip]) >= max_per_minute:
+        return False
+    _chat_rate_limit[client_ip].append(now)
+    return True
+
+
 @api_router.post("/chat", response_model=ChatResponse)
-async def chat_with_bot(message: ChatMessage):
+async def chat_with_bot(message: ChatMessage, request: Request):
     """Chat with the AI assistant about the platform"""
     try:
+        # CHAT-34: Rate limiting
+        client_ip = request.client.host if request.client else "unknown"
+        if not _check_chat_rate(client_ip):
+            return ChatResponse(
+                response="You're sending messages too quickly. Please wait a moment and try again.",
+                session_id=message.session_id or str(uuid.uuid4())
+            )
+
         api_key = os.environ.get('EMERGENT_LLM_KEY')
         if not api_key:
             raise HTTPException(status_code=500, detail="LLM API key not configured")
@@ -3660,6 +3683,30 @@ async def get_chat_history(session_id: str):
         {"_id": 0}
     ).sort("timestamp", 1).to_list(100)
     return history
+
+
+# CHAT-35: Export chat conversation
+@api_router.get("/chat/export/{session_id}")
+async def export_chat(session_id: str):
+    """Export chat history as a text file."""
+    history = await get_db().chat_history.find(
+        {"session_id": session_id},
+        {"_id": 0}
+    ).sort("timestamp", 1).to_list(200)
+
+    lines = [f"Chat Export — Session: {session_id}\n{'='*50}\n"]
+    for msg in history:
+        ts = msg.get("timestamp", "")[:19]
+        lines.append(f"[{ts}] You: {msg.get('user_message', '')}")
+        lines.append(f"[{ts}] Assistant: {msg.get('assistant_response', '')}\n")
+
+    content = "\n".join(lines)
+    from fastapi.responses import StreamingResponse as SR
+    return SR(
+        iter([content.encode()]),
+        media_type="text/plain",
+        headers={"Content-Disposition": f"attachment; filename=chat_{session_id[:8]}.txt"},
+    )
 
 
 # ==================== SFTP ADMIN ====================
@@ -4212,6 +4259,7 @@ api_router.include_router(planogram_router)
 api_router.include_router(bi_router)
 api_router.include_router(sftp_ext_router)
 api_router.include_router(warehouse_router)
+api_router.include_router(dq_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -4291,6 +4339,7 @@ async def startup():
     init_bi(client)
     init_sftp_routes(get_db, sftp_service)
     init_warehouse(client, get_db)
+    init_data_quality(client)
     logger.info("Multi-tenant startup complete")
 
 

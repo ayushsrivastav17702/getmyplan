@@ -5,7 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import {
   Users, Key, BarChart3, Settings as SettingsIcon, Activity,
   Shield, Copy, Check, Eye, EyeOff, RefreshCw, Loader2,
-  Database, FileText, Clock, Plus, Trash2, Save
+  Database, FileText, Clock, Plus, Trash2, Save, Download,
+  ArrowUp, ArrowDown, DollarSign, Filter, Search
 } from "lucide-react";
 
 const PLAN_LIMITS = {
@@ -29,7 +30,16 @@ const TenantAdminPanel = () => {
   // Settings form
   const [companyName, setCompanyName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Kolkata");
+  const [currency, setCurrency] = useState("INR");
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Plan change
+  const [planChanging, setPlanChanging] = useState(false);
+
+  // Tenant list (super admin)
+  const [allTenants, setAllTenants] = useState([]);
+  const [tenantFilter, setTenantFilter] = useState("");
+  const [tenantSearch, setTenantSearch] = useState("");
 
   // API key
   const [showKey, setShowKey] = useState({});
@@ -88,11 +98,50 @@ const TenantAdminPanel = () => {
     setSavingSettings(true);
     try {
       await axios.put(`${API}/tenants/${tenantId}/settings`, { company_name: companyName, timezone });
+      // Save currency separately
+      await axios.put(`${API}/tenants/${tenantId}/currency`, { currency });
       setSuccess("Settings saved");
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to save settings");
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handlePlanChange = async (newPlan) => {
+    if (!window.confirm(`Change plan to ${newPlan}? This will update your limits.`)) return;
+    setPlanChanging(true);
+    try {
+      const resp = await axios.put(`${API}/tenants/${tenantId}/plan`, { plan_type: newPlan });
+      setSuccess(resp.data.message);
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to change plan");
+    } finally {
+      setPlanChanging(false);
+    }
+  };
+
+  const fetchTenantList = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (tenantFilter) params.set("status", tenantFilter);
+      if (tenantSearch) params.set("search", tenantSearch);
+      const resp = await axios.get(`${API}/tenants/filtered?${params}`);
+      setAllTenants(resp.data.tenants || []);
+    } catch {
+      setError("Failed to load tenants list");
+    }
+  };
+
+  const handleExportTenants = async () => {
+    try {
+      const resp = await axios.get(`${API}/tenants/export`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([resp.data]));
+      const a = document.createElement("a");
+      a.href = url; a.download = "tenants_export.csv"; a.click();
+    } catch {
+      setError("Failed to export");
     }
   };
 
@@ -114,7 +163,9 @@ const TenantAdminPanel = () => {
 
   const tabs = [
     { key: "overview", label: "Overview", icon: BarChart3 },
+    { key: "plan", label: "Plan", icon: ArrowUp },
     { key: "api-keys", label: "API Keys", icon: Key },
+    { key: "tenants", label: "All Tenants", icon: Database },
     { key: "audit", label: "Audit Logs", icon: Activity },
     { key: "settings", label: "Settings", icon: SettingsIcon },
   ];
@@ -347,6 +398,103 @@ const TenantAdminPanel = () => {
             </div>
           )}
 
+          {/* ========= PLAN TAB ========= */}
+          {activeTab === "plan" && metrics && (
+            <div className="space-y-6" data-testid="plan-management">
+              <div className="bg-white border border-slate-200 rounded-xl p-6">
+                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">Current Plan</h2>
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-2xl font-bold text-slate-900 capitalize">{metrics.plan}</span>
+                  <span className="text-xs bg-[#0176D3] text-white px-3 py-1 rounded-full font-medium">{metrics.storage_used}/{metrics.storage_limit} GB</span>
+                </div>
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Change Plan</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Object.entries(PLAN_LIMITS).map(([key, plan]) => {
+                    const isCurrent = metrics.plan === key;
+                    const isUpgrade = Object.keys(PLAN_LIMITS).indexOf(key) > Object.keys(PLAN_LIMITS).indexOf(metrics.plan);
+                    return (
+                      <div key={key} data-testid={`plan-card-${key}`}
+                        className={`border-2 rounded-xl p-5 ${isCurrent ? "border-[#0176D3] bg-blue-50" : "border-slate-200 hover:border-slate-300"}`}>
+                        <h4 className="font-bold text-slate-900 capitalize">{plan.label}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{plan.desc}</p>
+                        <div className="mt-4">
+                          {isCurrent ? (
+                            <span className="text-xs text-[#0176D3] font-medium">Current Plan</span>
+                          ) : (
+                            <button onClick={() => handlePlanChange(key)} disabled={planChanging}
+                              className={`w-full text-sm py-2 rounded-lg font-medium transition-colors ${
+                                isUpgrade ? "bg-[#0176D3] text-white hover:bg-[#0161B0]" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                              {planChanging ? "..." : isUpgrade ? "Upgrade" : "Downgrade"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========= ALL TENANTS TAB ========= */}
+          {activeTab === "tenants" && (
+            <div className="space-y-4" data-testid="tenants-list-tab">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 flex-1 max-w-xs">
+                  <Search size={14} className="text-slate-400" />
+                  <input data-testid="tenant-search" type="text" placeholder="Search tenants..." value={tenantSearch}
+                    onChange={e => setTenantSearch(e.target.value)} className="border-none text-sm p-0 focus:ring-0 flex-1" />
+                </div>
+                <select data-testid="tenant-filter" value={tenantFilter} onChange={e => setTenantFilter(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  <option value="">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+                <button data-testid="filter-tenants-btn" onClick={fetchTenantList}
+                  className="flex items-center gap-2 bg-[#0176D3] text-white px-4 py-2 rounded-lg text-sm font-medium">
+                  <Filter size={14} /> Filter
+                </button>
+                <button data-testid="export-tenants-btn" onClick={handleExportTenants}
+                  className="flex items-center gap-2 border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm">
+                  <Download size={14} /> Export CSV
+                </button>
+              </div>
+              {allTenants.length > 0 ? (
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Tenant ID</th>
+                        <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Company</th>
+                        <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Plan</th>
+                        <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
+                        <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {allTenants.map(t => (
+                        <tr key={t.tenant_id} className="hover:bg-slate-50" data-testid={`tenant-row-${t.tenant_id}`}>
+                          <td className="px-6 py-4 font-mono text-slate-800">{t.tenant_id}</td>
+                          <td className="px-6 py-4 font-medium text-slate-800">{t.company_name}</td>
+                          <td className="px-6 py-4"><span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{t.plan_type || "starter"}</span></td>
+                          <td className="px-6 py-4">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${t.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{t.status}</span>
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-500">{t.created_at ? new Date(t.created_at).toLocaleDateString() : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-sm text-slate-400">
+                  Click "Filter" to load tenants list
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ========= SETTINGS ========= */}
           {activeTab === "settings" && (
             <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5" data-testid="admin-settings">
@@ -383,6 +531,23 @@ const TenantAdminPanel = () => {
                   <option value="Europe/London">Europe/London (GMT)</option>
                   <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
                   <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Currency</label>
+                <select
+                  data-testid="setting-currency"
+                  value={currency}
+                  onChange={e => setCurrency(e.target.value)}
+                  className="w-full max-w-md border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                >
+                  <option value="INR">INR (Indian Rupee)</option>
+                  <option value="USD">USD (US Dollar)</option>
+                  <option value="EUR">EUR (Euro)</option>
+                  <option value="GBP">GBP (British Pound)</option>
+                  <option value="AED">AED (UAE Dirham)</option>
+                  <option value="SGD">SGD (Singapore Dollar)</option>
+                  <option value="AUD">AUD (Australian Dollar)</option>
                 </select>
               </div>
               <div className="pt-3 border-t border-slate-100">
