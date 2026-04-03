@@ -156,8 +156,10 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 ## Prioritized Backlog
 
 ### P1
-- Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/
 - SFTP alert/notification system (SFTP-31 to SFTP-34)
+
+### P1 (Done)
+- ~~Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/~~ (Done Apr 2026)
 
 ### P2
 - DASH-35: PDF export for Executive Dashboard
