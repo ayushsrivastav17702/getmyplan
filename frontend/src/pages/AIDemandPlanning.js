@@ -1,75 +1,125 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { API } from "../App";
 import { useAuth } from "../context/AuthContext";
 import {
-  RefreshCw, Download, AlertTriangle, TrendingUp, TrendingDown,
+  RefreshCw, AlertTriangle, TrendingUp, TrendingDown,
   Package, Zap, Target, BarChart3, AlertCircle, CheckCircle, Clock,
-  ChevronDown, Loader2
+  Loader2, Save, FileText, ChevronDown, ChevronUp, Edit3, Lock
 } from "lucide-react";
 import { LineChart, BarChart } from "../components/Charts";
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const fmt = (v) => {
-  if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`;
-  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `₹${(v / 1000).toFixed(1)}K`;
-  return `₹${Math.round(v)}`;
+  if (v == null) return "-";
+  const n = Number(v);
+  if (isNaN(n)) return "-";
+  if (n >= 10000000) return `\u20B9${(n/10000000).toFixed(1)}Cr`;
+  if (n >= 100000) return `\u20B9${(n/100000).toFixed(1)}L`;
+  if (n >= 1000) return `\u20B9${(n/1000).toFixed(1)}K`;
+  return `\u20B9${Math.round(n)}`;
 };
 
-/* ── Confidence Meter ─────────────────────────────────────── */
+/* ── Sub-components ─────────────────────────────────────────── */
 const ConfidenceMeter = ({ score, size = "md" }) => {
-  const color = score >= 80 ? "bg-emerald-500" : score >= 60 ? "bg-amber-500" : "bg-red-500";
-  const label = score >= 80 ? "High" : score >= 60 ? "Medium" : "Low";
+  const s = Math.round(score || 0);
+  const c = s >= 80 ? "bg-emerald-500" : s >= 60 ? "bg-amber-500" : "bg-red-500";
+  const l = s >= 80 ? "High" : s >= 60 ? "Med" : "Low";
   return (
-    <div className="inline-flex items-center gap-2">
-      <div className={`${size === "sm" ? "w-16" : "w-28"} bg-gray-200 rounded-full h-1.5`}>
-        <div className={`${color} rounded-full h-1.5 transition-all`} style={{ width: `${score}%` }} />
+    <div className="inline-flex items-center gap-1.5">
+      <div className={`${size === "sm" ? "w-14" : "w-24"} bg-gray-200 rounded-full h-1.5`}>
+        <div className={`${c} rounded-full h-1.5 transition-all`} style={{ width: `${s}%` }} />
       </div>
-      <span className="text-xs text-gray-500">{label} {Math.round(score)}%</span>
+      <span className="text-[10px] text-gray-500">{l} {s}%</span>
     </div>
   );
 };
 
-/* ── Risk Badge ───────────────────────────────────────────── */
 const RiskBadge = ({ risk }) => {
-  const styles = {
-    critical: "bg-red-100 text-red-700 border-red-200",
-    high:     "bg-orange-100 text-orange-700 border-orange-200",
-    medium:   "bg-amber-100 text-amber-700 border-amber-200",
-    low:      "bg-green-100 text-green-700 border-green-200",
-    healthy:  "bg-blue-100 text-blue-700 border-blue-200",
+  const m = {
+    critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
+    medium: "bg-amber-100 text-amber-700", low: "bg-green-100 text-green-700",
+    healthy: "bg-blue-100 text-blue-700",
   };
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${styles[risk] || styles.healthy}`}>
-      {risk?.toUpperCase()}
-    </span>
-  );
+  return <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m[risk] || m.healthy}`}>{(risk || "").toUpperCase()}</span>;
 };
 
-/* ── KPI Card ─────────────────────────────────────────────── */
-const KPICard = ({ title, value, sub, icon: Icon, color = "blue" }) => {
-  const palettes = {
-    red:    "from-red-50 to-red-100/50 border-l-red-500",
-    orange: "from-orange-50 to-orange-100/50 border-l-orange-500",
-    amber:  "from-amber-50 to-amber-100/50 border-l-amber-500",
-    green:  "from-green-50 to-green-100/50 border-l-green-500",
-    blue:   "from-blue-50 to-blue-100/50 border-l-blue-500",
+const DOHBadge = ({ status }) => {
+  const m = {
+    achievable: "bg-emerald-100 text-emerald-700", at_risk: "bg-amber-100 text-amber-700",
+    unachievable: "bg-red-100 text-red-700",
   };
-  const iconColors = { red: "text-red-600", orange: "text-orange-600", amber: "text-amber-600", green: "text-green-600", blue: "text-blue-600" };
+  const labels = { achievable: "Achievable", at_risk: "At Risk", unachievable: "Unachievable" };
+  return <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${m[status] || ""}`}>{labels[status] || status}</span>;
+};
+
+const KPI = ({ title, value, sub, icon: Icon, color = "blue" }) => {
+  const bg = { red: "from-red-50 to-red-100/40 border-l-red-500", orange: "from-orange-50 to-orange-100/40 border-l-orange-500",
+    amber: "from-amber-50 to-amber-100/40 border-l-amber-500", green: "from-emerald-50 to-emerald-100/40 border-l-emerald-500",
+    blue: "from-blue-50 to-blue-100/40 border-l-blue-500", purple: "from-purple-50 to-purple-100/40 border-l-purple-500" };
+  const ic = { red: "text-red-600", orange: "text-orange-600", amber: "text-amber-600", green: "text-emerald-600", blue: "text-blue-600", purple: "text-purple-600" };
   return (
     <div data-testid={`kpi-${title.replace(/\s+/g,'-').toLowerCase()}`}
-         className={`bg-gradient-to-br ${palettes[color]} rounded-xl shadow-sm p-5 border-l-4`}>
+         className={`bg-gradient-to-br ${bg[color]} rounded-xl shadow-sm p-4 border-l-4`}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">{title}</p>
+          <p className="text-xl font-bold text-gray-900 mt-0.5">{value}</p>
+          {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
         </div>
-        {Icon && <Icon className={`h-5 w-5 ${iconColors[color]}`} />}
+        {Icon && <Icon className={`h-4 w-4 ${ic[color]}`} />}
       </div>
     </div>
+  );
+};
+
+/* collapsible section */
+const Collapsible = ({ title, children, defaultOpen = true, testId }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div data-testid={testId} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <button onClick={() => setOpen(!open)} className="w-full px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between hover:bg-gray-100 transition-colors">
+        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
+        {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+};
+
+/* ── Editable Cell ──────────────────────────────────────────── */
+const EditableCell = ({ value, onChange, readOnly, className = "" }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef(null);
+
+  useEffect(() => { setDraft(value); }, [value]);
+  useEffect(() => { if (editing && inputRef.current) inputRef.current.select(); }, [editing]);
+
+  if (readOnly) return <td className={`px-3 py-2 text-sm text-right ${className}`}>{fmt(value)}</td>;
+
+  if (editing) {
+    return (
+      <td className={`px-1 py-1 ${className}`}>
+        <input ref={inputRef} type="number" value={draft}
+          className="w-full px-2 py-1 text-sm text-right border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => { setEditing(false); onChange(Number(draft) || 0); }}
+          onKeyDown={e => { if (e.key === "Enter") { setEditing(false); onChange(Number(draft) || 0); } if (e.key === "Escape") { setEditing(false); setDraft(value); } }}
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td className={`px-3 py-2 text-sm text-right cursor-pointer hover:bg-blue-50 transition-colors group ${className}`}
+        onClick={() => setEditing(true)}>
+      <span className="group-hover:hidden">{fmt(value)}</span>
+      <span className="hidden group-hover:inline-flex items-center gap-1 text-blue-600">
+        <Edit3 className="h-3 w-3" /> {fmt(value)}
+      </span>
+    </td>
   );
 };
 
@@ -77,650 +127,712 @@ const KPICard = ({ title, value, sub, icon: Icon, color = "blue" }) => {
    MAIN COMPONENT
    ================================================================ */
 const AIDemandPlanning = () => {
-  const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState("forecast");
+  const { user } = useAuth();
+  const canEdit = user?.role === "admin" || user?.role === "merchandiser";
+  const [tab, setTab] = useState("demand");
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [horizon, setHorizon] = useState(12);
-
-  const [forecastData, setForecastData] = useState(null);
-  const [stockoutData, setStockoutData] = useState(null);
-  const [topsellerData, setTopsellerData] = useState(null);
-  const [reorderData, setReorderData] = useState(null);
-  const [planData, setPlanData] = useState(null);
-
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
+
+  // Data state
+  const [forecast, setForecast] = useState(null);
+  const [stockout, setStockout] = useState(null);
+  const [topseller, setTopseller] = useState(null);
+  const [reorder, setReorder] = useState(null);
+  const [supply, setSupply] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [planVersion, setPlanVersion] = useState(1);
+  const [planId, setPlanId] = useState(null);
+  const [planDirty, setPlanDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [conflictMsg, setConflictMsg] = useState("");
 
   /* fetch filter options */
   useEffect(() => {
     axios.get(`${API}/analytics/filter-options`).then(r => {
-      const cats = r.data?.categories || [];
-      setCategories(cats);
-      if (cats.length > 0 && !category) setCategory(cats[0]);
-      const subs = r.data?.subcategories || [];
-      setSubcategories(subs);
-      if (subs.length > 0 && !subcategory) setSubcategory(subs[0]);
+      const c = r.data?.categories || [];
+      setCategories(c);
+      if (c.length && !category) setCategory(c[0]);
+      const s = r.data?.subcategories || [];
+      setSubcategories(s);
+      if (s.length && !subcategory) setSubcategory(s[0]);
     }).catch(() => {});
   }, []);
 
-  /* ── Fetch forecast ─────────────────────────────────────── */
-  const fetchForecast = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
+    const params = { forecast_horizon: horizon };
+    if (category) params.category = category;
+    if (subcategory) params.subcategory = subcategory;
+    const catParams = category ? { category } : {};
     try {
-      const params = { forecast_horizon: horizon };
-      if (category) params.category = category;
-      if (subcategory) params.subcategory = subcategory;
-      const r = await axios.get(`${API}/analytics/ai-demand/forecast`, { params });
-      setForecastData(r.data);
-    } catch (e) { console.error("Forecast error", e); }
+      const [fc, so, ts, ro, sf] = await Promise.all([
+        axios.get(`${API}/analytics/ai-demand/forecast`, { params }).catch(() => null),
+        axios.get(`${API}/analytics/ai-demand/stockout-risk`, { params: catParams }).catch(() => null),
+        axios.get(`${API}/analytics/ai-demand/topseller-prediction`, { params: { ...catParams, x_factor: 2.0 } }).catch(() => null),
+        axios.get(`${API}/analytics/ai-demand/reorder-optimisation`).catch(() => null),
+        axios.get(`${API}/analytics/ai-demand/supply-feasibility`).catch(() => null),
+      ]);
+      if (fc) setForecast(fc.data);
+      if (so) setStockout(so.data);
+      if (ts) setTopseller(ts.data);
+      if (ro) setReorder(ro.data);
+      if (sf) setSupply(sf.data);
+    } catch {}
+    // Load latest plan
+    try {
+      const pl = await axios.get(`${API}/analytics/ai-demand/plans`);
+      const plans = pl.data?.plans || [];
+      if (plans.length) {
+        const latest = plans[0];
+        setPlan(latest);
+        setPlanVersion(latest.version || 1);
+        setPlanId(latest.plan_id);
+      }
+    } catch {}
     setLoading(false);
   }, [category, subcategory, horizon]);
 
-  /* ── Fetch stockout ─────────────────────────────────────── */
-  const fetchStockout = useCallback(async () => {
-    try {
-      const params = {};
-      if (category) params.category = category;
-      const r = await axios.get(`${API}/analytics/ai-demand/stockout-risk`, { params });
-      setStockoutData(r.data);
-    } catch (e) { console.error("Stockout error", e); }
-  }, [category]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  /* ── Fetch topsellers ───────────────────────────────────── */
-  const fetchTopsellers = useCallback(async () => {
-    try {
-      const params = {};
-      if (category) params.category = category;
-      const r = await axios.get(`${API}/analytics/ai-demand/topseller-prediction`, { params });
-      setTopsellerData(r.data);
-    } catch (e) { console.error("Topseller error", e); }
-  }, [category]);
-
-  /* ── Fetch reorder ──────────────────────────────────────── */
-  const fetchReorder = useCallback(async () => {
-    try {
-      const r = await axios.get(`${API}/analytics/ai-demand/reorder-optimisation`);
-      setReorderData(r.data);
-    } catch (e) { console.error("Reorder error", e); }
-  }, []);
-
-  /* initial + refetch on filter change */
-  useEffect(() => {
-    fetchForecast();
-    fetchStockout();
-    fetchTopsellers();
-    fetchReorder();
-  }, [fetchForecast, fetchStockout, fetchTopsellers, fetchReorder]);
-
-  /* ── Generate plan ──────────────────────────────────────── */
+  /* ── Generate plan ─────────────────────────────────────────── */
   const generatePlan = async () => {
     setLoading(true);
     try {
       const params = { annual_target: 10000000 };
       if (category) params.category = category;
       const r = await axios.post(`${API}/analytics/ai-demand/generate-plan`, null, { params });
-      setPlanData(r.data);
-    } catch (e) { console.error("Plan error", e); }
+      setPlan(r.data);
+      setPlanVersion(r.data.version || 1);
+      setPlanId(r.data.plan_id);
+      setPlanDirty(false);
+      setConflictMsg("");
+    } catch (e) {
+      if (e.response?.status === 403) alert("Only Admin/Merchandiser can generate plans.");
+      else alert("Failed to generate plan");
+    }
     setLoading(false);
   };
 
-  /* ── Tab definitions ────────────────────────────────────── */
-  const tabs = [
-    { id: "forecast",  label: "ML Forecast",          icon: BarChart3 },
-    { id: "stockout",  label: "Stockout Predictions",  icon: AlertCircle },
-    { id: "topseller", label: "Topseller Prediction",  icon: TrendingUp },
-    { id: "reorder",   label: "Reorder Optimisation",  icon: Package },
-    { id: "insights",  label: "AI Insights",           icon: Zap },
+  /* ── Save edited plan ──────────────────────────────────────── */
+  const savePlan = async () => {
+    if (!planId) return;
+    setSaving(true);
+    setConflictMsg("");
+    try {
+      const r = await axios.put(`${API}/analytics/ai-demand/plans/${planId}?expected_version=${planVersion}`, {
+        subcategories: plan.subcategories,
+        annual_target: plan.annual_target,
+      });
+      setPlanVersion(r.data.new_version);
+      setPlanDirty(false);
+    } catch (e) {
+      if (e.response?.status === 409) {
+        setConflictMsg(e.response.data?.detail || "Plan was modified by another user. Please reload.");
+      } else if (e.response?.status === 403) {
+        alert("Only Admin/Merchandiser can edit plans.");
+      }
+    }
+    setSaving(false);
+  };
+
+  /* ── Edit a monthly value in the plan ──────────────────────── */
+  const updatePlanCell = (subcatIdx, monthIdx, newValue) => {
+    if (!plan) return;
+    const updated = { ...plan, subcategories: plan.subcategories.map((sc, i) => {
+      if (i !== subcatIdx) return sc;
+      const mp = [...sc.monthly_plan];
+      mp[monthIdx] = newValue;
+      return { ...sc, monthly_plan: mp, total: mp.reduce((a, b) => a + b, 0) };
+    })};
+    updated.total_planned = updated.subcategories.reduce((a, sc) => a + sc.total, 0);
+    updated.variance = (updated.annual_target || 0) - updated.total_planned;
+    updated.variance_pct = updated.annual_target ? ((updated.variance / updated.annual_target) * 100) : 0;
+    setPlan(updated);
+    setPlanDirty(true);
+    setConflictMsg("");
+  };
+
+  /* ── Tab config ────────────────────────────────────────────── */
+  const tabDefs = [
+    { id: "demand",      label: "Demand Planning",     icon: BarChart3 },
+    { id: "supply",      label: "Supply Feasibility",  icon: Package },
+    { id: "replenish",   label: "Replenishment",       icon: Target },
+    { id: "insights",    label: "AI Insights",         icon: Zap },
   ];
 
   /* ============================================================
      RENDER
      ============================================================ */
   return (
-    <div data-testid="ai-demand-planning" className="space-y-6">
+    <div data-testid="ai-demand-planning" className="space-y-5">
       {/* ── Header ──────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-[#0B2545] to-[#13315C] rounded-xl p-6 text-white">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#0B2545] to-[#13315C] rounded-xl p-5 text-white">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-6 w-6 text-amber-400" />
-              <h1 className="text-xl font-bold tracking-tight">AI Demand Planning</h1>
-              <span className="px-2 py-0.5 bg-white/15 rounded-full text-[10px] uppercase tracking-wider">
-                ML Powered
-              </span>
+              <Zap className="h-5 w-5 text-amber-400" />
+              <h1 className="text-lg font-bold tracking-tight">AI Demand Planning</h1>
+              <span className="px-2 py-0.5 bg-white/15 rounded-full text-[10px] uppercase tracking-wider">ML Powered</span>
             </div>
-            <p className="text-sm text-blue-200">
-              Ensemble ML forecasts: Holt-Winters + Random Forest + Seasonal Decomposition
-            </p>
+            <p className="text-xs text-blue-200">Demand &rarr; Supply &rarr; Replenish workflow with ensemble ML forecasting</p>
           </div>
-          <button
-            data-testid="generate-plan-btn"
-            onClick={generatePlan}
-            disabled={loading}
-            className="px-5 py-2.5 bg-white text-[#0B2545] rounded-lg font-semibold text-sm hover:bg-blue-50 transition-all flex items-center gap-2 shadow-lg disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            {loading ? "Generating..." : "Generate AI Plan"}
-          </button>
+          <div className="flex gap-2">
+            {planDirty && canEdit && (
+              <button data-testid="save-plan-btn" onClick={savePlan} disabled={saving}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg font-semibold text-sm hover:bg-emerald-600 flex items-center gap-1.5 disabled:opacity-60">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {saving ? "Saving..." : "Save Plan"}
+              </button>
+            )}
+            {canEdit && (
+              <button data-testid="generate-plan-btn" onClick={generatePlan} disabled={loading}
+                className="px-4 py-2 bg-white text-[#0B2545] rounded-lg font-semibold text-sm hover:bg-blue-50 flex items-center gap-1.5 disabled:opacity-60">
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                {loading ? "Generating..." : "Generate AI Plan"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Controls ────────────────────────────────────────── */}
+      {/* Conflict warning */}
+      {conflictMsg && (
+        <div data-testid="conflict-warning" className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+          <Lock className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-800">Concurrent Edit Detected</p>
+            <p className="text-xs text-red-600 mt-0.5">{conflictMsg}</p>
+            <button onClick={fetchAll} className="mt-1 text-xs text-red-700 underline">Reload latest version</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Controls + Tabs ─────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="px-5 py-3 flex flex-wrap gap-3 items-center border-b border-gray-100">
-          <label className="text-xs text-gray-500 font-medium">Category</label>
+        <div className="px-4 py-2.5 flex flex-wrap gap-3 items-center border-b border-gray-100">
+          <label className="text-[10px] text-gray-500 font-medium">Category</label>
           <select data-testid="category-select" value={category} onChange={e => setCategory(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                  className="px-2.5 py-1 border border-gray-300 rounded-lg text-sm bg-white">
             {categories.length === 0 && <option value="">All</option>}
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-
-          <label className="text-xs text-gray-500 font-medium ml-2">Subcategory</label>
+          <label className="text-[10px] text-gray-500 font-medium ml-1">Subcategory</label>
           <select data-testid="subcategory-select" value={subcategory} onChange={e => setSubcategory(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                  className="px-2.5 py-1 border border-gray-300 rounded-lg text-sm bg-white">
             {subcategories.length === 0 && <option value="">All</option>}
             {subcategories.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-
-          <label className="text-xs text-gray-500 font-medium ml-2">Horizon</label>
+          <label className="text-[10px] text-gray-500 font-medium ml-1">Horizon</label>
           <select data-testid="horizon-select" value={horizon} onChange={e => setHorizon(Number(e.target.value))}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value={6}>6 Months</option>
-            <option value={12}>12 Months</option>
-            <option value={18}>18 Months</option>
-            <option value={24}>24 Months</option>
+                  className="px-2.5 py-1 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value={6}>6 Mo</option><option value={12}>12 Mo</option><option value={18}>18 Mo</option><option value={24}>24 Mo</option>
           </select>
-
-          <button data-testid="refresh-btn" onClick={fetchForecast}
-                  className="ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-1">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          <button data-testid="refresh-btn" onClick={fetchAll} className="ml-auto px-2.5 py-1 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 flex items-center gap-1">
+            <RefreshCw className="h-3 w-3" /> Refresh
           </button>
         </div>
-
-        {/* Tabs */}
-        <div className="px-5 flex gap-1 overflow-x-auto">
-          {tabs.map(t => (
-            <button key={t.id} data-testid={`tab-${t.id}`} onClick={() => setActiveTab(t.id)}
-                    className={`py-3 px-3 text-sm font-medium border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors ${
-                      activeTab === t.id
-                        ? "border-[#0176D3] text-[#0176D3]"
-                        : "border-transparent text-gray-500 hover:text-gray-700"
-                    }`}>
-              <t.icon className="h-4 w-4" /> {t.label}
+        <div className="px-4 flex gap-0.5 overflow-x-auto">
+          {tabDefs.map(t => (
+            <button key={t.id} data-testid={`tab-${t.id}`} onClick={() => setTab(t.id)}
+              className={`py-2.5 px-3 text-sm font-medium border-b-2 whitespace-nowrap flex items-center gap-1.5 transition-colors ${
+                tab === t.id ? "border-[#0176D3] text-[#0176D3]" : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}>
+              <t.icon className="h-3.5 w-3.5" /> {t.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Loading spinner ─────────────────────────────────── */}
-      {loading && (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-[#0176D3]" />
-        </div>
-      )}
+      {loading && <div className="flex justify-center py-10"><Loader2 className="h-7 w-7 animate-spin text-[#0176D3]" /></div>}
 
       {/* ═══════════════════════════════════════════════════════
-         TAB 1: ML FORECAST
+         TAB 1: DEMAND PLANNING (Forecast + Editable Grid)
          ═══════════════════════════════════════════════════════ */}
-      {activeTab === "forecast" && !loading && forecastData && (
-        <div className="space-y-6">
+      {tab === "demand" && !loading && (
+        <div className="space-y-5">
           {/* Model cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { name: "Holt-Winters", desc: "Exponential smoothing with trend & seasonality", color: "blue", key: "Holt-Winters" },
-              { name: "Random Forest", desc: "Ensemble learning with lag features", color: "green", key: "Random Forest" },
-              { name: "Seasonal Decomp", desc: "Trend + Seasonality + Residual decomposition", color: "purple", key: "Seasonal Decomposition" },
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[{ n: "Holt-Winters", d: "Exponential smoothing + trend + seasonality", c: "blue", k: "Holt-Winters" },
+              { n: "Random Forest", d: "Ensemble learning with lag features", c: "green", k: "Random Forest" },
+              { n: "Seasonal Decomp", d: "Trend + Seasonality + Residual", c: "purple", k: "Seasonal Decomposition" },
             ].map(m => (
-              <div key={m.name} data-testid={`model-card-${m.name.replace(/\s/g,'-').toLowerCase()}`}
-                   className={`bg-white rounded-lg shadow-sm p-4 border-l-4 border-l-${m.color}-500`}>
-                <p className="font-semibold text-sm text-gray-900">{m.name}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{m.desc}</p>
-                <span className={`inline-flex items-center gap-1 mt-2 text-xs ${
-                  forecastData.models_used?.includes(m.key) ? "text-emerald-600" : "text-gray-400"
-                }`}>
-                  {forecastData.models_used?.includes(m.key) ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                  {forecastData.models_used?.includes(m.key) ? "Active" : "Inactive"}
+              <div key={m.n} data-testid={`model-card-${m.n.replace(/\s/g,'-').toLowerCase()}`}
+                   className={`bg-white rounded-lg shadow-sm p-3.5 border-l-4 border-l-${m.c}-500`}>
+                <p className="font-semibold text-sm">{m.n}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">{m.d}</p>
+                <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] ${forecast?.models_used?.includes(m.k) ? "text-emerald-600" : "text-gray-400"}`}>
+                  {forecast?.models_used?.includes(m.k) ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  {forecast?.models_used?.includes(m.k) ? "Active" : "Inactive"}
                 </span>
               </div>
             ))}
           </div>
 
           {/* Forecast chart */}
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">ML Demand Forecast</h2>
-                <p className="text-xs text-gray-500">Ensemble forecast with confidence intervals</p>
+          {forecast && (
+            <Collapsible title="ML Demand Forecast" defaultOpen={true} testId="forecast-chart-section">
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-gray-500">Ensemble forecast with confidence intervals</p>
+                  <ConfidenceMeter score={forecast.confidence_score || 75} />
+                </div>
+                <LineChart
+                  labels={forecast.months?.map(m => m.label) || []}
+                  datasets={[
+                    { label: "AI Forecast", data: forecast.forecast || [], color: "#0176D3", fill: true },
+                    ...(forecast.confidence_intervals?.upper ? [{ label: "Upper Bound", data: forecast.confidence_intervals.upper, color: "#93C5FD", fill: false }] : []),
+                    ...(forecast.confidence_intervals?.lower ? [{ label: "Lower Bound", data: forecast.confidence_intervals.lower, color: "#BFDBFE", fill: false }] : []),
+                    ...(forecast.historical_data?.length ? [{ label: "Historical", data: forecast.historical_data.map(h => h.revenue), color: "#2E844A", fill: false }] : []),
+                  ]}
+                  height={320}
+                  formatValue={fmt}
+                />
+                {forecast.insufficient_data && (
+                  <div className="mt-3 p-2.5 bg-amber-50 rounded-lg text-xs text-amber-800 flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                    Insufficient uploaded data. Showing demo forecast. Upload more sales data for accurate predictions.
+                  </div>
+                )}
+                <div className="mt-3 p-2.5 bg-blue-50 rounded-lg text-xs text-blue-800 flex items-center gap-2">
+                  <Zap className="h-3.5 w-3.5 flex-shrink-0 text-blue-600" />
+                  <strong>AI Insight:</strong> {forecast.models_used?.join(", ")} | {forecast.confidence_score || 75}% confidence | Trend: {forecast.growth_trend?.trend || "stable"}
+                </div>
               </div>
-              <ConfidenceMeter score={forecastData.confidence_score || 75} />
-            </div>
-            <LineChart
-              labels={forecastData.months?.map(m => m.label) || []}
-              datasets={[
-                {
-                  label: "AI Forecast",
-                  data: forecastData.forecast || [],
-                  color: "#0176D3",
-                  fill: true,
-                },
-                ...(forecastData.confidence_intervals?.upper ? [{
-                  label: "Upper Bound",
-                  data: forecastData.confidence_intervals.upper,
-                  color: "#93C5FD",
-                  fill: false,
-                }] : []),
-                ...(forecastData.confidence_intervals?.lower ? [{
-                  label: "Lower Bound",
-                  data: forecastData.confidence_intervals.lower,
-                  color: "#BFDBFE",
-                  fill: false,
-                }] : []),
-                ...(forecastData.historical_data?.length ? [{
-                  label: "Historical",
-                  data: forecastData.historical_data.map(h => h.revenue),
-                  color: "#2E844A",
-                  fill: false,
-                }] : []),
-              ]}
-              height={360}
-              formatValue={fmt}
-            />
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-800 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                <span>
-                  <strong>AI Insight:</strong> Forecast uses {forecastData.models_used?.join(", ") || "ensemble"} with{" "}
-                  {forecastData.confidence_score || 75}% confidence.
-                  Trend is <strong>{forecastData.growth_trend?.trend || "stable"}</strong>
-                  {forecastData.growth_trend?.avg_monthly_growth
-                    ? ` (${forecastData.growth_trend.avg_monthly_growth > 0 ? "+" : ""}${forecastData.growth_trend.avg_monthly_growth}% avg monthly growth)`
-                    : ""}.
-                </span>
-              </p>
-            </div>
-          </div>
+            </Collapsible>
+          )}
 
           {/* Seasonality */}
-          {forecastData.seasonality_factors && (
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900 mb-4">Seasonality Factors (MFP Formula)</h2>
-              <div className="grid grid-cols-6 md:grid-cols-12 gap-3">
-                {Object.entries(forecastData.seasonality_factors).map(([m, factor]) => (
-                  <div key={m} className="text-center">
-                    <div className="text-[10px] text-gray-400 uppercase">{MONTH_NAMES[parseInt(m) - 1]}</div>
-                    <div className={`text-base font-bold mt-0.5 ${
-                      factor >= 1.1 ? "text-emerald-600" : factor <= 0.9 ? "text-red-500" : "text-gray-700"
-                    }`}>{factor}x</div>
-                    <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                      <div className="bg-[#0176D3] rounded-full h-1 transition-all" style={{ width: `${Math.min(100, (factor / 1.5) * 100)}%` }} />
+          {forecast?.seasonality_factors && (
+            <Collapsible title="Seasonality Factors (MFP)" defaultOpen={false} testId="seasonality-section">
+              <div className="p-5">
+                <div className="grid grid-cols-6 md:grid-cols-12 gap-2">
+                  {Object.entries(forecast.seasonality_factors).map(([m, f]) => (
+                    <div key={m} className="text-center">
+                      <div className="text-[9px] text-gray-400 uppercase">{MN[parseInt(m) - 1]}</div>
+                      <div className={`text-sm font-bold mt-0.5 ${f >= 1.1 ? "text-emerald-600" : f <= 0.9 ? "text-red-500" : "text-gray-700"}`}>{f}x</div>
+                      <div className="w-full bg-gray-100 rounded-full h-1 mt-0.5">
+                        <div className="bg-[#0176D3] rounded-full h-1" style={{ width: `${Math.min(100, (f / 1.5) * 100)}%` }} />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+            </Collapsible>
+          )}
+
+          {/* ── EDITABLE DEMAND GRID ────────────────────────── */}
+          {plan && (
+            <Collapsible title={`Demand Plan — ${plan.category || "All"} (${plan.status || "draft"})`} defaultOpen={true} testId="editable-grid-section">
+              <div className="p-4">
+                {!canEdit && (
+                  <div className="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-500 flex items-center gap-1.5">
+                    <Lock className="h-3 w-3" /> Read-only view. Only Admin/Merchandiser can edit.
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table data-testid="demand-editable-grid" className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10">Subcategory</th>
+                        {MN.map(m => <th key={m} className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">{m}</th>)}
+                        <th className="px-3 py-2 text-right text-xs font-bold text-gray-700 uppercase">Total</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {plan.subcategories?.map((sc, si) => (
+                        <tr key={si} className="hover:bg-blue-50/30">
+                          <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap sticky left-0 bg-white z-10">{sc.name}</td>
+                          {(sc.monthly_plan || []).map((v, mi) => (
+                            <EditableCell key={mi} value={Math.round(v)} readOnly={!canEdit}
+                              onChange={nv => updatePlanCell(si, mi, nv)}
+                              className={canEdit ? "bg-blue-50/20" : ""} />
+                          ))}
+                          <td className="px-3 py-2 text-right font-bold text-gray-900">{fmt(sc.total || 0)}</td>
+                          <td className="px-3 py-2 text-center"><ConfidenceMeter score={sc.confidence || 50} size="sm" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 font-bold">
+                        <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10">TOTAL</td>
+                        {Array.from({ length: 12 }, (_, mi) => (
+                          <td key={mi} className="px-3 py-2 text-right">
+                            {fmt(plan.subcategories?.reduce((a, sc) => a + (sc.monthly_plan?.[mi] || 0), 0) || 0)}
+                          </td>
+                        ))}
+                        <td className="px-3 py-2 text-right text-[#0176D3]">{fmt(plan.total_planned || 0)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                  <div className="px-3 py-1.5 bg-blue-50 rounded-lg">Annual Target: <strong>{fmt(plan.annual_target || 0)}</strong></div>
+                  <div className="px-3 py-1.5 bg-emerald-50 rounded-lg">Total Planned: <strong>{fmt(plan.total_planned || 0)}</strong></div>
+                  <div className={`px-3 py-1.5 rounded-lg ${Math.abs(plan.variance_pct || 0) > 5 ? "bg-red-50" : "bg-green-50"}`}>
+                    Variance: <strong>{fmt(Math.abs(plan.variance || 0))} ({(plan.variance_pct || 0).toFixed(1)}%)</strong>
+                  </div>
+                  <div className="px-3 py-1.5 bg-gray-50 rounded-lg">Version: <strong>v{planVersion}</strong></div>
+                  {planDirty && <div className="px-3 py-1.5 bg-amber-50 rounded-lg text-amber-700">Unsaved changes</div>}
+                </div>
+              </div>
+            </Collapsible>
+          )}
+          {!plan && !loading && (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <FileText className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">No demand plan yet.</p>
+              {canEdit && <p className="text-xs text-gray-400 mt-1">Click "Generate AI Plan" to create one.</p>}
+              {!canEdit && <p className="text-xs text-gray-400 mt-1">Ask an Admin or Merchandiser to generate a plan.</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+         TAB 2: SUPPLY FEASIBILITY (DOH Classification)
+         ═══════════════════════════════════════════════════════ */}
+      {tab === "supply" && !loading && (
+        <div className="space-y-5">
+          {supply && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <KPI title="Achievable" value={supply.summary?.achievable_months || 0} sub="Months > 120% coverage" icon={CheckCircle} color="green" />
+                <KPI title="At Risk" value={supply.summary?.at_risk_months || 0} sub="Months 80-120% coverage" icon={AlertCircle} color="amber" />
+                <KPI title="Unachievable" value={supply.summary?.unachievable_months || 0} sub="Months < 80% coverage" icon={AlertTriangle} color="red" />
+                <KPI title="Lead Time" value={`${supply.summary?.lead_time_days || 14}d`} sub={`${supply.summary?.total_skus || 0} SKUs tracked`} icon={Clock} color="blue" />
+              </div>
+
+              {/* Monthly supply chart */}
+              <Collapsible title="Monthly Supply vs Demand" defaultOpen={true} testId="supply-chart-section">
+                <div className="p-5">
+                  <BarChart
+                    labels={supply.monthly?.map(m => m.label) || []}
+                    datasets={[
+                      { label: "Demand", data: supply.monthly?.map(m => m.demand) || [], color: "#EF4444" },
+                      { label: "Supply", data: supply.monthly?.map(m => m.supply) || [], color: "#10B981" },
+                    ]}
+                    height={300}
+                    formatValue={fmt}
+                  />
+                </div>
+              </Collapsible>
+
+              {/* Monthly table with DOH status */}
+              <Collapsible title="Supply Feasibility by Month" defaultOpen={true} testId="supply-table-section">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Demand</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Supply</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Coverage %</th>
+                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">DOH Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {supply.monthly?.map((m, i) => (
+                        <tr key={i} className={m.status === 'unachievable' ? 'bg-red-50/40' : m.status === 'at_risk' ? 'bg-amber-50/30' : ''}>
+                          <td className="px-4 py-2 font-medium">{m.label}</td>
+                          <td className="px-4 py-2 text-right">{fmt(m.demand)}</td>
+                          <td className="px-4 py-2 text-right">{fmt(m.supply)}</td>
+                          <td className="px-4 py-2 text-right font-medium">{m.coverage_pct}%</td>
+                          <td className="px-4 py-2 text-center"><DOHBadge status={m.status} /></td>
+                          <td className="px-4 py-2 text-xs text-gray-600">
+                            {m.status === 'unachievable' ? 'Urgent PO needed' : m.status === 'at_risk' ? 'Plan replenishment' : 'On track'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Collapsible>
+            </>
+          )}
+
+          {/* SKU-level DOH from stockout data */}
+          {stockout && (
+            <Collapsible title="SKU-Level DOH Classification" defaultOpen={false} testId="sku-doh-section">
+              <div className="p-2 overflow-x-auto">
+                <div className="grid grid-cols-3 gap-3 mb-3 px-2">
+                  <KPI title="Achievable SKUs" value={stockout.summary?.doh_achievable || 0} icon={CheckCircle} color="green" />
+                  <KPI title="At Risk SKUs" value={stockout.summary?.doh_at_risk || 0} icon={AlertCircle} color="amber" />
+                  <KPI title="Unachievable SKUs" value={stockout.summary?.doh_unachievable || 0} icon={AlertTriangle} color="red" />
+                </div>
+                <table className="min-w-full divide-y divide-gray-100 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">SKU</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Style</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">SOH</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">ROS/Day</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Coverage</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500">DOH Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {stockout.items?.slice(0, 15).map((item, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-1.5 font-mono text-xs">{item.sku}</td>
+                        <td className="px-3 py-1.5 text-xs">{item.style}</td>
+                        <td className="px-3 py-1.5 text-right text-xs">{item.soh}</td>
+                        <td className="px-3 py-1.5 text-right text-xs">{item.ros}</td>
+                        <td className="px-3 py-1.5 text-right text-xs font-medium">{item.coverage_pct}%</td>
+                        <td className="px-3 py-1.5 text-center"><DOHBadge status={item.doh_status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Collapsible>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+         TAB 3: REPLENISHMENT (Reorder + Stockout)
+         ═══════════════════════════════════════════════════════ */}
+      {tab === "replenish" && !loading && (
+        <div className="space-y-5">
+          {/* Stockout KPIs */}
+          {stockout && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <KPI title="Critical" value={stockout.summary?.critical || 0} sub="< 3 days" icon={AlertTriangle} color="red" />
+              <KPI title="High Risk" value={stockout.summary?.high || 0} sub="3-7 days" icon={AlertCircle} color="orange" />
+              <KPI title="Medium" value={stockout.summary?.medium || 0} sub="7-14 days" icon={Clock} color="amber" />
+              <KPI title="Low Risk" value={stockout.summary?.low || 0} sub="14-30 days" icon={CheckCircle} color="green" />
+              <KPI title="Healthy" value={stockout.summary?.healthy || 0} sub="> 30 days" icon={CheckCircle} color="blue" />
             </div>
           )}
 
-          {/* Forecast table */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">Monthly Forecast Breakdown</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">AI Forecast</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Lower Bound</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Upper Bound</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {forecastData.forecast?.map((val, i) => (
-                    <tr key={i} className="hover:bg-gray-50/50">
-                      <td className="px-4 py-2.5 text-sm font-medium text-gray-900">
-                        {forecastData.months?.[i]?.label || `Month ${i + 1}`}
-                      </td>
-                      <td className="px-4 py-2.5 text-sm text-right font-semibold text-[#0176D3]">{fmt(val)}</td>
-                      <td className="px-4 py-2.5 text-sm text-right text-gray-500">
-                        {fmt(forecastData.confidence_intervals?.lower?.[i] || val * 0.8)}
-                      </td>
-                      <td className="px-4 py-2.5 text-sm text-right text-gray-500">
-                        {fmt(forecastData.confidence_intervals?.upper?.[i] || val * 1.2)}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <ConfidenceMeter score={forecastData.confidence_score || 75} size="sm" />
-                      </td>
+          {/* Stockout items */}
+          {stockout && (
+            <Collapsible title="Stockout Risk Items — Replenishment Priority" defaultOpen={true} testId="stockout-table-section">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-100 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Style</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Store</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">SOH</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">ROS/Day</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Days Left</th>
+                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Risk</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {stockout.items?.map((item, i) => (
+                      <tr key={i} className={item.risk === 'critical' ? 'bg-red-50/50' : item.risk === 'high' ? 'bg-orange-50/30' : ''}>
+                        <td className="px-3 py-2 font-mono text-xs">{item.sku}</td>
+                        <td className="px-3 py-2 text-xs">{item.style}</td>
+                        <td className="px-3 py-2 text-xs">{item.store_code}</td>
+                        <td className="px-3 py-2 text-right text-xs font-medium">{item.soh}</td>
+                        <td className="px-3 py-2 text-right text-xs">{item.ros}</td>
+                        <td className="px-3 py-2 text-right text-xs font-bold">{item.days_until_stockout}</td>
+                        <td className="px-3 py-2 text-center"><RiskBadge risk={item.risk} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Collapsible>
+          )}
 
-      {/* ═══════════════════════════════════════════════════════
-         TAB 2: STOCKOUT PREDICTIONS
-         ═══════════════════════════════════════════════════════ */}
-      {activeTab === "stockout" && stockoutData && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <KPICard title="Critical" value={stockoutData.summary?.critical || 0} sub="Stockout < 3 days" icon={AlertTriangle} color="red" />
-            <KPICard title="High Risk" value={stockoutData.summary?.high || 0} sub="3-7 days" icon={AlertCircle} color="orange" />
-            <KPICard title="Medium" value={stockoutData.summary?.medium || 0} sub="7-14 days" icon={Clock} color="amber" />
-            <KPICard title="Low Risk" value={stockoutData.summary?.low || 0} sub="14-30 days" icon={CheckCircle} color="green" />
-            <KPICard title="Healthy" value={stockoutData.summary?.healthy || 0} sub="> 30 days" icon={CheckCircle} color="blue" />
-          </div>
+          {/* Reorder Points */}
+          {reorder && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <KPI title="Total SKUs" value={reorder.summary?.total_skus || 0} icon={Package} color="blue" />
+                <KPI title="Reorder Needed" value={reorder.summary?.reorder_needed || 0} icon={AlertTriangle} color="red" />
+                <KPI title="Healthy" value={reorder.summary?.healthy || 0} icon={CheckCircle} color="green" />
+                <KPI title="Service Level" value={`${reorder.summary?.service_level || 95}%`} sub={`Lead: ${reorder.summary?.lead_time_days || 14}d`} icon={Target} color="purple" />
+              </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">Stockout Risk Items</h2>
-              <p className="text-xs text-gray-500">Based on ROS + Current Inventory</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Style</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Store</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">SOH</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">ROS/Day</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Days Left</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">Risk</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {stockoutData.items?.map((item, i) => (
-                    <tr key={i} className={`${
-                      item.risk === 'critical' ? 'bg-red-50/50' :
-                      item.risk === 'high' ? 'bg-orange-50/30' : ''
-                    }`}>
-                      <td className="px-4 py-2.5 text-sm font-mono text-gray-900">{item.sku}</td>
-                      <td className="px-4 py-2.5 text-sm text-gray-700">{item.style}</td>
-                      <td className="px-4 py-2.5 text-sm text-gray-600">{item.store_code}</td>
-                      <td className="px-4 py-2.5 text-sm text-right font-medium">{item.soh}</td>
-                      <td className="px-4 py-2.5 text-sm text-right">{item.ros}</td>
-                      <td className="px-4 py-2.5 text-sm text-right font-bold">{item.days_until_stockout}</td>
-                      <td className="px-4 py-2.5 text-center"><RiskBadge risk={item.risk} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════
-         TAB 3: TOPSELLER PREDICTION
-         ═══════════════════════════════════════════════════════ */}
-      {activeTab === "topseller" && topsellerData && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">AI-Powered Topseller Predictions</h2>
-              <p className="text-xs text-gray-500">Based on growth trends + ML demand forecasting</p>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {topsellerData.predictions?.map((item, i) => (
-                <div key={i} data-testid={`topseller-${i}`} className="p-4 hover:bg-gray-50/50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-[#0176D3] bg-blue-50 px-2 py-0.5 rounded">#{i + 1}</span>
-                        <p className="font-semibold text-sm text-gray-900">{item.style_name || item.style_code}</p>
-                      </div>
-                      <div className="flex gap-4 mt-1.5 text-xs text-gray-500">
-                        <span>Current Avg: {fmt(item.current_monthly_avg || 0)}/mo</span>
-                        <span>Predicted 3m: <strong className="text-emerald-600">{fmt(item.predicted_revenue_3m || 0)}</strong></span>
-                        <span>{item.months_active || 0} months active</span>
-                      </div>
-                    </div>
-                    <div className="text-right ml-4">
-                      <p className={`text-xl font-bold ${item.growth_rate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        {item.growth_rate >= 0 ? "+" : ""}{item.growth_rate}%
-                      </p>
-                      <ConfidenceMeter score={item.confidence || 60} size="sm" />
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-100 rounded-full h-1.5">
-                      <div className="bg-emerald-500 rounded-full h-1.5 transition-all"
-                           style={{ width: `${Math.min(100, Math.abs(item.growth_rate))}%` }} />
-                    </div>
-                  </div>
-                  {item.growth_rate > 30 && (
-                    <div className="mt-2">
-                      <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                        <TrendingUp className="h-3 w-3" /> Recommended: Increase safety stock by 50%
-                      </span>
-                    </div>
-                  )}
+              <Collapsible title="Optimal Reorder Points" defaultOpen={true} testId="reorder-table-section">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-100 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Style</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Avg/Day</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Safety Stock</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Reorder Pt</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Current</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">DOH</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Order Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {reorder.items?.map((item, i) => (
+                        <tr key={i} className={item.status === 'reorder_needed' ? 'bg-red-50/40' : ''}>
+                          <td className="px-3 py-2 font-mono text-xs">{item.sku}</td>
+                          <td className="px-3 py-2 text-xs">{item.style}</td>
+                          <td className="px-3 py-2 text-right text-xs">{item.avg_daily}</td>
+                          <td className="px-3 py-2 text-right text-xs">{item.safety_stock}</td>
+                          <td className="px-3 py-2 text-right text-xs font-medium">{item.reorder_point}</td>
+                          <td className="px-3 py-2 text-right text-xs">{item.current_stock}</td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              item.status === 'reorder_needed' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>{item.status === 'reorder_needed' ? 'REORDER' : 'OK'}</span>
+                          </td>
+                          <td className="px-3 py-2 text-center"><DOHBadge status={item.doh_status} /></td>
+                          <td className="px-3 py-2 text-right text-xs font-bold text-[#0176D3]">{item.recommended_order > 0 ? item.recommended_order : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-              {(!topsellerData.predictions || topsellerData.predictions.length === 0) && (
-                <div className="p-8 text-center text-gray-500 text-sm">No predictions available</div>
-              )}
-            </div>
-          </div>
+              </Collapsible>
+            </>
+          )}
         </div>
       )}
 
       {/* ═══════════════════════════════════════════════════════
-         TAB 4: REORDER OPTIMISATION
+         TAB 4: AI INSIGHTS (Topsellers + Summary)
          ═══════════════════════════════════════════════════════ */}
-      {activeTab === "reorder" && reorderData && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KPICard title="Total SKUs" value={reorderData.summary?.total_skus || 0} icon={Package} color="blue" />
-            <KPICard title="Reorder Needed" value={reorderData.summary?.reorder_needed || 0} icon={AlertTriangle} color="red" />
-            <KPICard title="Healthy" value={reorderData.summary?.healthy || 0} icon={CheckCircle} color="green" />
-            <KPICard title="Service Level" value={`${reorderData.summary?.service_level || 95}%`} sub={`Lead time: ${reorderData.summary?.lead_time_days || 14}d`} icon={Target} color="blue" />
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800">Optimal Reorder Points</h2>
-              <p className="text-xs text-gray-500">Reorder Point = (Avg Daily Sales x Lead Time) + Safety Stock</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Style</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Avg/Day</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Safety Stock</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Reorder Pt</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Current</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Days Left</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Order Qty</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {reorderData.items?.map((item, i) => (
-                    <tr key={i} className={item.status === 'reorder_needed' ? 'bg-red-50/40' : ''}>
-                      <td className="px-4 py-2.5 text-sm font-mono text-gray-900">{item.sku}</td>
-                      <td className="px-4 py-2.5 text-sm text-gray-700">{item.style}</td>
-                      <td className="px-4 py-2.5 text-sm text-right">{item.avg_daily}</td>
-                      <td className="px-4 py-2.5 text-sm text-right">{item.safety_stock}</td>
-                      <td className="px-4 py-2.5 text-sm text-right font-medium">{item.reorder_point}</td>
-                      <td className="px-4 py-2.5 text-sm text-right">{item.current_stock}</td>
-                      <td className="px-4 py-2.5 text-sm text-right font-bold">{item.days_until_reorder}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          item.status === 'reorder_needed'
-                            ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                        }`}>
-                          {item.status === 'reorder_needed' ? 'REORDER' : 'OK'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-sm text-right font-bold text-[#0176D3]">
-                        {item.recommended_order > 0 ? item.recommended_order : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════
-         TAB 5: AI INSIGHTS
-         ═══════════════════════════════════════════════════════ */}
-      {activeTab === "insights" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {tab === "insights" && !loading && (
+        <div className="space-y-5">
+          {/* Insight cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 bg-blue-100 rounded-lg"><TrendingUp className="h-4 w-4 text-blue-600" /></div>
-                <h3 className="font-semibold text-sm text-gray-900">Demand Trend Analysis</h3>
+                <h3 className="font-semibold text-sm">Demand Trend</h3>
               </div>
               <p className="text-sm text-gray-700">
-                Based on ML forecast, demand for <strong>{category || "selected category"}</strong> is
-                expected to {forecastData?.growth_trend?.trend === "accelerating" ? (
-                  <span className="text-emerald-600 font-medium"> increase </span>
-                ) : forecastData?.growth_trend?.trend === "declining" ? (
-                  <span className="text-red-600 font-medium"> decrease </span>
-                ) : (
-                  <span className="text-gray-600 font-medium"> remain stable </span>
-                )}
-                over the forecast horizon.
+                Demand is <strong className={forecast?.growth_trend?.trend === "accelerating" ? "text-emerald-600" : forecast?.growth_trend?.trend === "declining" ? "text-red-600" : "text-gray-600"}>
+                {forecast?.growth_trend?.trend || "stable"}</strong> ({forecast?.growth_trend?.avg_monthly_growth > 0 ? "+" : ""}{forecast?.growth_trend?.avg_monthly_growth || 0}% avg/mo).
               </p>
-              <div className="mt-3 p-2.5 bg-white/60 rounded-lg text-xs text-gray-600 space-y-1">
-                <p>Confidence Score: <strong>{forecastData?.confidence_score || 75}%</strong></p>
-                <p>Action: {forecastData?.growth_trend?.trend === "accelerating"
-                  ? "Increase purchase orders by 20-25%"
-                  : "Maintain current order levels"}</p>
+              <div className="mt-2 p-2 bg-white/60 rounded text-xs text-gray-600">
+                Action: {forecast?.growth_trend?.trend === "accelerating" ? "Increase POs by 20-25%" : "Maintain order levels"}
               </div>
             </div>
-
             <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-5 border border-red-200">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 bg-red-100 rounded-lg"><AlertCircle className="h-4 w-4 text-red-600" /></div>
-                <h3 className="font-semibold text-sm text-gray-900">Stockout Risk Alert</h3>
+                <h3 className="font-semibold text-sm">Stockout Risk</h3>
               </div>
               <p className="text-sm text-gray-700">
-                <strong>{stockoutData?.summary?.critical || 0} SKUs</strong> at critical risk and{" "}
-                <strong>{stockoutData?.summary?.high || 0} SKUs</strong> at high risk of stockout
-                within the next <span className="text-red-600 font-medium">7 days</span>.
+                <strong>{stockout?.summary?.critical || 0}</strong> critical + <strong>{stockout?.summary?.high || 0}</strong> high risk SKUs within 7 days.
               </p>
-              <div className="mt-3 p-2.5 bg-white/60 rounded-lg text-xs text-gray-600 space-y-1">
-                <p>Affected: {(stockoutData?.summary?.critical || 0) + (stockoutData?.summary?.high || 0)} urgent items</p>
-                <p>Action: Expedited replenishment required for critical items</p>
-              </div>
+              <div className="mt-2 p-2 bg-white/60 rounded text-xs text-gray-600">Action: Expedited replenishment for critical items</div>
             </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border border-green-200">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="p-1.5 bg-green-100 rounded-lg"><TrendingUp className="h-4 w-4 text-green-600" /></div>
-                <h3 className="font-semibold text-sm text-gray-900">Topseller Prediction</h3>
+            <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-5 border border-emerald-200">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-1.5 bg-emerald-100 rounded-lg"><TrendingUp className="h-4 w-4 text-emerald-600" /></div>
+                <h3 className="font-semibold text-sm">Topseller Prediction</h3>
               </div>
               <p className="text-sm text-gray-700">
-                {topsellerData?.predictions?.[0] ? (
-                  <>
-                    <strong>{topsellerData.predictions[0].style_name || topsellerData.predictions[0].style_code}</strong> is
-                    predicted to become a topseller with{" "}
-                    <span className="text-emerald-600 font-medium">
-                      {topsellerData.predictions[0].growth_rate}% growth
-                    </span>.
-                  </>
-                ) : (
-                  "Analyzing growth patterns to identify potential topsellers..."
-                )}
+                {topseller?.predictions?.[0]
+                  ? <><strong>{topseller.predictions[0].style_name}</strong> — X-Factor: {topseller.predictions[0].x_factor}, {topseller.predictions[0].is_topseller ? "confirmed topseller" : "potential"}.</>
+                  : "Analyzing patterns..."}
               </p>
-              <div className="mt-3 p-2.5 bg-white/60 rounded-lg text-xs text-gray-600 space-y-1">
-                <p>Top predicted styles: {topsellerData?.predictions?.length || 0}</p>
-                <p>Action: Increase safety stock by 50% for high-confidence predictions</p>
-              </div>
+              <div className="mt-2 p-2 bg-white/60 rounded text-xs text-gray-600">X-Factor threshold: {topseller?.x_factor_threshold || 2.0}x</div>
             </div>
-
             <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50 rounded-xl p-5 border border-purple-200">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 bg-purple-100 rounded-lg"><Target className="h-4 w-4 text-purple-600" /></div>
-                <h3 className="font-semibold text-sm text-gray-900">Reorder Optimisation</h3>
+                <h3 className="font-semibold text-sm">Reorder Optimisation</h3>
               </div>
               <p className="text-sm text-gray-700">
-                ML recommends updating reorder points for{" "}
-                <strong>{reorderData?.summary?.reorder_needed || 0} SKUs</strong> to maintain
-                {" "}{reorderData?.summary?.service_level || 95}% service level.
+                <strong>{reorder?.summary?.reorder_needed || 0}</strong> SKUs need reorder. Service level: {reorder?.summary?.service_level || 95}%.
               </p>
-              <div className="mt-3 p-2.5 bg-white/60 rounded-lg text-xs text-gray-600 space-y-1">
-                <p>Lead Time: {reorderData?.summary?.lead_time_days || 14} days</p>
-                <p>Action: Review and approve recommended order quantities</p>
-              </div>
+              <div className="mt-2 p-2 bg-white/60 rounded text-xs text-gray-600">Lead: {reorder?.summary?.lead_time_days || 14}d | Formula: Avg*LT + Z*σ*√LT</div>
             </div>
           </div>
+
+          {/* Topseller table with X-Factor */}
+          {topseller?.predictions?.length > 0 && (
+            <Collapsible title={`Topseller Predictions (X-Factor ≥ ${topseller.x_factor_threshold || 2.0})`} defaultOpen={true} testId="topseller-section">
+              <div className="divide-y divide-gray-100">
+                {topseller.predictions.map((item, i) => (
+                  <div key={i} data-testid={`topseller-${i}`} className="p-4 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-[#0176D3] bg-blue-50 px-1.5 py-0.5 rounded">#{i + 1}</span>
+                          <p className="font-semibold text-sm">{item.style_name || item.style_code}</p>
+                          {item.is_topseller && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold">TOPSELLER</span>}
+                        </div>
+                        <div className="flex gap-3 mt-1 text-[10px] text-gray-500">
+                          <span>Avg: {fmt(item.current_monthly_avg)}/mo</span>
+                          <span>Predicted 3m: <strong className="text-emerald-600">{fmt(item.predicted_revenue_3m)}</strong></span>
+                          <span>X-Factor: <strong className={item.x_factor >= (topseller.x_factor_threshold || 2) ? "text-emerald-600" : "text-gray-700"}>{item.x_factor}x</strong></span>
+                          <span>Cat Avg: {fmt(item.category_avg)}</span>
+                        </div>
+                      </div>
+                      <div className="text-right ml-3">
+                        <p className={`text-lg font-bold ${item.growth_rate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {item.growth_rate >= 0 ? "+" : ""}{item.growth_rate}%
+                        </p>
+                        <ConfidenceMeter score={item.confidence} size="sm" />
+                      </div>
+                    </div>
+                    <div className="mt-1.5">
+                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div className="bg-emerald-500 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(100, Math.abs(item.growth_rate))}%` }} />
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-blue-600">{item.recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            </Collapsible>
+          )}
 
           {/* Model Performance */}
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900 mb-4">Model Performance Summary</h2>
-            <div className="space-y-3">
-              {[
-                { name: "Holt-Winters", pct: 87, color: "bg-blue-500" },
-                { name: "Random Forest", pct: 84, color: "bg-emerald-500" },
-                { name: "Seasonal Decomposition", pct: 79, color: "bg-purple-500" },
-                { name: "Ensemble Model (Combined)", pct: 92, color: "bg-[#0176D3]" },
+          <Collapsible title="Model Performance Summary" defaultOpen={false} testId="model-performance-section">
+            <div className="p-5 space-y-3">
+              {[{ n: "Holt-Winters", p: 87, c: "bg-blue-500" }, { n: "Random Forest", p: 84, c: "bg-emerald-500" },
+                { n: "Seasonal Decomposition", p: 79, c: "bg-purple-500" }, { n: "Ensemble (Combined)", p: 92, c: "bg-[#0176D3]" }
               ].map(m => (
-                <div key={m.name}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-700">{m.name}</span>
-                    <span className="font-semibold">{m.pct}%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className={`${m.color} rounded-full h-2 transition-all`} style={{ width: `${m.pct}%` }} />
-                  </div>
+                <div key={m.n}>
+                  <div className="flex justify-between text-sm mb-1"><span>{m.n}</span><span className="font-semibold">{m.p}%</span></div>
+                  <div className="w-full bg-gray-100 rounded-full h-2"><div className={`${m.c} rounded-full h-2`} style={{ width: `${m.p}%` }} /></div>
                 </div>
               ))}
+              <div className="mt-3 p-2.5 bg-gray-50 rounded-lg text-xs text-gray-600 flex items-center gap-1.5">
+                <Zap className="h-3 w-3 text-amber-500" /> Ensemble combines all models for ~15% better accuracy
+              </div>
             </div>
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-600 flex items-center gap-2">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
-                Ensemble model combines all three algorithms for ~15% better accuracy than individual models
-              </p>
-            </div>
-          </div>
+          </Collapsible>
 
-          {/* Generated Plan Summary (if available) */}
-          {planData && (
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900 mb-4">Generated Demand Plan</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs text-gray-500">Annual Target</p>
-                  <p className="text-lg font-bold text-[#0176D3]">{fmt(planData.annual_target)}</p>
-                </div>
-                <div className="text-center p-3 bg-emerald-50 rounded-lg">
-                  <p className="text-xs text-gray-500">Total Planned</p>
-                  <p className="text-lg font-bold text-emerald-600">{fmt(planData.total_planned)}</p>
-                </div>
-                <div className="text-center p-3 bg-amber-50 rounded-lg">
-                  <p className="text-xs text-gray-500">Variance</p>
-                  <p className="text-lg font-bold text-amber-600">{fmt(Math.abs(planData.variance))} ({planData.variance_pct}%)</p>
-                </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <p className="text-xs text-gray-500">Subcategories</p>
-                  <p className="text-lg font-bold text-purple-600">{planData.subcategories?.length || 0}</p>
+          {/* Generated Plan Summary */}
+          {plan && (
+            <Collapsible title="Demand Plan Summary" defaultOpen={false} testId="plan-summary-section">
+              <div className="p-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div className="text-center p-2.5 bg-blue-50 rounded-lg">
+                    <p className="text-[10px] text-gray-500">Annual Target</p>
+                    <p className="text-base font-bold text-[#0176D3]">{fmt(plan.annual_target)}</p>
+                  </div>
+                  <div className="text-center p-2.5 bg-emerald-50 rounded-lg">
+                    <p className="text-[10px] text-gray-500">Total Planned</p>
+                    <p className="text-base font-bold text-emerald-600">{fmt(plan.total_planned)}</p>
+                  </div>
+                  <div className="text-center p-2.5 bg-amber-50 rounded-lg">
+                    <p className="text-[10px] text-gray-500">Variance</p>
+                    <p className="text-base font-bold text-amber-600">{fmt(Math.abs(plan.variance))} ({(plan.variance_pct||0).toFixed(1)}%)</p>
+                  </div>
+                  <div className="text-center p-2.5 bg-purple-50 rounded-lg">
+                    <p className="text-[10px] text-gray-500">Status</p>
+                    <p className="text-base font-bold text-purple-600 capitalize">{plan.status}</p>
+                  </div>
                 </div>
               </div>
-              {planData.subcategories?.map((sc, i) => (
-                <div key={i} className="mb-2 p-3 border border-gray-100 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-800">{sc.name}</span>
-                    <span className="text-sm font-bold text-[#0176D3]">{fmt(sc.total)}</span>
-                  </div>
-                  <ConfidenceMeter score={sc.confidence} size="sm" />
-                </div>
-              ))}
-            </div>
+            </Collapsible>
           )}
         </div>
       )}

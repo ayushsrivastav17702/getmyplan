@@ -40,6 +40,8 @@ from multi_tenant import (
     get_current_tenant,
     tenant_context,
 )
+from multi_tenant.auth import get_current_user
+from multi_tenant.rbac import require_role
 from multi_tenant.tenant_db import (
     get_mongo_client as mt_get_mongo_client,
     get_tenant_db as mt_get_tenant_db,
@@ -3161,7 +3163,7 @@ async def startup():
     init_data_quality(client)
     init_stock_out(client, get_cached_data, get_db, apply_date_filter, apply_channel_filter, apply_region_filter, apply_category_filter)
     init_gap_analysis(client, get_cached_data, get_db, apply_date_filter, apply_channel_filter, apply_region_filter, apply_category_filter)
-    init_ai_demand(client, get_cached_data, get_db)
+    init_ai_demand(client, get_cached_data, get_db, get_current_user, require_role)
     logger.info("Multi-tenant startup complete")
 
 
