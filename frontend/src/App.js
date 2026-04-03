@@ -6,7 +6,7 @@ import {
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp,
   MessageSquare, Menu, X, ChevronRight, Check, AlertCircle,
   Warehouse, Server, Award, XCircle, ShoppingCart, Clock,
-  Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users, Shield
+  Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users, Shield, Zap
 } from "lucide-react";
 
 // Auth
@@ -32,6 +32,7 @@ import DOHAnalysis from "./pages/DOHAnalysis";
 import PlanogramFillRate from "./pages/PlanogramFillRate";
 import UserManagement from "./pages/UserManagement";
 import TenantAdminPanel from "./pages/TenantAdminPanel";
+import AIDemandPlanning from "./pages/AIDemandPlanning";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -54,6 +55,7 @@ const navItems = [
   { path: "/warehouse",     label: "Warehouse",            icon: Warehouse,       permission: "dashboard.warehouse.view" },
   { path: "/sftp-monitor",  label: "SFTP Monitor",         icon: Server,          permission: "data.sftp.view" },
   { path: "/data-quality",  label: "Data Quality",         icon: Award,           permission: "data.quality.view" },
+  { path: "/ai-demand",     label: "AI Demand Planning",   icon: Zap,             permission: null },
   { path: "/chatbot",       label: "FAQ Chatbot",          icon: MessageSquare,   permission: "chatbot.faq.view" },
   { path: "/users",         label: "User Management",      icon: Users,           permission: "users.list.view" },
   { path: "/tenant-admin",  label: "Tenant Admin",         icon: Shield,          permission: "settings.tenant.view" },
@@ -273,6 +275,7 @@ const AuthenticatedApp = () => {
             <Route path="/warehouse"     element={<ProtectedRoute permission="dashboard.warehouse.view"><WarehouseAnalysis /></ProtectedRoute>} />
             <Route path="/sftp-monitor"  element={<ProtectedRoute permission="data.sftp.view"><SFTPMonitor /></ProtectedRoute>} />
             <Route path="/data-quality"  element={<ProtectedRoute permission="data.quality.view"><DataQuality /></ProtectedRoute>} />
+            <Route path="/ai-demand"     element={<AIDemandPlanning />} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
             <Route path="/tenant-admin"  element={<ProtectedRoute permission="settings.tenant.view"><TenantAdminPanel /></ProtectedRoute>} />
