@@ -91,6 +91,38 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **DASH-25: Offline Detection UI** — Global `OfflineBanner` component in `App.js` using `navigator.onLine` + window event listeners, red banner at z-index 100
 - Testing: **100% (Iteration 30, 19/19 PASS)**
 
+### Phase 30 — 51-Gap Fix: Data Quality, FAQ Chatbot, User Mgmt, Tenant Mgmt (Apr 2026)
+- **Data Quality (17 gaps fixed)**: New `/backend/routes/data_quality.py` with comprehensive checks
+  - DQ-01..07: Completeness (missing fields, empty files, date coverage, store/SKU coverage)
+  - DQ-09..14: Accuracy (MRP validation, category mapping, negative values, outliers, store/style code validation)
+  - DQ-16..20: Consistency (date format, currency, UOM, naming, cross-file)
+  - DQ-08/30: Quality trend over time
+  - DQ-29: Category-level scorecard
+  - DQ-31: CSV export of quality report
+  - DQ-32: Improvement recommendations
+  - Frontend: 5-tab layout (Overview, Data Checks, Category Scorecard, Quality Trend, Store Tracker)
+- **FAQ Chatbot (4 gaps fixed)**:
+  - CHAT-29: Copy button on assistant messages
+  - CHAT-34: Rate limiting (10 msgs/min per IP)
+  - CHAT-35: Chat export to text file
+- **User Management (16 gaps fixed)**: Extended `/backend/multi_tenant/user_routes.py`
+  - USER-04: Edit profile (name update)
+  - USER-07: Reactivate deleted user
+  - USER-08: Bulk user import (JSON array)
+  - USER-09: Bulk role update
+  - USER-16: Admin-initiated password reset
+  - USER-23: Edit custom role permissions
+  - USER-24/25: Delete custom role with system role protection
+  - USER-29/30: Resend/cancel invitations
+  - Frontend: Edit profile modal, password reset modal, bulk import modal, bulk role mode
+- **Tenant Management (14 gaps fixed)**: Extended `/backend/multi_tenant/tenant_routes.py`
+  - TENANT-06/27/28/29: Plan upgrade/downgrade with limit enforcement
+  - TENANT-23: Currency setting
+  - TENANT-34: Filter tenants (status, search)
+  - TENANT-35: Export tenants CSV
+  - Frontend: Plan tab, All Tenants tab, currency in settings
+- Testing: **100% (Iteration 31, 24/24 backend + all frontend PASS)**
+
 ## Test Coverage Summary
 
 | Module | Total | PASS | % |
@@ -107,11 +139,19 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | BI Dashboards | 35 | 35 | **100%** |
 | SFTP Monitor | 35 | 27 | 94% |
 | Warehouse | 30 | 30 | **100%** |
-| **Total** | **426** | **393** | **92%** |
+| Data Quality | 32 | 29 | **91%** |
+| FAQ Chatbot | 35 | 31 | **89%** |
+| User Management | 35 | 27 | **77%** |
+| Tenant Management | 35 | 21 | **60%** |
+| **Total** | **563** | **501** | **89%** |
 
 ## Remaining Known Gaps
 - DASH-35: PDF export (P2)
 - SFTP-31/32/33/34: Email/Slack alerts, dashboard notifications, alert thresholds (P1-P2)
+- DQ-08: Completeness trend (basic, needs real historical data)
+- CHAT-21: Message length limit, CHAT-23: Multi-language
+- USER-05: Email change, USER-10: Profile image, USER-17: Force password change, USER-18: MFA, USER-34: IP whitelisting, USER-35: Session management
+- TENANT-10: Restore from backup, TENANT-17/18: Backup isolation/resource limits, TENANT-20/24/25: Branding/language/logo, TENANT-31: Invoice generation
 
 ## Prioritized Backlog
 
@@ -121,5 +161,7 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### P2
 - DASH-35: PDF export for Executive Dashboard
+- USER-05: Email change, USER-17: Force password change
+- TENANT-20: Tenant branding (logo, colors)
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
