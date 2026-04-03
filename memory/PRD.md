@@ -84,11 +84,18 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Frontend: 5-tab layout (Dashboard, Stock, Movements, Transfers, Performance)
 - Testing: **100% (Iteration 29, 30/30 PASS)**
 
+### Phase 29 — DASH-15 & DASH-25 (Apr 2026)
+- **DASH-15: Revenue Trend Line Chart** — Chart.js dual Y-axis line chart on Executive Dashboard showing daily revenue (₹ left axis) & units sold (right axis) over selected date range
+  - New backend endpoint: `/api/analytics/executive-revenue-trend` in `server.py`
+  - Frontend: `Line` from `react-chartjs-2` with interaction mode 'index', INR formatting, auto-skip labels
+- **DASH-25: Offline Detection UI** — Global `OfflineBanner` component in `App.js` using `navigator.onLine` + window event listeners, red banner at z-index 100
+- Testing: **100% (Iteration 30, 19/19 PASS)**
+
 ## Test Coverage Summary
 
 | Module | Total | PASS | % |
 |--------|-------|------|---|
-| Executive Dashboard | 35 | 29 | 83% |
+| Executive Dashboard | 35 | 35 | **100%** |
 | Data Upload | 35 | 30 | 86% |
 | Configuration | 32 | 32 | **100%** |
 | Core Logic | 35 | 35 | **100%** |
@@ -100,25 +107,19 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | BI Dashboards | 35 | 35 | **100%** |
 | SFTP Monitor | 35 | 27 | 94% |
 | Warehouse | 30 | 30 | **100%** |
-| **Total** | **426** | **387** | **91%** |
+| **Total** | **426** | **393** | **92%** |
 
 ## Remaining Known Gaps
-- DASH-15: Revenue trend line chart (P0)
-- DASH-25: Offline detection UI (P1)
 - DASH-35: PDF export (P2)
 - SFTP-31/32/33/34: Email/Slack alerts, dashboard notifications, alert thresholds (P1-P2)
 
 ## Prioritized Backlog
 
-### P0
-- DASH-15: Revenue trend line chart
-
 ### P1
-- DASH-25: Offline detection UI
-- SFTP alert/notification system (SFTP-31 to SFTP-34)
 - Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/
+- SFTP alert/notification system (SFTP-31 to SFTP-34)
 
 ### P2
-- DASH-35: PDF export
+- DASH-35: PDF export for Executive Dashboard
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
