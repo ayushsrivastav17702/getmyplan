@@ -1,0 +1,127 @@
+{
+  "summary": "Auto-populate analytics filter options from onboarding data - ALL 15 TESTS PASSED. TenantDataProvider correctly falls back to onboarding data (ob_categories, ob_stores, ob_marketplaces) when CSV data is missing. CSV data always takes precedence.",
+
+  "test_case_matrix": {
+    "DEMO_TENANT_CSV_DATA": {
+      "filter_options_returns_csv_data": {"status": "PASS", "notes": "Returns Accessories, Apparel, Footwear from CSV"},
+      "ai_demand_options_returns_csv_data": {"status": "PASS", "notes": "Returns CSV data with onboarding_fallback all false"},
+      "validate_data_availability_includes_onboarding_fallback": {"status": "PASS", "notes": "data_status includes onboarding_fallback field"}
+    },
+    "ACME_TENANT_ONBOARDING_DATA": {
+      "filter_options_returns_onboarding_data": {"status": "PASS", "notes": "Returns Ethnic Wear category, Flipkart/Myntra channels, Delhi region"},
+      "ai_demand_options_returns_onboarding_data": {"status": "PASS", "notes": "Returns onboarding data with has_onboarding_data=true"},
+      "onboarding_fallback_is_true_for_acme": {"status": "PASS", "notes": "onboarding_fallback: {categories: true, stores: true, channels: true}"}
+    },
+    "CSV_PRECEDENCE": {
+      "csv_data_takes_precedence": {"status": "PASS", "notes": "Demo tenant with CSV has onboarding_fallback all false"}
+    },
+    "REGRESSION_ANALYTICS": {
+      "analytics_overview": {"status": "PASS", "notes": "Returns total_styles, total_stores"},
+      "analytics_executive_kpis": {"status": "PASS", "notes": "Returns revenue KPIs"},
+      "ai_demand_forecast": {"status": "PASS", "notes": "Returns forecast data"},
+      "ai_demand_stockout_risk": {"status": "PASS", "notes": "Returns stockout risk summary"}
+    },
+    "ONBOARDING_DATA_STRUCTURE": {
+      "get_categories_returns_root_categories": {"status": "PASS", "notes": "Returns level-1 categories (Ethnic Wear)"},
+      "get_subcategories_returns_child_categories": {"status": "PASS", "notes": "Returns level-2+ categories (Kurtas, Sarees)"},
+      "get_channels_returns_marketplaces": {"status": "PASS", "notes": "Returns marketplace names (Flipkart, Myntra)"},
+      "get_regions_returns_store_states": {"status": "PASS", "notes": "Returns store states (Delhi)"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 15,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "TOTAL": 15
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding_fallback_iter39.py",
+    "/app/test_reports/pytest/pytest_results_iter39.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "TenantDataProvider._ob_categories() correctly queries level=1 for root categories",
+    "TenantDataProvider._ob_subcategories() correctly queries level>=2 for child categories",
+    "TenantDataProvider._ob_channels() correctly returns marketplace names as channel fallback",
+    "TenantDataProvider._ob_regions() correctly returns store states as region fallback",
+    "CSV data precedence is correctly implemented - fallback only when CSV returns empty",
+    "onboarding_fallback field in data_status correctly indicates which dimensions use fallback"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_onboarding_fallback_iter39.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 15/15 tests passed",
+    "frontend": "N/A - backend only testing"
+  },
+
+  "test_credentials": {
+    "demo_admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin", "notes": "Has CSV data"},
+    "acme_admin": {"tenant_id": "acme_corp", "email": "admin@acme.com", "password": "AcmePass123!", "role": "admin", "notes": "No CSV data, has onboarding data", "requires_header": "X-Tenant-ID: acme_corp"}
+  },
+
+  "seed_data_creation": "No new seed data created. Used existing onboarding data for Acme tenant.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Onboarding fallback feature complete. TenantDataProvider now falls back to onboarding wizard data (ob_categories, ob_stores, ob_marketplaces) when CSV data is missing. Demo tenant has full CSV data (Accessories, Apparel, Footwear). Acme tenant has onboarding data only (Ethnic Wear category with Kurtas/Sarees children, Flipkart/Myntra marketplaces, DEL01 store in Delhi). The onboarding_fallback field in data_status shows which dimensions are using fallback.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "notes": "All APIs are real implementations using MongoDB collections."
+  },
+
+  "feature_verification": {
+    "TENANT_DATA_PROVIDER_FALLBACK": {
+      "feature": "Onboarding data fallback for analytics filters",
+      "status": "COMPLETE",
+      "verified_behaviors": [
+        "get_categories() returns onboarding root categories when no CSV style_master",
+        "get_subcategories() returns onboarding level-2+ categories when no CSV",
+        "get_channels() returns onboarding marketplace names when no CSV store_master/daily_sales",
+        "get_regions() returns onboarding store states when no CSV store_master",
+        "get_stores() returns onboarding stores when no CSV store_master",
+        "CSV data always takes precedence over onboarding data",
+        "validate_data_availability() includes onboarding_fallback field"
+      ]
+    },
+    "ENDPOINTS_VERIFIED": {
+      "GET /api/analytics/filter-options": "Returns onboarding data for tenant without CSV uploads",
+      "GET /api/analytics/ai-demand/options": "Returns onboarding data for tenant without CSV uploads"
+    },
+    "TENANT_SPECIFIC_RESULTS": {
+      "demo_tenant": {
+        "categories": ["Accessories", "Apparel", "Footwear"],
+        "channels": ["Retail"],
+        "regions": ["East", "North", "South", "West"],
+        "onboarding_fallback": {"categories": false, "stores": false, "channels": false}
+      },
+      "acme_tenant": {
+        "categories": ["Ethnic Wear"],
+        "subcategories": ["Kurtas", "Sarees"],
+        "channels": ["Flipkart", "Myntra"],
+        "regions": ["Delhi"],
+        "onboarding_fallback": {"categories": true, "stores": true, "channels": true}
+      }
+    }
+  }
+}
