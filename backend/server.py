@@ -1745,6 +1745,68 @@ async def get_executive_dashboard(
     }
 
 
+
+@api_router.get("/analytics/executive-revenue-trend")
+async def get_executive_revenue_trend(
+    start_date: str = None,
+    end_date: str = None,
+    categories: str = None,
+    channels: str = None,
+    regions: str = None,
+):
+    """Daily revenue & units timeseries for the Executive Dashboard trend chart."""
+    sales_df = await get_cached_data('daily_sales')
+    sku_df = await get_cached_data('sku_ean_master')
+
+    if sales_df is None or len(sales_df) == 0:
+        return {"labels": [], "revenue": [], "units": []}
+
+    sales_df = sales_df.copy()
+    sales_df['day'] = pd.to_datetime(sales_df['day'], errors='coerce')
+    sales_df['revenue'] = pd.to_numeric(sales_df['revenue'], errors='coerce').fillna(0)
+    sales_df['quantity'] = pd.to_numeric(sales_df['quantity'], errors='coerce').fillna(0)
+
+    # Apply filters
+    if start_date:
+        sales_df = sales_df[sales_df['day'] >= pd.to_datetime(start_date)]
+    if end_date:
+        sales_df = sales_df[sales_df['day'] <= pd.to_datetime(end_date)]
+    if categories and sku_df is not None:
+        cat_list = [c.strip() for c in categories.split(',')]
+        style_df = await get_cached_data('style_master')
+        if style_df is not None and 'category' in style_df.columns:
+            valid_styles = style_df[style_df['category'].isin(cat_list)]['style_code'].unique()
+            if 'sku' in sales_df.columns and 'style' in sku_df.columns and 'ean' in sku_df.columns:
+                valid_skus = sku_df[sku_df['style'].isin(valid_styles)]['ean'].unique()
+                sales_df = sales_df[sales_df['sku'].isin(valid_skus)]
+    if channels:
+        ch_list = [c.strip() for c in channels.split(',')]
+        if 'channel' in sales_df.columns:
+            sales_df = sales_df[sales_df['channel'].isin(ch_list)]
+    if regions:
+        rg_list = [r.strip() for r in regions.split(',')]
+        store_df = await get_cached_data('store_master')
+        if store_df is not None and 'region' in store_df.columns and 'store_code' in store_df.columns:
+            valid_stores = store_df[store_df['region'].isin(rg_list)]['store_code'].unique()
+            if 'store_code' in sales_df.columns:
+                sales_df = sales_df[sales_df['store_code'].isin(valid_stores)]
+
+    if len(sales_df) == 0:
+        return {"labels": [], "revenue": [], "units": []}
+
+    daily = sales_df.groupby(sales_df['day'].dt.date).agg(
+        revenue=('revenue', 'sum'),
+        units=('quantity', 'sum'),
+    ).sort_index()
+
+    labels = [d.strftime('%Y-%m-%d') for d in daily.index]
+    revenue = [round(float(v), 2) for v in daily['revenue']]
+    units = [int(v) for v in daily['units']]
+
+    return {"labels": labels, "revenue": revenue, "units": units}
+
+
+
 @api_router.get("/analytics/planogram-fill-rate")
 async def get_planogram_fill_rate(
     start_date: str = None,

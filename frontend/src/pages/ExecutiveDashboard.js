@@ -9,11 +9,13 @@ import {
 } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
 import { DoughnutChart } from "../components/Charts";
+import { Line } from "react-chartjs-2";
 
 const ExecutiveDashboard = () => {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [kpis, setKpis] = useState(null);
+  const [trendData, setTrendData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [filterOptions, setFilterOptions] = useState({});
@@ -61,13 +63,15 @@ const ExecutiveDashboard = () => {
     setError(null);
     try {
       const queryParams = buildQueryParams();
-      const [dashResp, kpiResp] = await Promise.all([
+      const [dashResp, kpiResp, trendResp] = await Promise.all([
         axios.get(`${API}/analytics/executive-dashboard?${queryParams}`),
         axios.get(`${API}/analytics/executive-kpis?${queryParams}`),
+        axios.get(`${API}/analytics/executive-revenue-trend?${queryParams}`),
       ]);
       if (dashResp.data.error) setError(dashResp.data.error);
       else setData(dashResp.data);
       setKpis(kpiResp.data);
+      setTrendData(trendResp.data);
     } catch (err) {
       setError("Failed to fetch dashboard data.");
     } finally {
@@ -322,6 +326,103 @@ const ExecutiveDashboard = () => {
                 {kpis.yoy?.previous_revenue === 0 && (
                   <p className="text-xs text-slate-400 italic">No data from same period last year</p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Revenue Trend Line Chart (DASH-15) ── */}
+          {trendData && trendData.labels && trendData.labels.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-8" data-testid="revenue-trend-chart">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-slate-900">Revenue Trend</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Daily revenue &amp; units sold over the selected period</p>
+                </div>
+                <TrendingUp size={18} className="text-[#0176D3]" />
+              </div>
+              <div style={{ height: 320 }}>
+                <Line
+                  data={{
+                    labels: trendData.labels.map(d => {
+                      const dt = new Date(d + 'T00:00:00');
+                      return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                    }),
+                    datasets: [
+                      {
+                        label: 'Revenue',
+                        data: trendData.revenue,
+                        borderColor: '#0176D3',
+                        backgroundColor: '#0176D320',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        yAxisID: 'y',
+                      },
+                      {
+                        label: 'Units Sold',
+                        data: trendData.units,
+                        borderColor: '#2E844A',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        yAxisID: 'y1',
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                      legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 12 } } },
+                      tooltip: {
+                        backgroundColor: '#0F172A',
+                        padding: 12,
+                        cornerRadius: 4,
+                        callbacks: {
+                          label: (ctx) => {
+                            const v = ctx.raw;
+                            if (ctx.datasetIndex === 0) {
+                              if (v >= 10000000) return `Revenue: \u20B9${(v/10000000).toFixed(1)}Cr`;
+                              if (v >= 100000) return `Revenue: \u20B9${(v/100000).toFixed(1)}L`;
+                              if (v >= 1000) return `Revenue: \u20B9${(v/1000).toFixed(0)}K`;
+                              return `Revenue: \u20B9${Math.round(v)}`;
+                            }
+                            return `Units: ${v.toLocaleString('en-IN')}`;
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+                      y: {
+                        type: 'linear', position: 'left',
+                        grid: { color: '#E2E8F0' },
+                        title: { display: true, text: 'Revenue (\u20B9)', font: { size: 11 }, color: '#0176D3' },
+                        ticks: {
+                          font: { size: 10 }, color: '#0176D3',
+                          callback: (v) => {
+                            if (v >= 10000000) return `\u20B9${(v/10000000).toFixed(1)}Cr`;
+                            if (v >= 100000) return `\u20B9${(v/100000).toFixed(1)}L`;
+                            if (v >= 1000) return `\u20B9${(v/1000).toFixed(0)}K`;
+                            return `\u20B9${v}`;
+                          }
+                        }
+                      },
+                      y1: {
+                        type: 'linear', position: 'right',
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: 'Units Sold', font: { size: 11 }, color: '#2E844A' },
+                        ticks: { font: { size: 10 }, color: '#2E844A' }
+                      },
+                    },
+                  }}
+                />
               </div>
             </div>
           )}

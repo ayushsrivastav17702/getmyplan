@@ -1,0 +1,117 @@
+{
+  "summary": "DASH-15 & DASH-25 Testing Complete. Backend: 16/16 pytest tests PASSED (100%). Frontend: All features verified working. Revenue Trend Chart renders with dual Y-axes (Revenue INR left, Units Sold right). Offline Banner appears/disappears correctly on network events.",
+
+  "test_case_matrix": {
+    "DASH-15_REVENUE_TREND_CHART": {
+      "API_endpoint": {"status": "PASS", "notes": "GET /api/analytics/executive-revenue-trend returns 200 with {labels, revenue, units} arrays"},
+      "API_structure": {"status": "PASS", "notes": "Response has labels (YYYY-MM-DD dates), revenue (numeric), units (numeric) - all same length"},
+      "API_filters": {"status": "PASS", "notes": "Accepts start_date, end_date, categories, channels, regions filter params"},
+      "Frontend_chart": {"status": "PASS", "notes": "Chart.js Line chart renders with data-testid='revenue-trend-chart'"},
+      "Dual_Y_axes": {"status": "PASS", "notes": "Left Y-axis: Revenue (₹) in blue, Right Y-axis: Units Sold in green"},
+      "Chart_title": {"status": "PASS", "notes": "Title: 'Revenue Trend', Description: 'Daily revenue & units sold over the selected period'"},
+      "Data_display": {"status": "PASS", "notes": "90 data points from Jan 1 to Mar 31, 2026. Revenue range ₹50L-60L, Units range 2700-3300"}
+    },
+    "DASH-25_OFFLINE_BANNER": {
+      "Component_exists": {"status": "PASS", "notes": "OfflineBanner component in App.js with data-testid='offline-banner'"},
+      "Hidden_when_online": {"status": "PASS", "notes": "Banner not in DOM when navigator.onLine is true"},
+      "Shows_on_offline": {"status": "PASS", "notes": "Banner appears when window 'offline' event is dispatched"},
+      "Hides_on_online": {"status": "PASS", "notes": "Banner disappears when window 'online' event is dispatched"},
+      "Banner_styling": {"status": "PASS", "notes": "Red background, white text, wifi-off icon, z-index 100 (above all content)"},
+      "Banner_message": {"status": "PASS", "notes": "Text: 'You are offline. Some features may be unavailable until your connection is restored.'"}
+    },
+    "EXECUTIVE_DASHBOARD_SECTIONS": {
+      "KPI_cards": {"status": "PASS", "notes": "4 KPI cards: Revenue (₹49.6Cr), Units (265K), MRP Realisation (99.6%), Health Score (25.8)"},
+      "WoW_card": {"status": "PASS", "notes": "Week-over-Week comparison: -0.2% revenue change, -1.5% units change"},
+      "YoY_card": {"status": "PASS", "notes": "Year-over-Year comparison: +0% (no data from same period last year)"},
+      "Health_score_circle": {"status": "PASS", "notes": "Circular gauge showing 25.8/100 with 'Critical' status"},
+      "Alerts_panel": {"status": "PASS", "notes": "3 high priority alerts (Stock-Out, Planogram)"},
+      "Module_cards": {"status": "PASS", "notes": "6/6 module cards: ROS Gap, Stock-Out, DOH, Planogram, Replenishment, NOOS"},
+      "Quick_links": {"status": "PASS", "notes": "Quick navigation section with 12 module links"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 19,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "GAP": 0,
+    "TOTAL": 19
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_dash15_dash25_iter30.py",
+    "/app/test_reports/pytest/pytest_results_iter30.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "DASH-15: Revenue Trend API properly groups daily_sales by day and returns {labels, revenue, units}",
+    "DASH-15: Frontend uses Chart.js Line component with dual Y-axes configuration",
+    "DASH-25: OfflineBanner uses navigator.onLine state and window event listeners",
+    "DASH-25: Banner renders at z-index 100 to appear above all content",
+    "Executive Dashboard fetches 3 endpoints in parallel: executive-dashboard, executive-kpis, executive-revenue-trend"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_dash15_dash25_iter30.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 16/16 tests passed",
+    "frontend": "100% - All DASH-15 and DASH-25 features verified working"
+  },
+
+  "test_credentials": {
+    "admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin"}
+  },
+
+  "seed_data_creation": "No new seed data created. Using existing demo tenant data.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "DASH-15 and DASH-25 verified complete. Revenue Trend API at /api/analytics/executive-revenue-trend returns timeseries data with labels/revenue/units arrays. Frontend renders Chart.js Line chart with dual Y-axes. Offline Banner component uses navigator.onLine and window events. Login requires selecting tenant 'demo' from dropdown before entering credentials.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+
+  "data_observations": {
+    "revenue_trend": {
+      "data_points": 90,
+      "date_range": "2026-01-01 to 2026-03-31",
+      "total_revenue": "~₹49.6Cr",
+      "total_units": "~265K"
+    },
+    "executive_kpis": {
+      "revenue": "₹49.6Cr",
+      "units_sold": "265K",
+      "mrp_realisation": "99.6%",
+      "health_score": 25.8,
+      "wow_revenue_change": "-0.2%",
+      "wow_units_change": "-1.5%",
+      "yoy_revenue_change": "+0%"
+    },
+    "dashboard_modules": {
+      "ros_gap": "present",
+      "stock_out": "29671 active stock-outs",
+      "doh": "present",
+      "planogram": "110 store-SKUs below 80% fill rate",
+      "replenishment": "present",
+      "noos": "present"
+    }
+  }
+}
