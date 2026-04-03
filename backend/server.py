@@ -20,6 +20,8 @@ from sftp import sftp_service, sftp_scheduler
 from routes.core_logic import router as core_logic_router, init_core_logic
 from routes.replenishment import router as replenishment_router, init_replenishment
 from routes.doh_analysis import router as doh_router, init_doh
+from routes.planogram import router as planogram_router, init_planogram
+from routes.bi_dashboard import router as bi_router, init_bi
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -4111,6 +4113,8 @@ async def get_quality_scorecard():
 api_router.include_router(core_logic_router)
 api_router.include_router(replenishment_router)
 api_router.include_router(doh_router)
+api_router.include_router(planogram_router)
+api_router.include_router(bi_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -4186,6 +4190,8 @@ async def startup():
     init_core_logic(client)
     init_replenishment(client)
     init_doh(client)
+    init_planogram(client)
+    init_bi(client)
     logger.info("Multi-tenant startup complete")
 
 
