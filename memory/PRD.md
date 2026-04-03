@@ -143,7 +143,8 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | FAQ Chatbot | 35 | 31 | **89%** |
 | User Management | 35 | 27 | **77%** |
 | Tenant Management | 35 | 21 | **60%** |
-| **Total** | **563** | **501** | **89%** |
+| AI Demand Planning | 32 | 32 | **100%** |
+| **Total** | **595** | **533** | **90%** |
 
 ## Remaining Known Gaps
 - DASH-35: PDF export (P2)
@@ -160,6 +161,7 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### P1 (Done)
 - ~~Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/~~ (Done Apr 2026)
+- ~~AI Demand Planning System — ML Forecast, Stockout Prediction, Topseller, Reorder, Plan Generation~~ (Done Apr 2026)
 
 ### P2
 - DASH-35: PDF export for Executive Dashboard
