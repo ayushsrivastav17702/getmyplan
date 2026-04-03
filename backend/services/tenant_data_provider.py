@@ -83,29 +83,35 @@ class TenantDataProvider:
     # ══════════════════════════════════════════════════════════
 
     async def get_categories(self) -> List[str]:
-        """Categories from style_master upload, with onboarding fallback."""
+        """Categories from style_master upload MERGED with onboarding root categories."""
         if "categories" in self._cache:
             return self._cache["categories"]
+        csv_cats = []
         df = await self._get_df("style_master")
         if df is not None and "category" in df.columns:
-            cats = sorted(df["category"].dropna().unique().tolist())
-            if cats:
-                self._cache["categories"] = cats
-                return cats
-        # Fallback to onboarding categories
-        cats = await self._ob_categories()
-        self._cache["categories"] = cats
-        return cats
+            csv_cats = df["category"].dropna().unique().tolist()
+        ob_cats = await self._ob_categories()
+        # Case-insensitive merge: CSV names win on conflict
+        csv_lower = {c.lower(): c for c in csv_cats}
+        for oc in ob_cats:
+            if oc.lower() not in csv_lower:
+                csv_lower[oc.lower()] = oc
+        merged = sorted(csv_lower.values())
+        self._cache["categories"] = merged
+        return merged
 
     async def get_subcategories(self, category: str = None) -> List[str]:
+        csv_subs = []
         df = await self._get_df("style_master")
         if df is not None and "subcategory" in df.columns:
             filtered = df[df["category"] == category] if category else df
-            subs = sorted(filtered["subcategory"].dropna().unique().tolist())
-            if subs:
-                return subs
-        # Fallback to onboarding child categories
-        return await self._ob_subcategories(category)
+            csv_subs = filtered["subcategory"].dropna().unique().tolist()
+        ob_subs = await self._ob_subcategories(category)
+        csv_lower = {s.lower(): s for s in csv_subs}
+        for os_ in ob_subs:
+            if os_.lower() not in csv_lower:
+                csv_lower[os_.lower()] = os_
+        return sorted(csv_lower.values())
 
     async def get_brands(self) -> List[str]:
         df = await self._get_df("style_master")
@@ -137,54 +143,59 @@ class TenantDataProvider:
     # ── Stores ───────────────────────────────────────────────
 
     async def get_stores(self) -> List[Dict]:
-        """Stores from store_master upload, with onboarding fallback."""
+        """Stores from store_master upload MERGED with onboarding stores."""
         if "stores" in self._cache:
             return self._cache["stores"]
+        csv_stores = []
         df = await self._get_df("store_master")
         if df is not None and len(df) > 0:
-            stores = df.to_dict("records")
-            self._cache["stores"] = stores
-            return stores
-        # Fallback to onboarding stores
-        stores = await self._ob_stores()
-        self._cache["stores"] = stores
-        return stores
+            csv_stores = df.to_dict("records")
+        ob_stores = await self._ob_stores()
+        # Merge: use store_code as key, CSV wins on conflict
+        seen_codes = {s.get("store_code", s.get("store", "")) for s in csv_stores}
+        for s in ob_stores:
+            if s.get("store_code") not in seen_codes:
+                csv_stores.append(s)
+        self._cache["stores"] = csv_stores
+        return csv_stores
 
     async def get_store_codes(self) -> List[str]:
         stores = await self.get_stores()
         codes = [s.get("store_code", s.get("store", "")) for s in stores]
-        return [c for c in codes if c]
+        return sorted(set(c for c in codes if c))
 
     async def get_channels(self) -> List[str]:
-        """Unique channel values from store_master, with onboarding marketplace fallback."""
+        """Unique channels from store_master/sales MERGED with onboarding marketplaces."""
         if "channels" in self._cache:
             return self._cache["channels"]
+        csv_chans = []
         df = await self._get_df("store_master")
         if df is not None and "channel" in df.columns:
-            chans = sorted(df["channel"].dropna().unique().tolist())
-            if chans:
-                self._cache["channels"] = chans
-                return chans
-        # Fallback to daily_sales channel column
-        sales_df = await self._get_df("daily_sales")
-        if sales_df is not None and "channel" in sales_df.columns:
-            chans = sorted(sales_df["channel"].dropna().unique().tolist())
-            if chans:
-                self._cache["channels"] = chans
-                return chans
-        # Fallback to onboarding marketplaces as channels
-        chans = await self._ob_channels()
-        self._cache["channels"] = chans
-        return chans
+            csv_chans = df["channel"].dropna().unique().tolist()
+        if not csv_chans:
+            sales_df = await self._get_df("daily_sales")
+            if sales_df is not None and "channel" in sales_df.columns:
+                csv_chans = sales_df["channel"].dropna().unique().tolist()
+        ob_chans = await self._ob_channels()
+        csv_lower = {c.lower(): c for c in csv_chans}
+        for oc in ob_chans:
+            if oc.lower() not in csv_lower:
+                csv_lower[oc.lower()] = oc
+        merged = sorted(csv_lower.values())
+        self._cache["channels"] = merged
+        return merged
 
     async def get_regions(self) -> List[str]:
+        csv_regions = []
         df = await self._get_df("store_master")
         if df is not None and "region" in df.columns:
-            regions = sorted(df["region"].dropna().unique().tolist())
-            if regions:
-                return regions
-        # Fallback to onboarding store states as regions
-        return await self._ob_regions()
+            csv_regions = df["region"].dropna().unique().tolist()
+        ob_regions = await self._ob_regions()
+        csv_lower = {r.lower(): r for r in csv_regions}
+        for orc in ob_regions:
+            if orc.lower() not in csv_lower:
+                csv_lower[orc.lower()] = orc
+        return sorted(csv_lower.values())
 
     async def get_warehouses(self) -> List[Dict]:
         df = await self._get_df("warehouse_master")
@@ -343,14 +354,14 @@ class TenantDataProvider:
     # ══════════════════════════════════════════════════════════
 
     async def validate_data_availability(self) -> Dict:
-        """Check what data has been uploaded, with onboarding fallback awareness."""
+        """Check what data has been uploaded and what comes from onboarding."""
         style_df = await self._get_df("style_master")
         store_df = await self._get_df("store_master")
         sales_range = await self.get_historical_sales_range()
         has_styles = style_df is not None and len(style_df) > 0
         has_stores = store_df is not None and len(store_df) > 0
 
-        # Check onboarding fallback availability
+        # Check onboarding data availability
         ob_cats = await self._ob_categories()
         ob_stores = await self._ob_store_codes()
         ob_channels = await self._ob_channels()
@@ -366,7 +377,6 @@ class TenantDataProvider:
         if not sales_range["has_data"]:
             missing.append("Daily Sales data")
 
-        # Consider data ready if CSV is complete
         csv_ready = has_styles and has_stores and sales_range["has_data"]
 
         return {
@@ -376,7 +386,7 @@ class TenantDataProvider:
             "sales_months_available": sales_range["months_available"],
             "is_ready": csv_ready,
             "has_onboarding_data": has_ob_cats or has_ob_stores or has_ob_channels,
-            "onboarding_fallback": {
+            "onboarding_contributing": {
                 "categories": has_ob_cats,
                 "stores": has_ob_stores,
                 "channels": has_ob_channels,
