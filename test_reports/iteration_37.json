@@ -1,0 +1,191 @@
+{
+  "summary": "TenantDataProvider Refactoring Phase 3, 4, 5 - COMPLETE. Backend: 36/36 pytest tests PASSED (100%). Frontend: All AI Demand Planning features verified working. Dynamic options from TenantDataProvider, data_source field in all analytics endpoints, data-source-indicator banner with correct styling.",
+
+  "test_case_matrix": {
+    "PHASE_3_AI_DEMAND_OPTIONS": {
+      "endpoint_exists": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/options returns 200"},
+      "has_data_field": {"status": "PASS", "notes": "Returns has_data: true"},
+      "categories_field": {"status": "PASS", "notes": "Returns categories: ['Accessories', 'Apparel', 'Footwear']"},
+      "subcategories_field": {"status": "PASS", "notes": "Returns subcategories: ['Bags', 'Belts', 'Boots', 'Dresses', 'Jeans', 'Sneakers', 'T-Shirts']"},
+      "channels_field": {"status": "PASS", "notes": "Returns channels: ['Retail']"},
+      "regions_field": {"status": "PASS", "notes": "Returns regions: ['East', 'North', 'South', 'West']"},
+      "brands_field": {"status": "PASS", "notes": "Returns brands: ['BrandA', 'BrandB', 'BrandC']"},
+      "genders_field": {"status": "PASS", "notes": "Returns genders: ['Men', 'Unisex', 'Women']"},
+      "seasons_field": {"status": "PASS", "notes": "Returns seasons: ['AW25', 'SS25', 'SS26']"},
+      "data_status_field": {"status": "PASS", "notes": "Returns data_status with has_style_master, has_store_master, has_sales_data, is_ready"}
+    },
+    "PHASE_3_AI_DEMAND_DATA_SOURCE": {
+      "forecast_data_source": {"status": "PASS", "notes": "Returns data_source='demo' (only 2 months of sales data)"},
+      "stockout_risk_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "topseller_prediction_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "reorder_optimisation_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "supply_feasibility_data_source": {"status": "PASS", "notes": "Returns data_source field"}
+    },
+    "PHASE_4_GAP_ANALYSIS_DATA_SOURCE": {
+      "ros_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "ros_gap_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "size_gap_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "noos_data_source": {"status": "PASS", "notes": "Returns data_source field"}
+    },
+    "PHASE_5_OTHER_ANALYTICS_DATA_SOURCE": {
+      "stock_out_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "planogram_fill_rate_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "bi_dashboard_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "doh_data_source": {"status": "PASS", "notes": "Returns data_source field"},
+      "replenishment_data_source": {"status": "PASS", "notes": "Returns data_source field"}
+    },
+    "PHASE_5_FILTER_OPTIONS": {
+      "endpoint_exists": {"status": "PASS", "notes": "GET /api/analytics/filter-options returns 200"},
+      "subcategories_field": {"status": "PASS", "notes": "Returns subcategories array"},
+      "brands_field": {"status": "PASS", "notes": "Returns brands array"},
+      "genders_field": {"status": "PASS", "notes": "Returns genders array"},
+      "seasons_field": {"status": "PASS", "notes": "Returns seasons array"},
+      "has_data_field": {"status": "PASS", "notes": "Returns has_data boolean"},
+      "data_status_field": {"status": "PASS", "notes": "Returns data_status object"}
+    },
+    "EXISTING_ENDPOINTS": {
+      "upload_status": {"status": "PASS", "notes": "GET /api/upload/status returns 200"},
+      "analytics_overview": {"status": "PASS", "notes": "GET /api/analytics/overview returns 200"},
+      "executive_kpis": {"status": "PASS", "notes": "GET /api/analytics/executive-kpis returns 200"},
+      "config": {"status": "PASS", "notes": "GET /api/config returns 200"}
+    },
+    "FRONTEND_UI": {
+      "data_source_indicator": {"status": "PASS", "notes": "GREEN banner shows 'Using uploaded tenant data (2 months of sales data)'"},
+      "category_select_dynamic": {"status": "PASS", "notes": "Shows Accessories, Apparel, Footwear from uploaded data"},
+      "subcategory_select_dynamic": {"status": "PASS", "notes": "Shows Bags, Belts, Boots, Dresses, Jeans, Sneakers, T-Shirts"},
+      "tabs_present": {"status": "PASS", "notes": "All 4 tabs present: demand, supply, replenish, insights"},
+      "forecast_chart_section": {"status": "PASS", "notes": "ML Demand Forecast section visible with chart"},
+      "forecast_data_source_warning": {"status": "PASS", "notes": "AMBER warning shows 'Data Source: Demo — Insufficient uploaded data'"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 36,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "TOTAL": 36
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_tenant_data_provider_iter37.py",
+    "/app/test_reports/pytest/pytest_results_iter37.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "TenantDataProvider service correctly provides dynamic options for AI Demand Planning",
+    "New /api/analytics/ai-demand/options endpoint returns all required fields (categories, subcategories, channels, regions, brands, genders, seasons, has_data, data_status)",
+    "data_source field correctly added to all analytics endpoints (Phase 3, 4, 5)",
+    "Frontend data-source-indicator banner correctly shows GREEN for uploaded data, AMBER for demo fallbacks",
+    "Forecast section correctly shows data source warning when insufficient data (<6 months)",
+    "All existing endpoints still work after refactoring"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_tenant_data_provider_iter37.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 36/36 tests passed",
+    "frontend": "100% - All Phase 3,4,5 features verified"
+  },
+
+  "test_credentials": {
+    "admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin"}
+  },
+
+  "seed_data_creation": "No new seed data created. Demo tenant has uploaded data with categories=['Accessories','Apparel','Footwear'], subcategories=['Bags','Belts','Boots','Dresses','Jeans','Sneakers','T-Shirts'], channels=['Retail'], regions=['East','North','South','West'], brands=['BrandA','BrandB','BrandC'], genders=['Men','Unisex','Women'], seasons=['AW25','SS25','SS26'].",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "TenantDataProvider refactoring Phase 3,4,5 complete. All analytics endpoints now return data_source field ('uploaded' or 'demo'). New /api/analytics/ai-demand/options endpoint provides dynamic filter options from uploaded tenant data. Frontend AI Demand Planning page shows data-source-indicator banner (GREEN=uploaded data, AMBER=demo fallbacks). Forecast section shows warning when insufficient data (<6 months). Demo tenant has 2 months of sales data, so forecast uses demo fallback while other analytics use uploaded data.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "notes": "All APIs are real implementations using TenantDataProvider to fetch data from uploaded CSV files stored in MongoDB. Forecast endpoint returns data_source='demo' because only 2 months of sales data exists (needs 6+ for real forecasts)."
+  },
+
+  "feature_verification": {
+    "PHASE_3_AI_DEMAND_OPTIONS": {
+      "feature": "GET /api/analytics/ai-demand/options - dynamic options from TenantDataProvider",
+      "status": "COMPLETE",
+      "response_fields": [
+        "has_data: boolean - true if uploaded data exists",
+        "data_status: object - detailed upload status",
+        "categories: array - from uploaded style_master",
+        "subcategories: array - from uploaded style_master",
+        "channels: array - from uploaded store_master",
+        "regions: array - from uploaded store_master",
+        "brands: array - from uploaded style_master",
+        "genders: array - from uploaded style_master",
+        "seasons: array - from uploaded style_master"
+      ]
+    },
+    "PHASE_3_AI_DEMAND_DATA_SOURCE": {
+      "feature": "data_source field in AI Demand endpoints",
+      "status": "COMPLETE",
+      "endpoints": [
+        "/api/analytics/ai-demand/forecast - data_source='demo' (insufficient data)",
+        "/api/analytics/ai-demand/stockout-risk - data_source field",
+        "/api/analytics/ai-demand/topseller-prediction - data_source field",
+        "/api/analytics/ai-demand/reorder-optimisation - data_source field",
+        "/api/analytics/ai-demand/supply-feasibility - data_source field"
+      ]
+    },
+    "PHASE_4_GAP_ANALYSIS_DATA_SOURCE": {
+      "feature": "data_source field in Gap Analysis endpoints",
+      "status": "COMPLETE",
+      "endpoints": [
+        "/api/analytics/ros - data_source field",
+        "/api/analytics/ros-gap - data_source field",
+        "/api/analytics/size-gap - data_source field",
+        "/api/analytics/noos - data_source field"
+      ]
+    },
+    "PHASE_5_OTHER_ANALYTICS_DATA_SOURCE": {
+      "feature": "data_source field in other analytics endpoints",
+      "status": "COMPLETE",
+      "endpoints": [
+        "/api/analytics/stock-out - data_source field",
+        "/api/analytics/planogram-fill-rate - data_source field",
+        "/api/analytics/bi-dashboard - data_source field",
+        "/api/analytics/doh - data_source field",
+        "/api/analytics/replenishment - data_source field"
+      ]
+    },
+    "PHASE_5_FILTER_OPTIONS": {
+      "feature": "/api/analytics/filter-options refactored with TenantDataProvider",
+      "status": "COMPLETE",
+      "response_fields": [
+        "subcategories: array",
+        "brands: array",
+        "genders: array",
+        "seasons: array",
+        "has_data: boolean",
+        "data_status: object"
+      ]
+    },
+    "FRONTEND_DATA_SOURCE_INDICATOR": {
+      "feature": "AI Demand Planning data source indicator banner",
+      "status": "COMPLETE",
+      "behavior": [
+        "GREEN banner when has_data=true: 'Using uploaded tenant data (X months of sales data)'",
+        "AMBER warning in forecast section when insufficient data: 'Data Source: Demo — Insufficient uploaded data'"
+      ]
+    }
+  }
+}

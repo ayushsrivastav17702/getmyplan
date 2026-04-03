@@ -10,10 +10,13 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, List, Dict
 import pandas as pd
 import numpy as np
-import os, time, logging
+import os
+import time
+import logging
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from sklearn.linear_model import LinearRegression
+from services.tenant_data_provider import get_tenant_provider
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,19 @@ def init_ai_demand(mongo_client, get_cached_data_func, get_db_func, get_current_
     _get_db = get_db_func
     _get_current_user = get_current_user_func
     _require_role = require_role_func
+
+
+# ═══════════════════════════════════════════════════════════════
+# OPTIONS — Dynamic filter values from TenantDataProvider
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/analytics/ai-demand/options")
+async def ai_demand_options(request: Request):
+    """Dynamic categories, subcategories, channels, and data status for AI Demand filters."""
+    if _get_current_user:
+        await _get_current_user(request)
+    provider = await get_tenant_provider()
+    return await provider.get_analytics_options()
 
 
 # ── helpers ──────────────────────────────────────────────────
@@ -166,6 +182,7 @@ async def ml_forecast(
         'historical_data': historical[-12:],
         'insufficient_data': insufficient,
         'generated_at': now.isoformat(),
+        'data_source': 'demo' if insufficient else 'uploaded',
     }
 
 
@@ -190,7 +207,9 @@ async def stockout_risk_prediction(
     sku_df = await _get_cached_data('sku_ean_master')
     style_df = await _get_cached_data('style_master')
     if sales_df is None or inv_df is None or sku_df is None:
-        return _demo_stockout_data()
+        resp = _demo_stockout_data()
+        resp['data_source'] = 'demo'
+        return resp
     try:
         sales_df = sales_df.copy()
         inv_df = inv_df.copy()
@@ -244,10 +263,13 @@ async def stockout_risk_prediction(
                 'doh_unachievable': doh_counts.get('unachievable', 0),
             },
             'items': items,
+            'data_source': 'uploaded',
         }
     except Exception as e:
         logger.error("Stockout risk prediction error: %s", e)
-        return _demo_stockout_data()
+        resp = _demo_stockout_data()
+        resp['data_source'] = 'demo'
+        return resp
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -271,7 +293,9 @@ async def topseller_prediction(
     sku_df = await _get_cached_data('sku_ean_master')
     style_df = await _get_cached_data('style_master')
     if sales_df is None or sku_df is None:
-        return _demo_topseller_data(x_factor)
+        resp = _demo_topseller_data(x_factor)
+        resp['data_source'] = 'demo'
+        return resp
     try:
         sales_df = sales_df.copy()
         sales_df['day'] = pd.to_datetime(sales_df['day'])
@@ -284,7 +308,9 @@ async def topseller_prediction(
             valid = style_df[style_df['category'] == category]['style_code'].tolist()
             merged = merged[merged['style'].isin(valid)]
         if len(merged) == 0:
-            return _demo_topseller_data(x_factor)
+            resp = _demo_topseller_data(x_factor)
+            resp['data_source'] = 'demo'
+            return resp
         merged['month'] = merged['day'].dt.to_period('M')
         style_monthly = merged.groupby(['style', 'month']).agg(revenue=('revenue', 'sum'), quantity=('quantity', 'sum')).reset_index()
         style_counts = style_monthly.groupby('style')['month'].nunique().reset_index()
@@ -326,10 +352,12 @@ async def topseller_prediction(
                 'recommendation': 'Increase safety stock by 50%' if is_topseller else 'Monitor trend',
             })
         predictions.sort(key=lambda x: x['predicted_revenue_3m'], reverse=True)
-        return {'predictions': predictions[:limit], 'x_factor_threshold': x_factor, 'category_avg_revenue': round(cat_avg, 2)}
+        return {'predictions': predictions[:limit], 'x_factor_threshold': x_factor, 'category_avg_revenue': round(cat_avg, 2), 'data_source': 'uploaded'}
     except Exception as e:
         logger.error("Topseller prediction error: %s", e)
-        return _demo_topseller_data(x_factor)
+        resp = _demo_topseller_data(x_factor)
+        resp['data_source'] = 'demo'
+        return resp
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -353,7 +381,9 @@ async def reorder_optimisation(
     inv_df = await _get_cached_data('store_inventory')
     sku_df = await _get_cached_data('sku_ean_master')
     if sales_df is None or inv_df is None or sku_df is None:
-        return _demo_reorder_data()
+        resp = _demo_reorder_data()
+        resp['data_source'] = 'demo'
+        return resp
     try:
         sales_df = sales_df.copy()
         inv_df = inv_df.copy()
@@ -395,10 +425,13 @@ async def reorder_optimisation(
                 'doh_unachievable': doh_counts.get('unachievable', 0),
             },
             'items': items,
+            'data_source': 'uploaded',
         }
     except Exception as e:
         logger.error("Reorder optimisation error: %s", e)
-        return _demo_reorder_data()
+        resp = _demo_reorder_data()
+        resp['data_source'] = 'demo'
+        return resp
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -466,6 +499,7 @@ async def generate_demand_plan(
         'updated_by': user_email,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'updated_at': datetime.now(timezone.utc).isoformat(),
+        'data_source': 'uploaded' if len(historical) >= 6 else 'demo',
     }
     result = await db.demand_plans.insert_one(plan_doc)
     plan_doc.pop('_id', None)
@@ -584,7 +618,9 @@ async def supply_feasibility(
     inv_df = await _get_cached_data('store_inventory')
     sales_df = await _get_cached_data('daily_sales')
     if inv_df is None or sales_df is None:
-        return _demo_supply_feasibility()
+        resp = _demo_supply_feasibility()
+        resp['data_source'] = 'demo'
+        return resp
 
     try:
         inv_df = inv_df.copy()
@@ -649,10 +685,13 @@ async def supply_feasibility(
                 'lead_time_days': lead_time_days,
             },
             'monthly': months_data,
+            'data_source': 'uploaded',
         }
     except Exception as e:
         logger.error("Supply feasibility error: %s", e)
-        return _demo_supply_feasibility()
+        resp = _demo_supply_feasibility()
+        resp['data_source'] = 'demo'
+        return resp
 
 
 # ═══════════════════════════════════════════════════════════════

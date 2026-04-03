@@ -149,16 +149,19 @@ const AIDemandPlanning = () => {
   const [planDirty, setPlanDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [conflictMsg, setConflictMsg] = useState("");
+  const [dataStatus, setDataStatus] = useState(null);
 
-  /* fetch filter options */
+  /* fetch filter options from TenantDataProvider-powered endpoint */
   useEffect(() => {
-    axios.get(`${API}/analytics/filter-options`).then(r => {
-      const c = r.data?.categories || [];
+    axios.get(`${API}/analytics/ai-demand/options`).then(r => {
+      const d = r.data || {};
+      const c = d.categories || [];
       setCategories(c);
       if (c.length && !category) setCategory(c[0]);
-      const s = r.data?.subcategories || [];
+      const s = d.subcategories || [];
       setSubcategories(s);
       if (s.length && !subcategory) setSubcategory(s[0]);
+      setDataStatus(d.data_status || null);
     }).catch(() => {});
   }, []);
 
@@ -311,6 +314,29 @@ const AIDemandPlanning = () => {
         </div>
       )}
 
+      {/* Data Source Indicator */}
+      {dataStatus && (
+        <div data-testid="data-source-indicator"
+             className={`rounded-lg px-4 py-2.5 flex items-center gap-2 text-sm ${
+               dataStatus.is_ready
+                 ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                 : "bg-amber-50 border border-amber-200 text-amber-800"
+             }`}>
+          {dataStatus.is_ready
+            ? <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+            : <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />}
+          <span className="font-medium">
+            {dataStatus.is_ready ? "Using uploaded tenant data" : "Some data missing — using demo fallbacks"}
+          </span>
+          {dataStatus.missing?.length > 0 && (
+            <span className="text-xs opacity-75 ml-1">Missing: {dataStatus.missing.join(", ")}</span>
+          )}
+          {dataStatus.is_ready && dataStatus.sales_months_available > 0 && (
+            <span className="text-xs opacity-75 ml-1">({dataStatus.sales_months_available} months of sales data)</span>
+          )}
+        </div>
+      )}
+
       {/* ── Controls + Tabs ─────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-4 py-2.5 flex flex-wrap gap-2 items-center border-b border-gray-100">
@@ -392,9 +418,15 @@ const AIDemandPlanning = () => {
                   formatValue={fmt}
                 />
                 {forecast.insufficient_data && (
-                  <div className="mt-3 p-2.5 bg-amber-50 rounded-lg text-xs text-amber-800 flex items-center gap-2">
+                  <div data-testid="forecast-data-source-warning" className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
                     <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                    Insufficient uploaded data. Showing demo forecast. Upload more sales data for accurate predictions.
+                    <span><strong>Data Source: Demo</strong> — Insufficient uploaded data ({forecast.data_source === 'demo' ? 'demo fallback' : 'uploaded'}). Upload 6+ months of sales data for accurate predictions.</span>
+                  </div>
+                )}
+                {!forecast.insufficient_data && forecast.data_source === 'uploaded' && (
+                  <div data-testid="forecast-data-source-uploaded" className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
+                    <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <strong>Data Source: Uploaded Tenant Data</strong>
                   </div>
                 )}
                 <div className="mt-3 p-2.5 bg-blue-50 rounded-lg text-xs text-blue-800 flex items-center gap-2">

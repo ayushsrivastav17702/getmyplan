@@ -871,45 +871,31 @@ async def delete_preset(preset_id: str):
 
 @api_router.get("/analytics/filter-options")
 async def get_filter_options():
-    """Get available filter options from uploaded data"""
-    options = {
-        "categories": [],
-        "channels": [],
-        "regions": [],
-        "storeClasses": [],
-        "dateRange": {"min": None, "max": None}
-    }
-    
-    # Get categories from style master
-    style_df = await get_cached_data('style_master')
-    if style_df is not None and 'category' in style_df.columns:
-        options['categories'] = sorted(style_df['category'].dropna().unique().tolist())
-    
-    # Get channels and regions from store master
-    store_df = await get_cached_data('store_master')
-    if store_df is not None:
-        if 'channel' in store_df.columns:
-            options['channels'] = sorted(store_df['channel'].dropna().unique().tolist())
-        if 'region' in store_df.columns:
-            options['regions'] = sorted(store_df['region'].dropna().unique().tolist())
-    
-    # Get store classes
-    store_classes = await get_db().store_classes.find({}, {"_id": 0}).sort("priority", 1).to_list(100)
-    options['storeClasses'] = [{"code": c["code"], "name": c["name"]} for c in store_classes]
+    """Get available filter options from uploaded data — powered by TenantDataProvider."""
+    from services.tenant_data_provider import get_tenant_provider
+    provider = await get_tenant_provider()
+    analytics_opts = await provider.get_analytics_options()
+    sales_range = analytics_opts.get("sales_range", {})
 
-    # Get channels from daily sales as fallback
-    sales_df = await get_cached_data('daily_sales')
-    if sales_df is not None:
-        if 'channel' in sales_df.columns and not options['channels']:
-            options['channels'] = sorted(sales_df['channel'].dropna().unique().tolist())
-        if 'day' in sales_df.columns:
-            sales_df['day'] = pd.to_datetime(sales_df['day'])
-            options['dateRange'] = {
-                'min': sales_df['day'].min().isoformat() if not pd.isna(sales_df['day'].min()) else None,
-                'max': sales_df['day'].max().isoformat() if not pd.isna(sales_df['day'].max()) else None
-            }
-    
-    return options
+    # Store classes come from DB config, not CSV
+    store_classes = await get_db().store_classes.find({}, {"_id": 0}).sort("priority", 1).to_list(100)
+
+    return {
+        "categories": analytics_opts.get("categories", []),
+        "subcategories": analytics_opts.get("subcategories", []),
+        "channels": analytics_opts.get("channels", []),
+        "regions": analytics_opts.get("regions", []),
+        "brands": analytics_opts.get("brands", []),
+        "genders": analytics_opts.get("genders", []),
+        "seasons": analytics_opts.get("seasons", []),
+        "storeClasses": [{"code": c["code"], "name": c["name"]} for c in store_classes],
+        "dateRange": {
+            "min": sales_range.get("oldest_date"),
+            "max": sales_range.get("newest_date"),
+        },
+        "data_status": analytics_opts.get("data_status", {}),
+        "has_data": analytics_opts.get("has_data", False),
+    }
 
 
 def apply_date_filter(df: pd.DataFrame, start_date: str = None, end_date: str = None, date_col: str = 'day') -> pd.DataFrame:
@@ -1602,10 +1588,11 @@ async def get_planogram_fill_rate(
             "trend_data": trend_data,
             "detail": detail,
             "recommendations": recommendations,
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"Planogram fill rate error: {str(e)}")
-        return {"error": str(e), "data": {}}
+        return {"error": str(e), "data": {}, "data_source": "error"}
 
 
 def formatCurrencyPy(value):
@@ -1899,10 +1886,11 @@ async def get_doh_analysis(
             "trend_data": trend_data,
             "detail": detail_data,
             "recommendations": recommendations,
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"DOH analysis error: {str(e)}")
-        return {"error": str(e), "data": {}}
+        return {"error": str(e), "data": {}, "data_source": "error"}
 
 
 @api_router.get("/analytics/replenishment")
@@ -2104,10 +2092,11 @@ async def get_replenishment_plan(
             "by_store": by_store.round(2).fillna(0).to_dict('records'),
             "by_style": by_style.round(2).fillna(0).to_dict('records'),
             "detail": detail.round(2).fillna(0).to_dict('records'),
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"Replenishment plan error: {str(e)}")
-        return {"error": str(e), "data": {}}
+        return {"error": str(e), "data": {}, "data_source": "error"}
 
 
 @api_router.get("/analytics/bi-dashboard")
@@ -2196,11 +2185,12 @@ async def get_bi_dashboard(
                 "total_quantity": int(sales_df['quantity'].sum()),
                 "total_transactions": len(sales_df),
                 "unique_stores": sales_df['store_code'].nunique()
-            }
+            },
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"BI dashboard error: {str(e)}")
-        return {"error": str(e), "data": {}}
+        return {"error": str(e), "data": {}, "data_source": "error"}
 
 
 @api_router.get("/analytics/store-style-ranking")

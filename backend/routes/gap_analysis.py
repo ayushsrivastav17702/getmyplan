@@ -105,11 +105,12 @@ async def get_ros_analysis(
                 "avg_broken_ros": float(ros_by_style[ros_by_style['status'] == 'broken']['ros'].mean()),
                 "total_sales_loss": float(ros_by_style['sales_loss'].sum())
             },
-            "data": ros_by_style.fillna(0).to_dict('records')
+            "data": ros_by_style.fillna(0).to_dict('records'),
+            "data_source": "uploaded"
         }
     except Exception as e:
         logger.error(f"ROS analysis error: {str(e)}")
-        return {"error": str(e), "data": []}
+        return {"error": str(e), "data": [], "data_source": "error"}
 
 
 # ─────────── ROS Gap Analysis ───────────
@@ -306,11 +307,12 @@ async def get_ros_gap_analysis(
             "style_ros_gap": style_ros.round(3).fillna(0).to_dict('records'),
             "store_health": store_health.round(1).fillna(0).to_dict('records'),
             "noos_styles": noos_styles.round(1).fillna(0).to_dict('records'),
-            "weekly_trend": weekly_trend
+            "weekly_trend": weekly_trend,
+            "data_source": "uploaded"
         }
     except Exception as e:
         logger.error(f"ROS Gap analysis error: {str(e)}")
-        return {"error": str(e), "data": {}}
+        return {"error": str(e), "data": {}, "data_source": "error"}
 
 
 # ─────────── Size Gap Analysis ───────────
@@ -462,12 +464,13 @@ async def get_size_gap_analysis(
             "category_breakdown": category_breakdown,
             "gender_breakdown": gender_breakdown,
             "weekly_trend": weekly_trend,
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"Size gap analysis error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return {"error": str(e), "data": []}
+        return {"error": str(e), "data": [], "data_source": "error"}
 
 
 # ─────────── NOOS Analysis ───────────
@@ -601,9 +604,10 @@ async def get_noos_analysis(
                 "seasonal_excluded": int(noos_df['is_seasonal_excluded'].sum()), "total_days": total_days,
             },
             "data": noos_df.fillna(0).to_dict('records'),
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"NOOS analysis error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return {"error": str(e), "data": []}
+        return {"error": str(e), "data": [], "data_source": "error"}

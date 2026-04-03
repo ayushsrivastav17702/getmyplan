@@ -435,7 +435,8 @@ async def get_stock_out_analysis(
             "category_heatmap": category_heatmap,
             "reorder_recommendations": reorder_recs,
             "alternative_suggestions": alt_suggestions,
+            "data_source": "uploaded",
         }
     except Exception as e:
         logger.error(f"Stock-out analysis error: {str(e)}")
-        return {"error": str(e), "data": {}}
+        return {"error": str(e), "data": {}, "data_source": "error"}
