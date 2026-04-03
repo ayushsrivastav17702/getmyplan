@@ -308,6 +308,32 @@ class TenantDataProvider:
         }
 
 
+    async def get_analytics_options(self) -> Dict:
+        """Unified options for all analytics modules."""
+        categories = await self.get_categories()
+        subcategories = await self.get_subcategories()
+        channels = await self.get_channels()
+        regions = await self.get_regions()
+        brands = await self.get_brands()
+        genders = await self.get_genders()
+        seasons = await self.get_seasons()
+        data_status = await self.validate_data_availability()
+        sales_range = await self.get_historical_sales_range()
+
+        return {
+            "has_data": data_status["is_ready"],
+            "data_status": data_status,
+            "sales_range": sales_range,
+            "categories": categories,
+            "subcategories": subcategories,
+            "channels": channels,
+            "regions": regions,
+            "brands": brands,
+            "genders": genders,
+            "seasons": seasons,
+        }
+
+
 async def get_tenant_provider() -> TenantDataProvider:
     """FastAPI-compatible dependency (works within tenant middleware context)."""
     return TenantDataProvider()
