@@ -371,7 +371,7 @@ export default function OnboardingWizard({ onComplete }) {
         <button data-testid="back-step2" onClick={() => setStep(2)} className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-2 text-sm"><ArrowLeft className="h-4 w-4" /> Back</button>
         <div className="flex gap-3">
           <button data-testid="skip-step3" onClick={skipStep} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm">Skip</button>
-          <button data-testid="complete-onboarding-btn" onClick={completeOnboarding} disabled={categories.length < 3 || loading} className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 text-sm font-medium transition-colors">
+          <button data-testid="complete-onboarding-btn" onClick={completeOnboarding} disabled={flatten(categories).length < 3 || loading} className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 text-sm font-medium transition-colors">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Complete Setup
           </button>
         </div>

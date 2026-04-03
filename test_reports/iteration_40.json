@@ -1,0 +1,140 @@
+{
+  "summary": "Onboarding Wizard comprehensive testing - 19/19 backend tests PASSED, UI tests PASSED with 1 bug fixed. Fixed Complete Setup button bug (was checking root categories instead of total categories).",
+
+  "test_case_matrix": {
+    "BACKEND_API_TESTS": {
+      "OW-WF-08_demo_auto_onboarded": {"status": "PASS", "notes": "Demo tenant with uploaded_files is auto-onboarded"},
+      "OW-WF-14_reset_onboarding": {"status": "PASS", "notes": "Reset clears all ob_ collections and status"},
+      "OW-WF-02_add_marketplace": {"status": "PASS", "notes": "All fields (name, currency, tax, commission, type) saved correctly"},
+      "OW-WF-11_duplicate_marketplace": {"status": "PASS", "notes": "400 error for duplicate marketplace_id"},
+      "OW-WF-05_delete_marketplace": {"status": "PASS", "notes": "Marketplace removed from API response"},
+      "OW-WF-03_add_store": {"status": "PASS", "notes": "Store with marketplace mapping saved correctly"},
+      "OW-WF-11_duplicate_store": {"status": "PASS", "notes": "400 error for duplicate store_code"},
+      "OW-WF-10_update_store_mapping": {"status": "PASS", "notes": "PUT /stores/{code}/marketplaces works"},
+      "OW-WF-04_nested_categories": {"status": "PASS", "notes": "4-level hierarchy (Apparel→Men→Jeans→Slim Fit) created"},
+      "OW-WF-11_duplicate_category": {"status": "PASS", "notes": "400 error for duplicate category_id"},
+      "OW-WF-06_cascade_delete": {"status": "PASS", "notes": "Parent delete removes all children"},
+      "OW-WF-07_skip_step": {"status": "PASS", "notes": "Skip marks step complete in status"},
+      "OW-WF-13_minimum_data": {"status": "PASS", "notes": "1 mp, 1 store, 3 categories completes onboarding"},
+      "OW-WF-15_concurrent_users": {"status": "PASS", "notes": "Two concurrent requests both succeed"}
+    },
+    "FRONTEND_UI_TESTS": {
+      "OW-UI-01_wizard_landing": {"status": "PASS", "notes": "Header 'Welcome to Merchandising Platform', 3-step indicator, progress bar visible"},
+      "OW-UI-02_step_navigation": {"status": "PASS", "notes": "Active step has primary color, completed steps have checkmarks"},
+      "OW-UI-04_form_expand_collapse": {"status": "PASS", "notes": "Add Marketplace form expands/collapses correctly"},
+      "OW-UI-05_marketplace_cards": {"status": "PASS", "notes": "Cards show name, currency, tax, commission details"},
+      "OW-UI-05_store_cards": {"status": "PASS", "notes": "Cards show name, code, city, state, marketplace mapping"},
+      "OW-UI-09_category_tree": {"status": "PASS", "notes": "Tree displays with proper indentation per level"},
+      "OW-UI-10_delete_on_hover": {"status": "PASS", "notes": "Delete button appears on hover (group-hover:opacity-100)"},
+      "OW-UI-11_loading_spinner": {"status": "PASS", "notes": "Loader2 spinner shows during API calls"},
+      "OW-UI-14_progress_bar": {"status": "PASS", "notes": "Progress bar width increases as steps complete"},
+      "OW-WF-01_complete_flow": {"status": "PASS", "notes": "Full 3-step flow completes, redirects to /upload"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 24,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "TOTAL": 24
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OnboardingWizard.js",
+        "issue": "Complete Setup button checked categories.length (root only) instead of flatten(categories).length (total)",
+        "selector": "[data-testid='complete-onboarding-btn']",
+        "priority": "HIGH",
+        "status": "FIXED",
+        "fix_applied": "Changed disabled condition from categories.length < 3 to flatten(categories).length < 3"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding_wizard_iter40.py",
+    "/app/test_reports/pytest/pytest_results_iter40.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "BUG FIXED: Complete Setup button now correctly counts total categories including nested children",
+    "All data-testid attributes are properly implemented for testing",
+    "Form validation works correctly (disabled buttons when fields empty)",
+    "Browser confirm() dialogs used for delete/skip confirmations",
+    "Progress bar animation uses CSS transition-all duration-500"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_onboarding_wizard_iter40.py",
+    "/app/frontend/src/pages/OnboardingWizard.js"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 19/19 tests passed",
+    "frontend": "100% - All UI tests passed after bug fix"
+  },
+
+  "test_credentials": {
+    "demo_admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "notes": "Auto-onboarded (has uploaded_files)"},
+    "acme_admin": {"tenant_id": "acme_corp", "email": "admin@acme.com", "password": "AcmePass123!", "notes": "Requires X-Tenant-ID header, used for onboarding tests"}
+  },
+
+  "seed_data_creation": "Test data created and cleaned up during tests. Acme tenant reset after testing.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Onboarding Wizard fully tested. Bug fixed: Complete Setup button now uses flatten(categories).length instead of categories.length to count total categories including nested children. All 3 steps (Marketplaces, Stores, Categories) work correctly. Demo tenant is auto-onboarded. Acme tenant can be used for fresh onboarding tests after reset.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "notes": "All APIs are real implementations using MongoDB collections (ob_marketplaces, ob_stores, ob_categories, onboarding_status)."
+  },
+
+  "feature_verification": {
+    "ONBOARDING_WIZARD": {
+      "feature": "3-step onboarding wizard for Fashion Retail Gap Analysis platform",
+      "status": "COMPLETE",
+      "verified_behaviors": [
+        "Step 1: Add/delete marketplaces with name, currency, tax_rate, commission_percentage, type",
+        "Step 2: Add/delete stores with marketplace mapping, update mapping via PUT",
+        "Step 3: Build nested category hierarchy, cascade delete children",
+        "Skip step functionality with browser confirmation",
+        "Complete onboarding with minimum data (1 mp, 1 store, 3 categories)",
+        "Auto-onboard existing tenants with uploaded_files",
+        "Reset onboarding clears all data",
+        "Duplicate prevention for marketplace_id, store_code, category_id",
+        "Progress bar and step indicators update correctly"
+      ]
+    },
+    "UI_ELEMENTS_VERIFIED": {
+      "data-testid attributes": [
+        "onboarding-wizard", "step1-icon", "step2-icon", "step3-icon",
+        "add-mp-btn", "mp-form", "mp-name", "mp-currency", "mp-type", "mp-tax", "mp-comm", "mp-submit", "del-mp-{id}",
+        "add-store-btn", "store-form", "store-code", "store-name", "store-type", "store-city", "store-state", "store-pincode", "store-mp-select", "store-submit", "del-store-{code}",
+        "add-cat-btn", "cat-form", "cat-name", "cat-desc", "cat-parent", "cat-submit", "del-cat-{id}", "category-tree",
+        "skip-step1", "skip-step2", "skip-step3", "next-step2", "next-step3", "back-step1", "back-step2",
+        "complete-onboarding-btn", "progress-bar", "onboarding-error"
+      ]
+    }
+  },
+
+  "bug_fix_details": {
+    "file": "/app/frontend/src/pages/OnboardingWizard.js",
+    "line": 374,
+    "before": "disabled={categories.length < 3 || loading}",
+    "after": "disabled={flatten(categories).length < 3 || loading}",
+    "reason": "categories.length only counts root categories, not nested children. flatten(categories).length counts all categories in the tree."
+  }
+}
