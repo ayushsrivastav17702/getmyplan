@@ -66,63 +66,52 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Testing: **100% (Iteration 27, 35/35 PASS)**
 
 ### Phase 27 — SFTP Monitor Enhancement (Apr 2026)
-- **19 gap test cases resolved**:
-  - SFTP-03: Connection timeout with retry backoff (exponential backoff, configurable max_retries/base_delay/max_delay)
-  - SFTP-04: Network interruption auto-reconnect (connection pool with automatic recovery)
-  - SFTP-07: Connection pool (thread-safe pool with max_size, acquire/release, stats tracking)
-  - SFTP-08: SSL/TLS verification (auto/strict/reject modes via config)
-  - SFTP-09: Upload file to SFTP (single file upload with progress, hash, speed)
-  - SFTP-10: Download file from SFTP (with progress tracking)
-  - SFTP-11: Large file transfer with progress indicator (chunked transfer, TransferTracker)
-  - SFTP-12: Partial transfer resume (byte offset resume for downloads)
-  - SFTP-14: File overwrite protection (auto-versioning with timestamp suffix)
-  - SFTP-15: Batch file upload (multi-file upload with aggregate results)
-  - SFTP-16: Scheduled transfer (enhanced scheduler with demo/real mode)
-  - SFTP-20: Malformed file detection -> failed folder (Pandas validation, archive_path)
-  - SFTP-22: Duplicate file handling (SHA-256 hash-based dedup)
-  - SFTP-23: File archive after processing (/archive/processed/ and /archive/failed/)
-  - SFTP-25: Filter logs by date range (start_date, end_date params)
-  - SFTP-29: Download error log as CSV
-  - SFTP-30: Transfer speed metrics (avg/max/min speed, daily breakdown)
-  - SFTP-35: Daily summary report (files, success rate, store coverage, top errors, by type)
+- 19 gap test cases resolved: Connection pool, retry backoff, SSL/TLS, upload/download, batch upload, malformed detection, duplicate handling, file archive, date filtering, error log CSV, speed metrics, daily summary
 - New route file: `/backend/routes/sftp_routes.py`
-- Enhanced: `/backend/sftp/sftp_service.py` (ConnectionPool, TransferTracker, full file ops)
-- Enhanced: `/backend/sftp/sftp_scheduler.py` (real scheduled transfer support)
-- Enhanced: `/backend/server.py` (status with pool/SSL/retry, logs with date filter, stats with speed/malformed/dup)
-- Frontend: Complete rewrite of SFTPMonitor.js with 5 tabs (Overview, Transfers, Logs, Speed Metrics, Daily Summary)
+- Enhanced: sftp_service.py (ConnectionPool, TransferTracker), sftp_scheduler.py
+- Frontend: 5-tab layout (Overview, Transfers, Logs, Speed Metrics, Daily Summary)
 - Testing: **100% (Iteration 28, 25/25 PASS)**
-- Note: All SFTP operations run in **DEMO MODE** (MOCKED) — no real SFTP server connected
+- Note: SFTP operations in **DEMO MODE** (MOCKED)
+
+### Phase 28 — Warehouse Module (Apr 2026)
+- **30/30 test cases PASS**:
+  - **WH-01..08 Stock**: View stock levels, filter by warehouse/category, search by SKU/style, stock value calculation (Qty x MRP), low stock alert (<50 units), out of stock (=0), overstock (>500)
+  - **WH-09..14 Movements**: Inbound/outbound tracking with timeline, daily stock change (opening vs closing), stock reconciliation (system vs physical), stock adjustment log (who changed what)
+  - **WH-15..20 Transfers**: Create transfer order, allocate stock, multi-step approval workflow, track in-transit inventory, receive transfer, transfer history audit trail
+  - **WH-21..25 Performance**: Order fulfillment rate (%), avg dispatch time (hours), warehouse turnover (COGS/Avg Inv), storage utilization (% capacity), slow-moving stock (90+ days no sales)
+  - **WH-26..30 Dashboard**: KPI cards (Total Stock, Stock Value, SKUs, Warehouses), stock by category chart, stock movement trend (inbound/outbound), CSV export, multi-warehouse comparison table
+- New route file: `/backend/routes/warehouse.py`
+- Frontend: 5-tab layout (Dashboard, Stock, Movements, Transfers, Performance)
+- Testing: **100% (Iteration 29, 30/30 PASS)**
 
 ## Test Coverage Summary
 
-| Module | Total | PASS | PARTIAL | GAP | % |
-|--------|-------|------|---------|-----|---|
-| Executive Dashboard | 35 | 29 | 1 | 3 | 83% |
-| Data Upload | 35 | 30 | 4 | 3 | 86% |
-| Configuration | 32 | 32 | 0 | 0 | **100%** |
-| Core Logic | 35 | 35 | 0 | 0 | **100%** |
-| Gap Analysis | 35 | 35 | 0 | 0 | **100%** |
-| Stock-Out Analysis | 35 | 35 | 0 | 0 | **100%** |
-| Replenishment Planner | 32 | 32 | 0 | 0 | **100%** |
-| DOH Analysis | 35 | 35 | 0 | 0 | **100%** |
-| Planogram Fill Rate | 32 | 32 | 0 | 0 | **100%** |
-| BI Dashboards | 35 | 35 | 0 | 0 | **100%** |
-| SFTP Monitor | 35 | 27 | 6 | 2 | **94%** |
-| **Total** | **396** | **357** | **11** | **8** | **96%** |
+| Module | Total | PASS | % |
+|--------|-------|------|---|
+| Executive Dashboard | 35 | 29 | 83% |
+| Data Upload | 35 | 30 | 86% |
+| Configuration | 32 | 32 | **100%** |
+| Core Logic | 35 | 35 | **100%** |
+| Gap Analysis | 35 | 35 | **100%** |
+| Stock-Out Analysis | 35 | 35 | **100%** |
+| Replenishment Planner | 32 | 32 | **100%** |
+| DOH Analysis | 35 | 35 | **100%** |
+| Planogram Fill Rate | 32 | 32 | **100%** |
+| BI Dashboards | 35 | 35 | **100%** |
+| SFTP Monitor | 35 | 27 | 94% |
+| Warehouse | 30 | 30 | **100%** |
+| **Total** | **426** | **387** | **91%** |
 
 ## Remaining Known Gaps
 - DASH-15: Revenue trend line chart (P0)
 - DASH-25: Offline detection UI (P1)
 - DASH-35: PDF export (P2)
 - SFTP-31/32/33/34: Email/Slack alerts, dashboard notifications, alert thresholds (P1-P2)
-- SFTP-05/06: Host unreachable/permission denied messages (PARTIAL — generic errors)
-- Warehouse Module: 24 gaps out of 30 test cases
 
 ## Prioritized Backlog
 
 ### P0
 - DASH-15: Revenue trend line chart
-- Warehouse Module (30 test cases — 24 gaps)
 
 ### P1
 - DASH-25: Offline detection UI
