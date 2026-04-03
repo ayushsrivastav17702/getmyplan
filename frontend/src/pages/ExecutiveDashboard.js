@@ -5,11 +5,14 @@ import { useNavigate } from "react-router-dom";
 import {
   RefreshCw, AlertTriangle, TrendingDown, TrendingUp, ShieldCheck,
   XCircle, Clock, Layout, Package, ShoppingCart, ArrowRight,
-  ChevronRight, Activity, IndianRupee, Percent, ArrowUpRight, ArrowDownRight
+  ChevronRight, Activity, IndianRupee, Percent, ArrowUpRight, ArrowDownRight,
+  FileDown, Loader2
 } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
 import { DoughnutChart } from "../components/Charts";
 import { Line } from "react-chartjs-2";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 const ExecutiveDashboard = () => {
   const navigate = useNavigate();
@@ -29,6 +32,57 @@ const ExecutiveDashboard = () => {
   const [countdown, setCountdown] = useState(30);
   const autoRefreshRef = useRef(null);
   const countdownRef = useRef(null);
+
+  // PDF Export
+  const [exporting, setExporting] = useState(false);
+  const dashboardRef = useRef(null);
+
+  const handleExportPDF = async () => {
+    if (!dashboardRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(dashboardRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#F8F9FA",
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+
+      const pdf = new jsPDF({ orientation: imgW > imgH ? "l" : "p", unit: "px", format: [imgW + 40, imgH + 100] });
+
+      // Header
+      pdf.setFillColor(1, 118, 211);
+      pdf.rect(0, 0, imgW + 40, 50, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(18);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text("Executive Dashboard Report", 20, 33);
+
+      // Date
+      pdf.setFontSize(10);
+      pdf.setTextColor(200, 220, 255);
+      const dateStr = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      pdf.text(`Generated: ${dateStr}`, imgW + 20, 33, { align: "right" });
+
+      // Dashboard image
+      pdf.addImage(imgData, "PNG", 20, 60, imgW, imgH);
+
+      // Footer
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text("Increff Analytics - Confidential", 20, imgH + 85);
+      pdf.text(`Page 1 of 1`, imgW + 20, imgH + 85, { align: "right" });
+
+      pdf.save(`executive-dashboard-${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchFilterOptions = useCallback(async () => {
     try {
@@ -150,6 +204,16 @@ const ExecutiveDashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* PDF Export */}
+          <button
+            data-testid="export-pdf-btn"
+            onClick={handleExportPDF}
+            disabled={exporting || !data}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+            {exporting ? 'Exporting...' : 'Export PDF'}
+          </button>
           {/* Auto-refresh Toggle */}
           <button
             data-testid="auto-refresh-toggle"
@@ -196,6 +260,7 @@ const ExecutiveDashboard = () => {
       )}
 
       {data && !loading && !error && (
+        <div ref={dashboardRef}>
         <>
           {/* ── Revenue & Margin KPI Row ── */}
           {kpis && (
@@ -628,6 +693,7 @@ const ExecutiveDashboard = () => {
             </div>
           </div>
         </>
+        </div>
       )}
 
       {!loading && !error && !data && (

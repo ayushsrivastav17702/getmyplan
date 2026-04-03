@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [tenantId, setTenantId] = useState(null);
   const [tenantInfo, setTenantInfo] = useState(null);
+  const [branding, setBranding] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -30,6 +31,7 @@ export const AuthProvider = ({ children }) => {
             setToken(null);
             setTenantId(null);
             setTenantInfo(null);
+            setBranding(null);
             setPermissions([]);
             delete axios.defaults.headers.common["Authorization"];
             delete axios.defaults.headers.common["X-Tenant-ID"];
@@ -56,6 +58,7 @@ export const AuthProvider = ({ children }) => {
         setToken(data.token);
         setTenantId(data.tenantId);
         setTenantInfo(data.tenantInfo);
+        setBranding(data.branding || null);
         setPermissions(data.permissions || data.user?.permissions || []);
         axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
         axios.defaults.headers.common["X-Tenant-ID"] = data.tenantId;
@@ -76,13 +79,20 @@ export const AuthProvider = ({ children }) => {
     const { access_token, user: userData } = resp.data;
     const userPerms = userData.permissions || [];
 
-    // Fetch tenant info
+    // Fetch tenant info + branding
     let tInfo = null;
+    let brandData = null;
     try {
-      const tResp = await axios.get(`${API}/tenants/${selectedTenantId}/status`, {
-        headers: { "X-Tenant-ID": selectedTenantId, Authorization: `Bearer ${access_token}` },
-      });
+      const [tResp, bResp] = await Promise.all([
+        axios.get(`${API}/tenants/${selectedTenantId}/status`, {
+          headers: { "X-Tenant-ID": selectedTenantId, Authorization: `Bearer ${access_token}` },
+        }),
+        axios.get(`${API}/tenants/${selectedTenantId}/branding`, {
+          headers: { "X-Tenant-ID": selectedTenantId, Authorization: `Bearer ${access_token}` },
+        }).catch(() => ({ data: null })),
+      ]);
       tInfo = tResp.data;
+      brandData = bResp.data;
     } catch (e) {
       tInfo = { tenant_id: selectedTenantId, company_name: selectedTenantId };
     }
@@ -91,6 +101,7 @@ export const AuthProvider = ({ children }) => {
     setToken(access_token);
     setTenantId(selectedTenantId);
     setTenantInfo(tInfo);
+    setBranding(brandData);
     setPermissions(userPerms);
 
     axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
@@ -101,6 +112,7 @@ export const AuthProvider = ({ children }) => {
       token: access_token,
       tenantId: selectedTenantId,
       tenantInfo: tInfo,
+      branding: brandData,
       permissions: userPerms,
     }));
 
@@ -112,6 +124,7 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setTenantId(null);
     setTenantInfo(null);
+    setBranding(null);
     setPermissions([]);
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
@@ -135,7 +148,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, token, tenantId, tenantInfo, permissions,
+      user, token, tenantId, tenantInfo, branding, permissions,
       loading, isAuthenticated, sessionExpired,
       login, logout, hasPermission, hasRole, clearSessionExpired,
     }}>

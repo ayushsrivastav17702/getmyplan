@@ -251,6 +251,8 @@ async def tenant_metrics(tenant_id: str, current_user: dict = Depends(require_ro
     plan = tenant.get("plan_type", "starter")
     storage_limit = {"starter": 10, "professional": 50, "enterprise": 100}.get(plan, 10)
 
+    branding = tenant.get("branding", {})
+
     return {
         "tenant_id": tenant_id,
         "company_name": tenant["company_name"],
@@ -263,6 +265,11 @@ async def tenant_metrics(tenant_id: str, current_user: dict = Depends(require_ro
         "storage_used": round(uploaded * 0.3, 1),
         "storage_limit": storage_limit,
         "created_at": tenant.get("created_at"),
+        "branding": {
+            "primary_color": branding.get("primary_color", "#0176D3"),
+            "secondary_color": branding.get("secondary_color", "#0161B0"),
+            "logo_url": branding.get("logo_url", ""),
+        },
     }
 
 
@@ -337,6 +344,55 @@ async def update_tenant_settings(tenant_id: str, body: dict, current_user: dict 
         raise HTTPException(404, "Tenant not found")
     clear_tenant_cache(tenant_id)
     return {"message": "Settings updated"}
+
+
+# ──────────── TENANT-20: Branding (Logo, Colors) ────────────
+
+@tenant_router.put("/{tenant_id}/branding")
+async def update_tenant_branding(tenant_id: str, body: dict, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Update tenant branding: primary_color, secondary_color, logo_url."""
+    shared = get_shared_db()
+    branding = {}
+    if "primary_color" in body:
+        pc = body["primary_color"]
+        if not (isinstance(pc, str) and len(pc) == 7 and pc.startswith("#")):
+            raise HTTPException(400, "primary_color must be a valid hex color (e.g. #0176D3)")
+        branding["primary_color"] = pc
+    if "secondary_color" in body:
+        sc = body["secondary_color"]
+        if not (isinstance(sc, str) and len(sc) == 7 and sc.startswith("#")):
+            raise HTTPException(400, "secondary_color must be a valid hex color (e.g. #0161B0)")
+        branding["secondary_color"] = sc
+    if "logo_url" in body:
+        branding["logo_url"] = body["logo_url"][:500]  # cap length
+
+    if not branding:
+        raise HTTPException(400, "No branding fields provided")
+
+    result = await shared.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {f"branding.{k}": v for k, v in branding.items()} | {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Tenant not found")
+    clear_tenant_cache(tenant_id)
+    return {"message": "Branding updated", "branding": branding}
+
+
+@tenant_router.get("/{tenant_id}/branding")
+async def get_tenant_branding(tenant_id: str):
+    """Get tenant branding info (public for rendering)."""
+    shared = get_shared_db()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "branding": 1, "company_name": 1})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    branding = tenant.get("branding", {})
+    return {
+        "company_name": tenant.get("company_name", ""),
+        "primary_color": branding.get("primary_color", "#0176D3"),
+        "secondary_color": branding.get("secondary_color", "#0161B0"),
+        "logo_url": branding.get("logo_url", ""),
+    }
 
 
 # ──────────── TENANT-06/27/28: Plan Management ────────────

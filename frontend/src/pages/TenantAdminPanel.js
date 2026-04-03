@@ -6,7 +6,7 @@ import {
   Users, Key, BarChart3, Settings as SettingsIcon, Activity,
   Shield, Copy, Check, Eye, EyeOff, RefreshCw, Loader2,
   Database, FileText, Clock, Plus, Trash2, Save, Download,
-  ArrowUp, ArrowDown, DollarSign, Filter, Search
+  ArrowUp, ArrowDown, DollarSign, Filter, Search, Palette
 } from "lucide-react";
 
 const PLAN_LIMITS = {
@@ -33,6 +33,12 @@ const TenantAdminPanel = () => {
   const [currency, setCurrency] = useState("INR");
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Branding
+  const [primaryColor, setPrimaryColor] = useState("#0176D3");
+  const [secondaryColor, setSecondaryColor] = useState("#0161B0");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [savingBranding, setSavingBranding] = useState(false);
+
   // Plan change
   const [planChanging, setPlanChanging] = useState(false);
 
@@ -58,6 +64,11 @@ const TenantAdminPanel = () => {
       setApiKeys(keysR.data.keys || []);
       setAuditLogs(logsR.data.logs || []);
       setCompanyName(metricsR.data.company_name || "");
+      // Load branding
+      const b = metricsR.data.branding || {};
+      setPrimaryColor(b.primary_color || "#0176D3");
+      setSecondaryColor(b.secondary_color || "#0161B0");
+      setLogoUrl(b.logo_url || "");
     } catch (err) {
       setError("Failed to load tenant data");
     } finally {
@@ -105,6 +116,23 @@ const TenantAdminPanel = () => {
       setError(err.response?.data?.detail || "Failed to save settings");
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSaveBranding = async () => {
+    setSavingBranding(true);
+    try {
+      await axios.put(`${API}/tenants/${tenantId}/branding`, {
+        primary_color: primaryColor,
+        secondary_color: secondaryColor,
+        logo_url: logoUrl,
+      });
+      setSuccess("Branding updated! Refresh the page to see changes across the app.");
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to update branding");
+    } finally {
+      setSavingBranding(false);
     }
   };
 
@@ -167,6 +195,7 @@ const TenantAdminPanel = () => {
     { key: "api-keys", label: "API Keys", icon: Key },
     { key: "tenants", label: "All Tenants", icon: Database },
     { key: "audit", label: "Audit Logs", icon: Activity },
+    { key: "branding", label: "Branding", icon: Palette },
     { key: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
@@ -492,6 +521,119 @@ const TenantAdminPanel = () => {
                   Click "Filter" to load tenants list
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ========= BRANDING ========= */}
+          {activeTab === "branding" && (
+            <div className="space-y-6" data-testid="branding-settings">
+              <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+                <div>
+                  <h3 className="font-semibold text-slate-800 mb-1">Brand Identity</h3>
+                  <p className="text-xs text-slate-500">Customize your tenant's visual appearance across the app</p>
+                </div>
+
+                {/* Color Pickers */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Primary Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        data-testid="branding-primary-color"
+                        type="color"
+                        value={primaryColor}
+                        onChange={e => setPrimaryColor(e.target.value)}
+                        className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer p-0.5"
+                      />
+                      <input
+                        data-testid="branding-primary-hex"
+                        type="text"
+                        value={primaryColor}
+                        onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setPrimaryColor(e.target.value); }}
+                        className="w-28 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                        maxLength={7}
+                      />
+                      <div className="flex-1 h-10 rounded-lg" style={{ backgroundColor: primaryColor }} />
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Used for sidebar header, active nav items, and primary buttons</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Secondary Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        data-testid="branding-secondary-color"
+                        type="color"
+                        value={secondaryColor}
+                        onChange={e => setSecondaryColor(e.target.value)}
+                        className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer p-0.5"
+                      />
+                      <input
+                        data-testid="branding-secondary-hex"
+                        type="text"
+                        value={secondaryColor}
+                        onChange={e => { if (/^#[0-9a-fA-F]{0,6}$/.test(e.target.value)) setSecondaryColor(e.target.value); }}
+                        className="w-28 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                        maxLength={7}
+                      />
+                      <div className="flex-1 h-10 rounded-lg" style={{ backgroundColor: secondaryColor }} />
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">Used for hover states and secondary elements</p>
+                  </div>
+                </div>
+
+                {/* Logo URL */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Logo URL</label>
+                  <input
+                    data-testid="branding-logo-url"
+                    type="text"
+                    value={logoUrl}
+                    onChange={e => setLogoUrl(e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                    className="w-full max-w-lg border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Enter a URL to your company logo (displayed in the sidebar header, max height 32px)</p>
+                </div>
+
+                {/* Preview */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Preview</label>
+                  <div className="w-64 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                    <div className="h-14 flex items-center px-4 gap-3" style={{ backgroundColor: primaryColor }}>
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" onError={e => { e.target.style.display = 'none'; }} data-testid="branding-preview-logo" />
+                      ) : (
+                        <span className="text-white text-sm font-semibold">{companyName || "Your Company"}</span>
+                      )}
+                    </div>
+                    <div className="p-3 bg-white space-y-1.5">
+                      <div className="flex items-center gap-2 px-3 py-2 rounded text-white text-xs font-medium" style={{ backgroundColor: primaryColor }}>
+                        <BarChart3 size={14} /> Dashboard
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-2 rounded text-slate-500 text-xs hover:bg-slate-50">
+                        <Users size={14} /> Users
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-2 rounded text-slate-500 text-xs hover:bg-slate-50">
+                        <SettingsIcon size={14} /> Settings
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save */}
+                <div className="pt-3 border-t border-slate-100">
+                  <button
+                    data-testid="save-branding-btn"
+                    onClick={handleSaveBranding}
+                    disabled={savingBranding}
+                    className="flex items-center gap-2 text-white px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    {savingBranding ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    {savingBranding ? "Saving..." : "Save Branding"}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
