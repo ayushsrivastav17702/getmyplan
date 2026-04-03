@@ -22,8 +22,9 @@ ChartJS.register(
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const CATEGORIES_LIST = ["Jeans", "Shirts", "Jackets", "Belts", "Socks", "Shoes"];
-const CHANNELS_LIST = ["STORE_A", "STORE_B", "AMAZON", "FLIPKART", "MYNTRA"];
+// Fallback defaults (used only when no uploaded data)
+const FALLBACK_CATEGORIES = ["Jeans", "Shirts", "Jackets", "Belts", "Socks", "Shoes"];
+const FALLBACK_CHANNELS = [];
 
 // ─── Wizard Step 1: Revenue Target ───
 const StepRevenue = ({ params, updateParam, onNext }) => (
@@ -78,7 +79,7 @@ const StepRevenue = ({ params, updateParam, onNext }) => (
 );
 
 // ─── Wizard Step 2: Categories ───
-const StepCategories = ({ params, toggleCategory, onNext, onBack }) => (
+const StepCategories = ({ params, toggleCategory, onNext, onBack, categoriesList }) => (
   <div className="space-y-6 max-w-2xl mx-auto animate-in fade-in duration-300" data-testid="wizard-step-categories">
     <div className="text-center space-y-1">
       <Package className="w-10 h-10 text-indigo-600 mx-auto" />
@@ -86,23 +87,15 @@ const StepCategories = ({ params, toggleCategory, onNext, onBack }) => (
       <p className="text-sm text-slate-500">Choose which categories to include in the buy plan</p>
     </div>
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-      {CATEGORIES_LIST.map(cat => {
+      {categoriesList.map(cat => {
         const selected = params.categories.includes(cat);
         return (
-          <button key={cat} data-testid={`cat-${cat.toLowerCase()}`}
+          <button key={cat} data-testid={`cat-${cat.toLowerCase().replace(/\s+/g, '-')}`}
             onClick={() => toggleCategory(cat)}
             className={`relative p-4 border-2 rounded-xl text-left transition-all duration-200
               ${selected ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-indigo-300 hover:shadow-sm"}`}>
             {selected && <CheckCircle size={18} className="absolute top-2 right-2 text-emerald-500" />}
             <span className="block text-sm font-semibold text-slate-800">{cat}</span>
-            <span className="text-xs text-slate-400">
-              {cat === "Jeans" && "Denim, Trousers"}
-              {cat === "Shirts" && "Formal, Casual"}
-              {cat === "Jackets" && "Denim, Leather"}
-              {cat === "Belts" && "Leather, Canvas"}
-              {cat === "Socks" && "Ankle, Sports"}
-              {cat === "Shoes" && "Sneakers, Formal"}
-            </span>
           </button>
         );
       })}
@@ -118,7 +111,11 @@ const StepCategories = ({ params, toggleCategory, onNext, onBack }) => (
 );
 
 // ─── Wizard Step 3: Channels ───
-const StepChannels = ({ params, toggleChannel, onNext, onBack }) => (
+const StepChannels = ({ params, toggleChannel, onNext, onBack, channelsList }) => {
+  const storeChannels = channelsList.filter(c => c.toUpperCase().includes("STORE") || c.toUpperCase().includes("EBO") || c.toUpperCase().includes("MBO") || c.toUpperCase().includes("LFS"));
+  const marketChannels = channelsList.filter(c => !storeChannels.includes(c));
+
+  return (
   <div className="space-y-6 max-w-2xl mx-auto animate-in fade-in duration-300" data-testid="wizard-step-channels">
     <div className="text-center space-y-1">
       <Store className="w-10 h-10 text-indigo-600 mx-auto" />
@@ -126,36 +123,50 @@ const StepChannels = ({ params, toggleChannel, onNext, onBack }) => (
       <p className="text-sm text-slate-500">Choose stores and marketplaces for distribution</p>
     </div>
     <div>
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Physical Stores</h3>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        {CHANNELS_LIST.filter(c => c.startsWith("STORE")).map(ch => {
-          const sel = params.channels.includes(ch);
-          return (
-            <button key={ch} data-testid={`ch-${ch.toLowerCase()}`} onClick={() => toggleChannel(ch)}
-              className={`flex flex-col items-center gap-1.5 p-4 border-2 rounded-xl transition-all
-              ${sel ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-indigo-300"}`}>
-              {sel && <CheckCircle size={16} className="text-emerald-500" />}
-              <Store size={20} className="text-slate-500" />
-              <span className="text-sm font-medium">{ch.replace("_", " ")}</span>
-            </button>
-          );
-        })}
-      </div>
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Marketplaces</h3>
-      <div className="grid grid-cols-3 gap-3">
-        {CHANNELS_LIST.filter(c => !c.startsWith("STORE")).map(ch => {
-          const sel = params.channels.includes(ch);
-          return (
-            <button key={ch} data-testid={`ch-${ch.toLowerCase()}`} onClick={() => toggleChannel(ch)}
-              className={`flex flex-col items-center gap-1.5 p-4 border-2 rounded-xl transition-all
-              ${sel ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-indigo-300"}`}>
-              {sel && <CheckCircle size={16} className="text-emerald-500" />}
-              <Globe size={20} className="text-slate-500" />
-              <span className="text-sm font-medium">{ch}</span>
-            </button>
-          );
-        })}
-      </div>
+      {storeChannels.length > 0 && (
+        <>
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Physical Stores</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+            {storeChannels.map(ch => {
+              const sel = params.channels.includes(ch);
+              return (
+                <button key={ch} data-testid={`ch-${ch.toLowerCase().replace(/\s+/g, '-')}`} onClick={() => toggleChannel(ch)}
+                  className={`flex flex-col items-center gap-1.5 p-4 border-2 rounded-xl transition-all
+                  ${sel ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-indigo-300"}`}>
+                  {sel && <CheckCircle size={16} className="text-emerald-500" />}
+                  <Store size={20} className="text-slate-500" />
+                  <span className="text-sm font-medium">{ch}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {marketChannels.length > 0 && (
+        <>
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Marketplaces</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {marketChannels.map(ch => {
+              const sel = params.channels.includes(ch);
+              return (
+                <button key={ch} data-testid={`ch-${ch.toLowerCase().replace(/\s+/g, '-')}`} onClick={() => toggleChannel(ch)}
+                  className={`flex flex-col items-center gap-1.5 p-4 border-2 rounded-xl transition-all
+                  ${sel ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-indigo-300"}`}>
+                  {sel && <CheckCircle size={16} className="text-emerald-500" />}
+                  <Globe size={20} className="text-slate-500" />
+                  <span className="text-sm font-medium">{ch}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {channelsList.length === 0 && (
+        <div className="text-center py-8 text-slate-400 text-sm">
+          <AlertCircle size={24} className="mx-auto mb-2 opacity-50" />
+          No channels found. Upload store master data to see available channels.
+        </div>
+      )}
     </div>
     <div className="flex justify-between gap-3">
       <button onClick={onBack} className="px-5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
@@ -165,7 +176,8 @@ const StepChannels = ({ params, toggleChannel, onNext, onBack }) => (
       </button>
     </div>
   </div>
-);
+  );
+};
 
 // ─── Wizard Step 4: Parameters + Generate ───
 const StepParams = ({ params, updateParam, onBack, onGenerate, loading }) => (
@@ -464,11 +476,16 @@ const BuyPlanDashboard = () => {
   const [history, setHistory] = useState([]);
   const [wizardStep, setWizardStep] = useState(1);
   const [error, setError] = useState(null);
+
+  // Dynamic options from backend
+  const [options, setOptions] = useState(null);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+
   const [params, setParams] = useState({
     revenue_target_cr: 1.1,
     revenue_increase_percent: 20,
-    categories: [...CATEGORIES_LIST],
-    channels: [...CHANNELS_LIST],
+    categories: [],
+    channels: [],
     months: 12,
     safety_stock_percent: 15,
     lead_time_days: 30,
@@ -482,6 +499,30 @@ const BuyPlanDashboard = () => {
   const toggleChannel = ch => setParams(p => ({
     ...p, channels: p.channels.includes(ch) ? p.channels.filter(c => c !== ch) : [...p.channels, ch]
   }));
+
+  // Fetch dynamic options on mount
+  useEffect(() => {
+    const fetchOptions = async () => {
+      setOptionsLoading(true);
+      try {
+        const { data } = await axios.get(`${API}/buy-plan/options`);
+        setOptions(data);
+        // Initialize params with dynamic data
+        setParams(p => ({
+          ...p,
+          categories: data.categories || FALLBACK_CATEGORIES,
+          channels: data.channels || FALLBACK_CHANNELS,
+        }));
+      } catch (e) {
+        console.error("Failed to fetch options:", e);
+        // Use fallbacks
+        setParams(p => ({ ...p, categories: [...FALLBACK_CATEGORIES], channels: [...FALLBACK_CHANNELS] }));
+      } finally {
+        setOptionsLoading(false);
+      }
+    };
+    fetchOptions();
+  }, []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -594,6 +635,15 @@ const BuyPlanDashboard = () => {
       {/* Content */}
       {activeTab === "wizard" && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          {/* Data source indicator */}
+          {options && (
+            <div className={`px-6 py-2 text-xs font-medium flex items-center gap-1.5 ${options.has_data ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`} data-testid="data-source-indicator">
+              {options.has_data ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+              {options.has_data
+                ? `Using uploaded data: ${options.categories.length} categories, ${options.channels.length} channels`
+                : "No uploaded data yet — using default categories. Upload data for dynamic planning."}
+            </div>
+          )}
           {/* Progress steps */}
           <div className="flex px-6 py-4 bg-slate-50 border-b border-slate-200">
             {[
@@ -616,16 +666,29 @@ const BuyPlanDashboard = () => {
             ))}
           </div>
           <div className="p-6">
-            {wizardStep === 1 && <StepRevenue params={params} updateParam={updateParam} onNext={() => setWizardStep(2)} />}
-            {wizardStep === 2 && <StepCategories params={params} toggleCategory={toggleCategory} onNext={() => setWizardStep(3)} onBack={() => setWizardStep(1)} />}
-            {wizardStep === 3 && <StepChannels params={params} toggleChannel={toggleChannel} onNext={() => setWizardStep(4)} onBack={() => setWizardStep(2)} />}
-            {wizardStep === 4 && <StepParams params={params} updateParam={updateParam} onBack={() => setWizardStep(3)} onGenerate={handleGenerate} loading={loading} />}
+            {optionsLoading ? (
+              <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
+                <RefreshCw size={18} className="animate-spin" /> Loading options...
+              </div>
+            ) : (
+              <>
+                {wizardStep === 1 && <StepRevenue params={params} updateParam={updateParam} onNext={() => setWizardStep(2)} />}
+                {wizardStep === 2 && <StepCategories params={params} toggleCategory={toggleCategory} onNext={() => setWizardStep(3)} onBack={() => setWizardStep(1)} categoriesList={options?.categories || FALLBACK_CATEGORIES} />}
+                {wizardStep === 3 && <StepChannels params={params} toggleChannel={toggleChannel} onNext={() => setWizardStep(4)} onBack={() => setWizardStep(2)} channelsList={options?.channels || FALLBACK_CHANNELS} />}
+                {wizardStep === 4 && <StepParams params={params} updateParam={updateParam} onBack={() => setWizardStep(3)} onGenerate={handleGenerate} loading={loading} />}
+              </>
+            )}
           </div>
         </div>
       )}
 
       {activeTab === "results" && planData && (
         <div className="space-y-5">
+          {/* Data source badge */}
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${planData.metadata?.data_source === "uploaded" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`} data-testid="results-data-source">
+            {planData.metadata?.data_source === "uploaded" ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+            Data source: {planData.metadata?.data_source === "uploaded" ? "Uploaded tenant data" : "Default fallback values"}
+          </div>
           {/* Summary KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4" data-testid="buy-plan-kpis">
             <div className="bg-white border border-slate-200 rounded-xl p-4">

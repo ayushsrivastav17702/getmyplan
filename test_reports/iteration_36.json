@@ -1,0 +1,150 @@
+{
+  "summary": "Buy Plan Generator Refactoring (Iteration 36) - TenantDataProvider Integration COMPLETE. Backend: 24/24 pytest tests PASSED (100%). Frontend: All features verified working. Dynamic categories/channels from uploaded CSV data, data-source-indicator banner, data_source field in API responses.",
+
+  "test_case_matrix": {
+    "BUY_PLAN_OPTIONS_ENDPOINT": {
+      "endpoint_exists": {"status": "PASS", "notes": "GET /api/buy-plan/options returns 200"},
+      "has_data_field": {"status": "PASS", "notes": "Returns has_data: true (uploaded data exists)"},
+      "categories_field": {"status": "PASS", "notes": "Returns categories: ['Accessories', 'Apparel', 'Footwear']"},
+      "channels_field": {"status": "PASS", "notes": "Returns channels: ['Retail']"},
+      "asp_by_category": {"status": "PASS", "notes": "Returns ASP values from uploaded sales data"},
+      "data_status": {"status": "PASS", "notes": "Returns data_status with has_style_master, has_store_master, has_sales_data, is_ready"},
+      "seasonality": {"status": "PASS", "notes": "Returns seasonality factors from uploaded data"},
+      "channel_splits": {"status": "PASS", "notes": "Returns channel revenue splits"}
+    },
+    "BUY_PLAN_GENERATE_DYNAMIC": {
+      "data_source_field": {"status": "PASS", "notes": "metadata.data_source = 'uploaded' when tenant has data"},
+      "auto_select_categories": {"status": "PASS", "notes": "Auto-selects categories from uploaded data when not specified"},
+      "specific_categories": {"status": "PASS", "notes": "Uses specified categories when provided"},
+      "dynamic_channels": {"status": "PASS", "notes": "Uses channels from uploaded data"}
+    },
+    "BUY_PLAN_SUMMARY_ENDPOINT": {
+      "has_uploaded_data_flag": {"status": "PASS", "notes": "Returns has_uploaded_data: true"},
+      "dynamic_categories": {"status": "PASS", "notes": "Returns categories from uploaded data"},
+      "dynamic_channels": {"status": "PASS", "notes": "Returns channels from uploaded data"},
+      "data_status": {"status": "PASS", "notes": "Returns data_status object"}
+    },
+    "EXISTING_ENDPOINTS": {
+      "export_excel": {"status": "PASS", "notes": "POST /api/buy-plan/export-excel returns valid .xlsx file"},
+      "history": {"status": "PASS", "notes": "GET /api/buy-plan/history returns saved plans"},
+      "generate_full_params": {"status": "PASS", "notes": "Generate works with all parameters"}
+    },
+    "DYNAMIC_DATA_VERIFICATION": {
+      "categories_from_uploaded": {"status": "PASS", "notes": "Categories are Accessories, Apparel, Footwear (from uploaded CSV)"},
+      "channels_from_uploaded": {"status": "PASS", "notes": "Channel is Retail (from uploaded CSV)"},
+      "old_hardcoded_not_present": {"status": "PASS", "notes": "Old hardcoded Jeans, Shirts, STORE_A, AMAZON NOT present"}
+    },
+    "OTHER_MODULES": {
+      "executive_dashboard": {"status": "PASS", "notes": "Executive dashboard still works"},
+      "filter_options": {"status": "PASS", "notes": "Filter options endpoint still works"},
+      "upload_status": {"status": "PASS", "notes": "Upload status endpoint still works"}
+    },
+    "FRONTEND_UI": {
+      "data_source_indicator": {"status": "PASS", "notes": "GREEN banner shows 'Using uploaded data: 3 categories, 1 channels'"},
+      "step2_dynamic_categories": {"status": "PASS", "notes": "Shows Accessories, Apparel, Footwear (NOT Jeans, Shirts, etc.)"},
+      "step3_dynamic_channels": {"status": "PASS", "notes": "Shows Retail (NOT STORE_A, AMAZON, etc.)"},
+      "results_data_source_badge": {"status": "PASS", "notes": "Shows 'Data source: Uploaded tenant data' in GREEN"},
+      "wizard_navigation": {"status": "PASS", "notes": "Step 1 → 2 → 3 → 4 → Generate works"},
+      "results_tab": {"status": "PASS", "notes": "KPIs, charts, table all visible"},
+      "workbook_tab": {"status": "PASS", "notes": "Download Excel and Upload buttons present"},
+      "history_tab": {"status": "PASS", "notes": "Shows list of saved plans"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 30,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "TOTAL": 30
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_buy_plan_refactoring_iter36.py",
+    "/app/test_reports/pytest/pytest_results_iter36.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "TenantDataProvider service layer correctly abstracts tenant-specific data access",
+    "New /api/buy-plan/options endpoint provides dynamic categories, channels, ASP from uploaded CSV data",
+    "data_source field in generate response correctly shows 'uploaded' vs 'defaults'",
+    "Frontend data-source-indicator banner correctly shows GREEN for uploaded data, AMBER for defaults",
+    "Old hardcoded categories (Jeans, Shirts, etc.) and channels (STORE_A, AMAZON, etc.) correctly NOT shown when uploaded data exists",
+    "Buy quantity can be 0 when current inventory exceeds required units - this is correct behavior",
+    "All existing endpoints (export-excel, history, upload-edited-plan) still work after refactoring"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_buy_plan_refactoring_iter36.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 24/24 tests passed",
+    "frontend": "100% - All Buy Plan Generator refactoring features verified"
+  },
+
+  "test_credentials": {
+    "admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin"}
+  },
+
+  "seed_data_creation": "No new seed data created. Demo tenant has uploaded data with categories=['Accessories','Apparel','Footwear'] and channels=['Retail'].",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Buy Plan Generator refactoring (Phase 1+2) complete. TenantDataProvider service layer provides dynamic categories, channels, ASP from uploaded CSV data. New /api/buy-plan/options endpoint returns has_data flag and dynamic options. Frontend shows data-source-indicator banner (GREEN=uploaded, AMBER=defaults). Old hardcoded categories (Jeans, Shirts, Jackets, Belts, Socks, Shoes) and channels (STORE_A, STORE_B, AMAZON, FLIPKART, MYNTRA) are NOT shown when uploaded data exists. Demo tenant has uploaded data with categories=['Accessories','Apparel','Footwear'] and channels=['Retail'].",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "notes": "All APIs are real implementations using TenantDataProvider to fetch data from uploaded CSV files stored in MongoDB."
+  },
+
+  "feature_verification": {
+    "TENANT_DATA_PROVIDER": {
+      "feature": "TenantDataProvider service layer for dynamic data",
+      "status": "COMPLETE",
+      "components": [
+        "get_categories() - returns categories from style_master upload",
+        "get_channels() - returns channels from store_master upload",
+        "get_asp_by_category() - returns ASP from sales data",
+        "get_seasonality_factors() - returns monthly seasonality from sales",
+        "get_channel_splits() - returns revenue share per channel",
+        "validate_data_availability() - checks what data has been uploaded"
+      ]
+    },
+    "BUY_PLAN_OPTIONS_ENDPOINT": {
+      "feature": "GET /api/buy-plan/options - dynamic options for wizard",
+      "status": "COMPLETE",
+      "response_fields": [
+        "has_data: boolean - true if uploaded data exists",
+        "data_status: object - detailed upload status",
+        "categories: array - from uploaded data or fallback",
+        "channels: array - from uploaded data or fallback",
+        "asp_by_category: object - ASP values",
+        "seasonality: object - monthly factors",
+        "channel_splits: object - revenue shares"
+      ]
+    },
+    "DATA_SOURCE_INDICATOR": {
+      "feature": "Frontend data source indicator banner",
+      "status": "COMPLETE",
+      "behavior": [
+        "GREEN banner when has_data=true: 'Using uploaded data: X categories, Y channels'",
+        "AMBER banner when has_data=false: 'No uploaded data yet — using default categories'"
+      ]
+    }
+  }
+}

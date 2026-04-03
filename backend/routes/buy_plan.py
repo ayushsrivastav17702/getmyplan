@@ -1,6 +1,8 @@
 """
 Buy Plan Engine — Backend Route Module
-Endpoints: generate, export-excel, upload-edited-plan, history
+Endpoints: generate, export-excel, upload-edited-plan, history, options
+Uses TenantDataProvider for dynamic categories, channels, ASP, and seasonality.
+Falls back to defaults only when no uploaded data exists.
 """
 from fastapi import APIRouter, HTTPException, Query, Body, File, UploadFile, Depends, Request
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -8,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, Dict, List
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
+from services.tenant_data_provider import get_tenant_provider, TenantDataProvider
 import pandas as pd
 import numpy as np
 import io
@@ -30,29 +33,21 @@ def init_buy_plan(mongo_client, get_db_func, get_current_user_func=None, require
     _get_current_user = get_current_user_func
     _require_role = require_role_func
 
-# ── Constants ────────────────────────────────────────────────
+# ── Fallback Constants (used ONLY when no data uploaded) ─────
 
 MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-DEFAULT_ASP = {
+FALLBACK_ASP = {
     "Jeans": 1499, "Shirts": 1199, "Jackets": 2499,
     "Belts": 799, "Socks": 299, "Shoes": 2999
 }
 
-DEFAULT_CHANNEL_SPLITS = {
-    "STORE_A": 0.35, "STORE_B": 0.15,
-    "AMAZON": 0.30, "FLIPKART": 0.12, "MYNTRA": 0.08
-}
-
-DEFAULT_SEASONAL_INDEX = {
+FALLBACK_SEASONAL_INDEX = {
     1: 0.85, 2: 0.80, 3: 0.90, 4: 0.95,
     5: 1.00, 6: 1.05, 7: 1.10, 8: 1.15,
     9: 1.40, 10: 1.20, 11: 1.10, 12: 1.50
 }
-
-ALL_CATEGORIES = ["Jeans", "Shirts", "Jackets", "Belts", "Socks", "Shoes"]
-ALL_CHANNELS = ["STORE_A", "STORE_B", "AMAZON", "FLIPKART", "MYNTRA"]
 
 
 # ── Rate Limiter ─────────────────────────────────────────────
@@ -70,102 +65,13 @@ def _check_rate_limit(request: Request):
     _rate_buckets[ip].append(now)
 
 
-# ── Service helpers ──────────────────────────────────────────
-
-async def _get_historical_analysis(tenant_db, category: str):
-    """Analyse historical sales data for a category."""
-    pipeline = [
-        {"$match": {"category": category}},
-        {"$group": {
-            "_id": {"channel": "$channel", "month": {"$month": {"$toDate": "$day"}}},
-            "revenue": {"$sum": "$revenue"},
-            "quantity": {"$sum": "$quantity"},
-        }},
-    ]
-    try:
-        results = await tenant_db.daily_sales.aggregate(pipeline).to_list(None)
-    except Exception:
-        results = []
-
-    channel_data = defaultdict(lambda: {
-        'monthly_sales': [0] * 12,
-        'monthly_revenue': [0] * 12,
-        'total_quantity': 0,
-        'total_revenue': 0,
-    })
-    for r in results:
-        ch = r["_id"].get("channel", "UNKNOWN")
-        m_idx = (r["_id"].get("month", 1) or 1) - 1
-        if 0 <= m_idx < 12:
-            channel_data[ch]['monthly_sales'][m_idx] += r.get('quantity', 0)
-            channel_data[ch]['monthly_revenue'][m_idx] += r.get('revenue', 0)
-            channel_data[ch]['total_quantity'] += r.get('quantity', 0)
-            channel_data[ch]['total_revenue'] += r.get('revenue', 0)
-
-    for ch, data in channel_data.items():
-        total = data['total_quantity']
-        avg = total / 12 if total > 0 else 1
-        data['seasonal_index'] = {
-            i + 1: round(data['monthly_sales'][i] / avg, 2) if avg > 0 else 1.0
-            for i in range(12)
-        }
-    return dict(channel_data)
-
-
-async def _get_category_asp(tenant_db, category: str) -> float:
-    """Get ASP from sales data or fallback to defaults."""
-    pipeline = [
-        {"$match": {"category": category}},
-        {"$group": {"_id": None, "total_rev": {"$sum": "$revenue"}, "total_qty": {"$sum": "$quantity"}}},
-    ]
-    try:
-        r = await tenant_db.daily_sales.aggregate(pipeline).to_list(None)
-        if r and r[0].get("total_qty", 0) > 0:
-            return round(r[0]["total_rev"] / r[0]["total_qty"], 2)
-    except Exception:
-        pass
-    return DEFAULT_ASP.get(category, 1500)
-
-
-async def _get_current_inventory(tenant_db, category: str, channel: str) -> int:
-    """Get current inventory for a category-channel."""
-    pipeline = [
-        {"$match": {"category": category, "channel": channel}},
-        {"$group": {"_id": None, "qty": {"$sum": "$quantity"}}},
-    ]
-    try:
-        r = await tenant_db.store_inventory.aggregate(pipeline).to_list(None)
-        return r[0]["qty"] if r else 0
-    except Exception:
-        return 0
-
-
-async def _get_sell_through(tenant_db, category: str, channel: str) -> float:
-    """Sell-through = units sold / avg inventory (last 90 days)."""
-    try:
-        sold_p = [
-            {"$match": {"category": category, "channel": channel}},
-            {"$group": {"_id": None, "sold": {"$sum": "$quantity"}}},
-        ]
-        inv_p = [
-            {"$match": {"category": category, "channel": channel}},
-            {"$group": {"_id": None, "inv": {"$avg": "$quantity"}}},
-        ]
-        sold_r = await tenant_db.daily_sales.aggregate(sold_p).to_list(None)
-        inv_r = await tenant_db.store_inventory.aggregate(inv_p).to_list(None)
-        sold = sold_r[0]["sold"] if sold_r else 0
-        inv = inv_r[0]["inv"] if inv_r else 1
-        if inv > 0:
-            return round(sold / inv, 2)
-    except Exception:
-        pass
-    return 0.0
+# ── Pure computation helpers (no DB access) ─────────────────
 
 
 def _apply_seasonal_phasing(total_units: int, seasonal_index: dict, months: int = 12):
     """Distribute units across months using seasonal weights."""
     if not seasonal_index:
-        seasonal_index = DEFAULT_SEASONAL_INDEX
+        seasonal_index = FALLBACK_SEASONAL_INDEX
     total_weight = sum(seasonal_index.get(m, 1) for m in range(1, months + 1))
     results = []
     for m in range(1, months + 1):
@@ -203,6 +109,32 @@ def _calculate_buy_quantity(required: int, safety_pct: float, current_inv: int,
 
 # ── Endpoints ────────────────────────────────────────────────
 
+@router.get("/buy-plan/options")
+async def get_buy_plan_options(request: Request, current_user: dict = Depends(lambda: None)):
+    """Get dynamic options for the wizard — categories, channels, etc. from uploaded data."""
+    if _get_current_user:
+        await _get_current_user(request)
+
+    provider = await get_tenant_provider()
+    data_status = await provider.validate_data_availability()
+
+    categories = await provider.get_categories()
+    channels = await provider.get_channels()
+    asp_map = await provider.get_asp_by_category()
+    seasonality = await provider.get_seasonality_factors()
+    channel_splits = await provider.get_channel_splits()
+
+    return {
+        "has_data": data_status["is_ready"],
+        "data_status": data_status,
+        "categories": categories if categories else list(FALLBACK_ASP.keys()),
+        "channels": channels if channels else [],
+        "asp_by_category": asp_map if asp_map else FALLBACK_ASP,
+        "seasonality": seasonality if any(v != 1.0 for v in seasonality.values()) else FALLBACK_SEASONAL_INDEX,
+        "channel_splits": channel_splits if channel_splits else {},
+    }
+
+
 @router.post("/buy-plan/generate")
 async def generate_buy_plan(
     request: Request,
@@ -214,67 +146,55 @@ async def generate_buy_plan(
         current_user = await _get_current_user(request)
 
     tenant_db = _get_db()
+    provider = await get_tenant_provider()
 
-    # Parse params with defaults
+    # Parse params
     revenue_target_cr = body.get("revenue_target_cr", 1.1)
     revenue_increase_pct = body.get("revenue_increase_percent", 20)
-    categories = body.get("categories", ALL_CATEGORIES)
-    channels = body.get("channels", ALL_CHANNELS)
     months = min(body.get("months", 12), 24)
     safety_stock_pct = body.get("safety_stock_percent", 15)
     lead_time_days = body.get("lead_time_days", 30)
     return_rate_pct = body.get("return_rate_percent", 5) / 100
-
     revenue_target = revenue_target_cr * 10_000_000  # Cr → Rs
 
-    # ── Category contributions from historical data ──────────
-    cat_rev = {}
-    for cat in categories:
-        pipeline = [
-            {"$match": {"category": cat}},
-            {"$group": {"_id": None, "rev": {"$sum": "$revenue"}}},
-        ]
-        try:
-            r = await tenant_db.daily_sales.aggregate(pipeline).to_list(None)
-            cat_rev[cat] = r[0]["rev"] if r else 0
-        except Exception:
-            cat_rev[cat] = 0
+    # ── Dynamic categories from provider (fallback to request body) ──
+    available_cats = await provider.get_categories()
+    requested_cats = body.get("categories", available_cats if available_cats else list(FALLBACK_ASP.keys()))
+    categories = requested_cats
 
-    total_rev = sum(cat_rev.values())
-    contributions = (
-        {c: cat_rev[c] / total_rev for c in categories}
-        if total_rev > 0
-        else {c: 1 / len(categories) for c in categories}
-    )
+    available_channels = await provider.get_channels()
+    requested_channels = body.get("channels", available_channels if available_channels else [])
+    channels = requested_channels if requested_channels else available_channels if available_channels else ["UNKNOWN"]
 
-    # ── Channel splits from historical data ──────────────────
-    channel_splits = {ch: DEFAULT_CHANNEL_SPLITS.get(ch, 0.1) for ch in channels}
-    try:
-        split_p = [
-            {"$match": {"channel": {"$in": channels}}},
-            {"$group": {"_id": "$channel", "rev": {"$sum": "$revenue"}}},
-        ]
-        real = await tenant_db.daily_sales.aggregate(split_p).to_list(None)
-        if real:
-            t = sum(s["rev"] for s in real)
-            if t > 0:
-                channel_splits = {s["_id"]: s["rev"] / t for s in real if s["_id"] in channels}
-                # Fill missing channels
-                for ch in channels:
-                    if ch not in channel_splits:
-                        channel_splits[ch] = DEFAULT_CHANNEL_SPLITS.get(ch, 0.05)
-    except Exception:
-        pass
+    # ── ASP from real data ──
+    real_asp = await provider.get_asp_by_category()
+
+    # ── Contributions from real revenue ──
+    real_rev_by_cat = await provider.get_revenue_by_category(days=365)
+    total_rev = sum(real_rev_by_cat.values())
+    if total_rev > 0:
+        contributions = {c: real_rev_by_cat.get(c, 0) / total_rev for c in categories}
+    else:
+        contributions = {c: 1 / len(categories) for c in categories}
+
+    # ── Channel splits from real data ──
+    real_splits = await provider.get_channel_splits()
+    if real_splits:
+        channel_splits = {ch: real_splits.get(ch, 1 / len(channels)) for ch in channels}
+    else:
+        channel_splits = {ch: 1 / len(channels) for ch in channels}
     # Normalize
     total_split = sum(channel_splits.values())
     if total_split > 0:
         channel_splits = {k: v / total_split for k, v in channel_splits.items()}
 
+    # ── Seasonality from real data ──
+    real_seasonality = await provider.get_seasonality_factors()
+
     # ── Process each category ────────────────────────────────
     categories_plan = []
     for cat in categories:
-        historical = await _get_historical_analysis(tenant_db, cat)
-        asp = await _get_category_asp(tenant_db, cat)
+        asp = real_asp.get(cat, FALLBACK_ASP.get(cat, 1500))
         contribution = contributions.get(cat, 1 / len(categories))
 
         # Step 2: Revenue → units
@@ -282,14 +202,8 @@ async def generate_buy_plan(
         base_units = cat_revenue_target / asp if asp > 0 else 0
         required_units = max(1, int(base_units / (1 - return_rate_pct)))
 
-        # Step 3: Seasonal phasing
-        seasonal_idx = {}
-        for ch_data in historical.values():
-            if ch_data.get("seasonal_index"):
-                seasonal_idx = ch_data["seasonal_index"]
-                break
-        monthly_raw = _apply_seasonal_phasing(required_units, seasonal_idx, months)
-
+        # Step 3: Seasonal phasing (real data or fallback)
+        monthly_raw = _apply_seasonal_phasing(required_units, real_seasonality, months)
         monthly_breakdown = []
         for m, units, factor in monthly_raw:
             monthly_breakdown.append({
@@ -306,18 +220,15 @@ async def generate_buy_plan(
         # Step 5: Buy quantity per channel
         channel_breakdown = []
         for ch, units in ch_units.items():
-            curr_inv = await _get_current_inventory(tenant_db, cat, ch)
-            sell_through = await _get_sell_through(tenant_db, cat, ch)
+            curr_inv = await provider.get_current_inventory_by_channel(ch)
             daily_demand = units / 30 if units > 0 else 0
-
             buy_qty, safety = _calculate_buy_quantity(
                 units, safety_stock_pct, curr_inv, 0,
                 lead_time_days, daily_demand
             )
-
             channel_breakdown.append({
                 "channel": ch,
-                "channel_type": "store" if ch.startswith("STORE") else "marketplace",
+                "channel_type": "store" if any(k in ch.upper() for k in ["STORE", "EBO", "MBO", "LFS"]) else "marketplace",
                 "revenue_target": round(units * asp, 2),
                 "units_needed": units,
                 "safety_stock": safety,
@@ -326,7 +237,7 @@ async def generate_buy_plan(
                 "buy_quantity": buy_qty,
                 "buy_value": round(buy_qty * asp, 2),
                 "asp": asp,
-                "sell_through_rate": sell_through,
+                "sell_through_rate": 0,
             })
 
         cat_plan = {
@@ -343,6 +254,7 @@ async def generate_buy_plan(
         categories_plan.append(cat_plan)
 
     user_email = current_user.get("email", "system") if current_user else "system"
+    data_status = await provider.validate_data_availability()
 
     response = {
         "metadata": {
@@ -350,6 +262,7 @@ async def generate_buy_plan(
             "revenue_target_cr": revenue_target_cr,
             "revenue_increase_percent": revenue_increase_pct,
             "user": user_email,
+            "data_source": "uploaded" if data_status["is_ready"] else "defaults",
         },
         "summary": {
             "total_buy_quantity": sum(c["total_buy_quantity"] for c in categories_plan),
@@ -360,7 +273,7 @@ async def generate_buy_plan(
         },
         "categories": categories_plan,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "version": "1.0",
+        "version": "1.1",
     }
 
     # Save to history
@@ -566,12 +479,20 @@ async def get_plan_history(
 
 @router.get("/buy-plan/summary")
 async def get_plan_summary(request: Request, current_user: dict = Depends(lambda: None)):
-    """Quick summary of categories, channels, and defaults."""
+    """Dynamic summary: categories, channels, and data availability."""
+    if _get_current_user:
+        await _get_current_user(request)
+
+    provider = await get_tenant_provider()
+    data_status = await provider.validate_data_availability()
+    categories = await provider.get_categories()
+    channels = await provider.get_channels()
+
     return {
-        "categories": ALL_CATEGORIES,
-        "channels": ALL_CHANNELS,
-        "channel_types": {ch: "store" if ch.startswith("STORE") else "marketplace" for ch in ALL_CHANNELS},
-        "default_asp": DEFAULT_ASP,
-        "default_channel_splits": DEFAULT_CHANNEL_SPLITS,
-        "seasonal_index": DEFAULT_SEASONAL_INDEX,
+        "categories": categories if categories else list(FALLBACK_ASP.keys()),
+        "channels": channels if channels else [],
+        "has_uploaded_data": data_status["is_ready"],
+        "data_status": data_status,
+        "fallback_asp": FALLBACK_ASP,
+        "seasonality": FALLBACK_SEASONAL_INDEX,
     }
