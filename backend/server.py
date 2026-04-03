@@ -23,6 +23,7 @@ from routes.doh_analysis import router as doh_router, init_doh
 from routes.planogram import router as planogram_router, init_planogram
 from routes.bi_dashboard import router as bi_router, init_bi
 from routes.sftp_routes import router as sftp_ext_router, init_sftp_routes
+from routes.warehouse import router as warehouse_router, init_warehouse
 
 # Multi-tenant imports
 from multi_tenant import (
@@ -4148,6 +4149,7 @@ api_router.include_router(doh_router)
 api_router.include_router(planogram_router)
 api_router.include_router(bi_router)
 api_router.include_router(sftp_ext_router)
+api_router.include_router(warehouse_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -4226,6 +4228,7 @@ async def startup():
     init_planogram(client)
     init_bi(client)
     init_sftp_routes(get_db, sftp_service)
+    init_warehouse(client, get_db)
     logger.info("Multi-tenant startup complete")
 
 

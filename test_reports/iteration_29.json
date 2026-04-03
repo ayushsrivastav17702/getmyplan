@@ -1,0 +1,140 @@
+{
+  "summary": "Warehouse Module Testing - 30 test cases. Backend: 31/31 pytest tests PASSED (100%). Frontend: All 5 tabs verified working (Dashboard, Stock, Movements, Transfers, Performance). All warehouse features working correctly.",
+
+  "test_case_matrix": {
+    "STOCK_ENDPOINTS_WH01_WH08": {
+      "WH-01": {"status": "PASS", "notes": "GET /api/analytics/warehouse/stock returns items with sku, warehouse, quantity, style, size fields"},
+      "WH-02": {"status": "PASS", "notes": "GET /api/analytics/warehouse/stock?warehouse=Central%20WH filters by specific warehouse"},
+      "WH-03": {"status": "PASS", "notes": "GET /api/analytics/warehouse/stock?category=Pants filters by category"},
+      "WH-04": {"status": "PASS", "notes": "GET /api/analytics/warehouse/stock?search=1769 returns matching SKU/style results"},
+      "WH-05": {"status": "PASS", "notes": "Stock table includes mrp and stock_value columns. totals.total_value=570924507.0 > 0"},
+      "WH-06": {"status": "PASS", "notes": "totals.low_stock=686 (qty < reorder_point=50). Frontend Low Stock KPI card is clickable and filters table"},
+      "WH-07": {"status": "PASS", "notes": "totals.out_of_stock=14 (qty = 0). Frontend shows Out of Stock KPI card"},
+      "WH-08": {"status": "PASS", "notes": "totals.overstock=0 (qty > max_threshold=500). Frontend shows Overstock KPI card"}
+    },
+    "MOVEMENTS_WH09_WH14": {
+      "WH-09": {"status": "PASS", "notes": "GET /api/analytics/warehouse/movements returns inbound items with direction='inbound', source, reference. summary.total_inbound=48.1K"},
+      "WH-10": {"status": "PASS", "notes": "GET /api/analytics/warehouse/movements returns outbound items with direction='outbound', destination, reference. summary.total_outbound=13.8K"},
+      "WH-11": {"status": "PASS", "notes": "Movements array has timestamp field, creating timeline view in frontend"},
+      "WH-12": {"status": "PASS", "notes": "GET /api/analytics/warehouse/daily-change returns days array with opening_stock, closing_stock, change fields"},
+      "WH-13": {"status": "PASS", "notes": "GET /api/analytics/warehouse/reconciliation returns reconciliations with system_qty, physical_qty, variance. POST creates new reconciliation"},
+      "WH-14": {"status": "PASS", "notes": "GET /api/analytics/warehouse/adjustments returns adjustments with previous_qty, new_qty, change, reason, adjusted_by fields"}
+    },
+    "TRANSFERS_WH15_WH20": {
+      "WH-15": {"status": "PASS", "notes": "POST /api/analytics/warehouse/transfers creates new transfer with from_warehouse, to_store, items, status=pending"},
+      "WH-16": {"status": "PASS", "notes": "PUT /api/analytics/warehouse/transfers/{id}/allocate changes status from pending to allocated"},
+      "WH-17": {"status": "PASS", "notes": "PUT /api/analytics/warehouse/transfers/{id}/approve changes status from allocated to approved with approved_by field"},
+      "WH-18": {"status": "PASS", "notes": "GET /api/analytics/warehouse/transfers/in-transit returns transfers with status=in_transit and total_in_transit=87"},
+      "WH-19": {"status": "PASS", "notes": "PUT /api/analytics/warehouse/transfers/{id}/receive changes status from in_transit to received with received_by"},
+      "WH-20": {"status": "PASS", "notes": "GET /api/analytics/warehouse/transfers/history returns full audit trail of all transfers (15 total)"}
+    },
+    "PERFORMANCE_WH21_WH25": {
+      "WH-21": {"status": "PASS", "notes": "GET /api/analytics/warehouse/performance returns fulfillment_rate=60%"},
+      "WH-22": {"status": "PASS", "notes": "GET /api/analytics/warehouse/performance returns avg_dispatch_hours=24.5h"},
+      "WH-23": {"status": "PASS", "notes": "GET /api/analytics/warehouse/performance returns turnover_ratio=1628.72"},
+      "WH-24": {"status": "PASS", "notes": "GET /api/analytics/warehouse/performance returns utilization_pct=102.1% and by_warehouse array with capacity and utilization_pct"},
+      "WH-25": {"status": "PASS", "notes": "GET /api/analytics/warehouse/performance returns slow_moving array (1 SKU with no sales in 90+ days)"}
+    },
+    "DASHBOARD_WH26_WH30": {
+      "WH-26": {"status": "PASS", "notes": "GET /api/analytics/warehouse/dashboard returns kpis with total_stock=306.4K, total_value=$5709.2L, total_skus=2.3K, total_warehouses=3, snapshot_date=2026-03-31"},
+      "WH-27": {"status": "PASS", "notes": "GET /api/analytics/warehouse/dashboard returns category_chart array. Frontend shows Stock by Category bar chart (Pants)"},
+      "WH-28": {"status": "PASS", "notes": "GET /api/analytics/warehouse/dashboard returns movement_trend with inbound/outbound per day. Frontend shows line chart"},
+      "WH-29": {"status": "PASS", "notes": "Frontend Stock tab has Export CSV button that downloads warehouse_stock_2026-04-03.csv"},
+      "WH-30": {"status": "PASS", "notes": "GET /api/analytics/warehouse/dashboard returns comparison array with warehouse, total_qty, stock_value, sku_count. Frontend shows side-by-side comparison table"}
+    }
+  },
+
+  "summary_counts": {
+    "PASS": 30,
+    "PARTIAL": 0,
+    "FAIL": 0,
+    "GAP": 0,
+    "TOTAL": 30
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_warehouse_iter29.py",
+    "/app/test_reports/pytest/pytest_results_iter29.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "All 30 warehouse test cases PASS",
+    "Backend endpoints properly structured under /api/analytics/warehouse/* prefix",
+    "Stock data comes from uploaded_files collection (warehouse_inventory, sku_ean_master, style_master)",
+    "Movement/transfer/adjustment data seeded via POST /api/analytics/warehouse/seed-demo",
+    "Warehouse names: Central WH, North WH, South WH",
+    "Alert thresholds: reorder_point=50 (low_stock), max_threshold=500 (overstock)",
+    "Transfer lifecycle: pending → allocated → approved → in_transit → received",
+    "Frontend has 5 tabs: Dashboard, Stock, Movements, Transfers, Performance",
+    "Export CSV functionality working correctly"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_warehouse_iter29.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 31/31 tests passed",
+    "frontend": "100% - All 5 tabs and features verified working"
+  },
+
+  "test_credentials": {
+    "admin": {"tenant_id": "demo", "email": "admin@demo.com", "password": "demo1234", "role": "admin"}
+  },
+
+  "seed_data_creation": "POST /api/analytics/warehouse/seed-demo seeds demo data: 274 movements, 15 transfers, 12 adjustments, 8 reconciliations",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "All 30 warehouse test cases verified PASS. Backend endpoints: /api/analytics/warehouse/stock (with filters), /movements, /daily-change, /reconciliation (GET/POST), /adjustments, /transfers (CRUD + lifecycle), /transfers/in-transit, /transfers/history, /performance, /dashboard, /seed-demo. Frontend: /warehouse-analysis page with 5 tabs. Real warehouse inventory data from uploads. Movement/transfer data seeded via demo endpoint.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+
+  "data_observations": {
+    "stock_totals": {
+      "total_stock": 306393,
+      "total_value": 570924507.0,
+      "total_skus": 2318,
+      "total_warehouses": 3,
+      "low_stock": 686,
+      "out_of_stock": 14,
+      "overstock": 0
+    },
+    "movements_summary": {
+      "total_inbound": 48100,
+      "total_outbound": 13800,
+      "inbound_count": 179,
+      "outbound_count": 125
+    },
+    "transfers_summary": {
+      "in_transit": 2,
+      "in_transit_qty": 87,
+      "total_transfers": 15
+    },
+    "performance_metrics": {
+      "fulfillment_rate": "60%",
+      "avg_dispatch_hours": "24.5h",
+      "turnover_ratio": 1628.72,
+      "utilization_pct": "102.1%",
+      "slow_moving_count": 1
+    },
+    "warehouses": ["Central WH", "North WH", "South WH"]
+  }
+}
