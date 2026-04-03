@@ -27,50 +27,50 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 
 ### Phase 34 — TenantDataProvider Refactoring (Apr 2026)
 - **Phase 1: Core Infrastructure** — Created `TenantDataProvider` service layer
-  - `get_categories()`, `get_channels()`, `get_asp_by_category()`, `get_seasonality_factors()`, `get_channel_splits()`, `get_revenue_by_category/channel()`, `validate_data_availability()`, `get_analytics_options()`
-  - Initialised in `server.py` via `init_tenant_provider(get_cached_data, get_db)`
-- **Phase 2: Buy Plan Generator Refactored** — Replaced ALL hardcoded data with TenantDataProvider
-  - New `GET /api/buy-plan/options` endpoint
-  - `data_source` field in responses
-  - Frontend data-source-indicator banner
-- **Phase 3: AI Demand Planning Refactored** (Apr 2026)
-  - New `GET /api/analytics/ai-demand/options` endpoint — dynamic categories, subcategories, channels, regions, brands, genders, seasons from TenantDataProvider
-  - `data_source` field added to ALL 6 AI Demand endpoints (forecast, stockout-risk, topseller, reorder, supply-feasibility, generate-plan)
-  - Frontend: AIDemandPlanning.js now fetches from `/ai-demand/options`, shows data-source-indicator banner (green=uploaded, amber=demo)
-- **Phase 4: Gap Analysis Refactored** (Apr 2026)
-  - `data_source` field added to ROS, ROS Gap, Size Gap, NOOS endpoints
-- **Phase 5: Remaining Analytics Refactored** (Apr 2026)
-  - `data_source` field added to Stock-Out, Planogram, DOH, Replenishment, BI Dashboard endpoints
-  - `GET /api/analytics/filter-options` refactored to use TenantDataProvider — now returns subcategories, brands, genders, seasons, has_data, data_status
+- **Phase 2: Buy Plan Generator Refactored** — data_source field, `/buy-plan/options` endpoint
+- **Phase 3: AI Demand Planning Refactored** — `/ai-demand/options` endpoint, data_source in all 6 endpoints
+- **Phase 4: Gap Analysis Refactored** — data_source in ROS, ROS Gap, Size Gap, NOOS
+- **Phase 5: Remaining Analytics** — data_source in Stock-Out, Planogram, DOH, Replenishment, BI Dashboard, filter-options
 - Testing: **100% (Iteration 37, 36/36 PASS)**
+
+### Phase 35 — Onboarding Wizard (Apr 2026)
+- **3-step wizard**: Marketplaces → Stores → Category Taxonomy
+- **Backend**: Full CRUD for marketplaces (ob_marketplaces), stores (ob_stores), categories (ob_categories)
+  - `POST/GET/DELETE /api/onboarding/marketplaces` with currency, tax, commission, type
+  - `POST/GET/DELETE /api/onboarding/stores` with marketplace mapping
+  - `POST/GET/DELETE /api/onboarding/categories` with nested parent-child tree
+  - `GET /api/onboarding/status` — progress %, current step, is_onboarded
+  - `POST /api/onboarding/skip` — skip individual steps
+  - `POST /api/onboarding/complete` — validates all 3 steps done, marks onboarded
+  - `POST /api/onboarding/reset` — clears all onboarding data
+- **Auto-onboarding**: Existing tenants with uploaded data are auto-marked as onboarded
+- **Frontend**: Full wizard UI with progress bar, skip, back/next, add/delete forms
+- **RequireOnboarding guard**: Non-onboarded tenants see full-page wizard before accessing app
+- **Nav item**: "Setup Wizard" in sidebar for admin reconfiguration
+- Testing: **100% (Iteration 38, 31/31 PASS)**
 
 ## Key API Endpoints
 
+### Onboarding
+- `GET /api/onboarding/status` — Onboarding progress, current step, is_onboarded
+- `POST/GET/DELETE /api/onboarding/marketplaces` — Marketplace CRUD
+- `POST/GET/DELETE /api/onboarding/stores` — Store CRUD with marketplace mapping
+- `POST/GET/DELETE /api/onboarding/categories` — Category taxonomy CRUD (nested tree)
+- `POST /api/onboarding/skip?step=N` — Skip a step
+- `POST /api/onboarding/complete` — Complete onboarding
+- `POST /api/onboarding/reset` — Reset onboarding
+
 ### TenantDataProvider-Powered
-- `GET /api/analytics/ai-demand/options` — Dynamic options for AI Demand filters
-- `GET /api/analytics/filter-options` — Unified filter options (TenantDataProvider-powered)
-- `GET /api/buy-plan/options` — Dynamic categories, channels, ASP for Buy Plan wizard
+- `GET /api/analytics/ai-demand/options` — Dynamic filter options
+- `GET /api/analytics/filter-options` — Unified filter options
+- `GET /api/buy-plan/options` — Buy Plan dynamic options
 
 ### AI Demand
-- `GET /api/analytics/ai-demand/forecast` — ML ensemble forecast (data_source field)
-- `GET /api/analytics/ai-demand/stockout-risk` — Stockout risk prediction
-- `GET /api/analytics/ai-demand/topseller-prediction` — Topseller with X-Factor
-- `GET /api/analytics/ai-demand/reorder-optimisation` — Reorder points
-- `GET /api/analytics/ai-demand/supply-feasibility` — DOH-based feasibility
-- `POST /api/analytics/ai-demand/generate-plan` — Generate demand plan
+- `GET /api/analytics/ai-demand/forecast` + stockout-risk, topseller, reorder, supply-feasibility
+- `POST /api/analytics/ai-demand/generate-plan`
 
 ### Buy Plan
-- `POST /api/buy-plan/generate` — Generate buy plan
-- `POST /api/buy-plan/export-excel` — Export multi-sheet Excel
-- `POST /api/buy-plan/upload-edited-plan` — Upload overrides
-- `GET /api/buy-plan/history` — Plan history
-
-## Incremental Refactoring Roadmap (TenantDataProvider)
-- [x] Phase 1: Core Infrastructure (TenantDataProvider)
-- [x] Phase 2: Buy Plan Generator
-- [x] Phase 3: AI Demand Planning
-- [x] Phase 4: Gap Analysis
-- [x] Phase 5: Stock-Out, DOH, Replenishment, Planogram, BI Dashboards
+- `POST /api/buy-plan/generate`, `/export-excel`, `/upload-edited-plan`
 
 ## Prioritized Backlog
 
