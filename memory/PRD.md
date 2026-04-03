@@ -162,6 +162,7 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 ### P1 (Done)
 - ~~Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/~~ (Done Apr 2026)
 - ~~AI Demand Planning System — ML Forecast, Stockout Prediction, Topseller, Reorder, Plan Generation~~ (Done Apr 2026)
+- ~~AI Demand 25-Point Compliance — RBAC, Rate Limiting, DOH, X-Factor, Editable Grid, Concurrent Locking, 3-Tab Workflow~~ (Done Apr 2026)
 
 ### P2
 - DASH-35: PDF export for Executive Dashboard

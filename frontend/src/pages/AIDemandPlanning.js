@@ -312,8 +312,8 @@ const AIDemandPlanning = () => {
       )}
 
       {/* ── Controls + Tabs ─────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="px-4 py-2.5 flex flex-wrap gap-3 items-center border-b border-gray-100">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-4 py-2.5 flex flex-wrap gap-2 items-center border-b border-gray-100">
           <label className="text-[10px] text-gray-500 font-medium">Category</label>
           <select data-testid="category-select" value={category} onChange={e => setCategory(e.target.value)}
                   className="px-2.5 py-1 border border-gray-300 rounded-lg text-sm bg-white">
@@ -434,7 +434,7 @@ const AIDemandPlanning = () => {
                   </div>
                 )}
                 <div className="overflow-x-auto">
-                  <table data-testid="demand-editable-grid" className="min-w-full text-sm">
+                  <table data-testid="demand-editable-grid" className="w-full text-sm" style={{ minWidth: '900px' }}>
                     <thead>
                       <tr className="bg-gray-50">
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10">Subcategory</th>
