@@ -26,35 +26,55 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Testing: **100% (Iteration 35, 28/28 PASS)**
 
 ### Phase 34 — TenantDataProvider Refactoring (Apr 2026)
-- **Phase 1: Core Infrastructure** — Created `TenantDataProvider` service layer (`/backend/services/tenant_data_provider.py`)
-  - `get_categories()`, `get_channels()`, `get_asp_by_category()`, `get_seasonality_factors()`, `get_channel_splits()`, `get_revenue_by_category/channel()`, `validate_data_availability()`
+- **Phase 1: Core Infrastructure** — Created `TenantDataProvider` service layer
+  - `get_categories()`, `get_channels()`, `get_asp_by_category()`, `get_seasonality_factors()`, `get_channel_splits()`, `get_revenue_by_category/channel()`, `validate_data_availability()`, `get_analytics_options()`
   - Initialised in `server.py` via `init_tenant_provider(get_cached_data, get_db)`
 - **Phase 2: Buy Plan Generator Refactored** — Replaced ALL hardcoded data with TenantDataProvider
-  - New `GET /api/buy-plan/options` endpoint: returns dynamic categories, channels, ASP, seasonality, channel splits from uploaded CSV data
-  - `POST /api/buy-plan/generate`: `data_source` field shows "uploaded" vs "defaults"; version bumped to 1.1
-  - Frontend: data-source-indicator banner (green=uploaded data, amber=defaults), dynamic categoriesList/channelsList props in wizard steps
-  - Old hardcoded values (Jeans/Shirts/STORE_A/AMAZON) only used as fallback when no data exists
-- Testing: **100% (Iteration 36, 30/30 PASS)**
+  - New `GET /api/buy-plan/options` endpoint
+  - `data_source` field in responses
+  - Frontend data-source-indicator banner
+- **Phase 3: AI Demand Planning Refactored** (Apr 2026)
+  - New `GET /api/analytics/ai-demand/options` endpoint — dynamic categories, subcategories, channels, regions, brands, genders, seasons from TenantDataProvider
+  - `data_source` field added to ALL 6 AI Demand endpoints (forecast, stockout-risk, topseller, reorder, supply-feasibility, generate-plan)
+  - Frontend: AIDemandPlanning.js now fetches from `/ai-demand/options`, shows data-source-indicator banner (green=uploaded, amber=demo)
+- **Phase 4: Gap Analysis Refactored** (Apr 2026)
+  - `data_source` field added to ROS, ROS Gap, Size Gap, NOOS endpoints
+- **Phase 5: Remaining Analytics Refactored** (Apr 2026)
+  - `data_source` field added to Stock-Out, Planogram, DOH, Replenishment, BI Dashboard endpoints
+  - `GET /api/analytics/filter-options` refactored to use TenantDataProvider — now returns subcategories, brands, genders, seasons, has_data, data_status
+- Testing: **100% (Iteration 37, 36/36 PASS)**
 
-## Key API Endpoints (Buy Plan — Refactored)
-- `GET /api/buy-plan/options` — Dynamic categories, channels, ASP from uploaded data
-- `POST /api/buy-plan/generate` — Generate buy plan (uses TenantDataProvider)
+## Key API Endpoints
+
+### TenantDataProvider-Powered
+- `GET /api/analytics/ai-demand/options` — Dynamic options for AI Demand filters
+- `GET /api/analytics/filter-options` — Unified filter options (TenantDataProvider-powered)
+- `GET /api/buy-plan/options` — Dynamic categories, channels, ASP for Buy Plan wizard
+
+### AI Demand
+- `GET /api/analytics/ai-demand/forecast` — ML ensemble forecast (data_source field)
+- `GET /api/analytics/ai-demand/stockout-risk` — Stockout risk prediction
+- `GET /api/analytics/ai-demand/topseller-prediction` — Topseller with X-Factor
+- `GET /api/analytics/ai-demand/reorder-optimisation` — Reorder points
+- `GET /api/analytics/ai-demand/supply-feasibility` — DOH-based feasibility
+- `POST /api/analytics/ai-demand/generate-plan` — Generate demand plan
+
+### Buy Plan
+- `POST /api/buy-plan/generate` — Generate buy plan
 - `POST /api/buy-plan/export-excel` — Export multi-sheet Excel
-- `POST /api/buy-plan/upload-edited-plan` — Upload edited plan with overrides
-- `GET /api/buy-plan/history` — Saved plan history
-- `GET /api/buy-plan/summary` — Dynamic summary with data status
+- `POST /api/buy-plan/upload-edited-plan` — Upload overrides
+- `GET /api/buy-plan/history` — Plan history
 
 ## Incremental Refactoring Roadmap (TenantDataProvider)
 - [x] Phase 1: Core Infrastructure (TenantDataProvider)
 - [x] Phase 2: Buy Plan Generator
-- [ ] Phase 3: AI Demand Planning
-- [ ] Phase 4: Gap Analysis
-- [ ] Phase 5: Stock-Out, DOH, Replenishment, Planogram, BI Dashboards
+- [x] Phase 3: AI Demand Planning
+- [x] Phase 4: Gap Analysis
+- [x] Phase 5: Stock-Out, DOH, Replenishment, Planogram, BI Dashboards
 
 ## Prioritized Backlog
 
 ### P1
-- Phase 3-5: Continue TenantDataProvider refactoring (AI Demand → Gap Analysis → remaining modules)
 - SFTP alert/notification system (SFTP-31 to SFTP-34)
 
 ### P2
@@ -66,3 +86,4 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - USER-18: MFA
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
+- Data Quality Rules Engine (custom tenant-specific validation)
