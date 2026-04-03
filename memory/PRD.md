@@ -51,13 +51,47 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Testing: **100% (Iteration 25, 32/32 PASS)**
 
 ### Phase 24 — DOH Analysis Module (Apr 2026)
-- **DOH-01–08**: DOH Calculation — store-SKU DOH = Inventory/ROS, zero inv (STOCKED_OUT), zero ROS (NO_SALES/9999), weighted avg DOH, channel-level DOH aggregation, category-level DOH, WH stock toggle (include_wh), store-only mode
-- **DOH-09–15**: Classification — Optimal (±20% ideal), Overstocked (>120%), Understocked (<80%), Stocked Out, ideal_doh=9d default, category-specific ideal DOH (CRUD), topseller additional cover (multiplier)
-- **DOH-16–21**: Heatmap — store grid color-coded by status, category grid, click drill-down with status % and detail, region filter, store class filter, heatmap export
-- **DOH-22–27**: DOH vs Stock-Out Correlation — negative correlation (high DOH -> low stock-outs), trendline visualization, Pearson correlation coefficient, optimal DOH range identification via bucket analysis, store-level correlation
-- **DOH-28–35**: Recommendations — low DOH (increase replenishment), high DOH (reduce orders), stocked out (expedite), bulk low DOH, category-wide issues, store-wide issues (>30% SO or >50% understocked), seasonal adjustment, DOH target setting suggestion
+- DOH-01–35: DOH Calculation, Classification, Heatmap, DOH vs Stock-Out Correlation, Recommendations
 - New modular route file: `/backend/routes/doh_analysis.py`
 - Testing: **100% (Iteration 26, 35/35 PASS)**
+
+### Phase 25 — Planogram Fill Rate Module (Apr 2026)
+- PLAN-01–32: Fill Rate Calculation, Store Performance, Category Performance, Gap Analysis, Dashboard
+- New modular route file: `/backend/routes/planogram.py`
+- Testing: **100% (Iteration 27, 32/32 PASS)**
+
+### Phase 26 — BI Dashboards Module (Apr 2026)
+- BI-01–35: Revenue Analytics, Category Analytics, Store Analytics, Trend Analysis, Custom Dashboards
+- New modular route file: `/backend/routes/bi_dashboard.py`
+- Testing: **100% (Iteration 27, 35/35 PASS)**
+
+### Phase 27 — SFTP Monitor Enhancement (Apr 2026)
+- **19 gap test cases resolved**:
+  - SFTP-03: Connection timeout with retry backoff (exponential backoff, configurable max_retries/base_delay/max_delay)
+  - SFTP-04: Network interruption auto-reconnect (connection pool with automatic recovery)
+  - SFTP-07: Connection pool (thread-safe pool with max_size, acquire/release, stats tracking)
+  - SFTP-08: SSL/TLS verification (auto/strict/reject modes via config)
+  - SFTP-09: Upload file to SFTP (single file upload with progress, hash, speed)
+  - SFTP-10: Download file from SFTP (with progress tracking)
+  - SFTP-11: Large file transfer with progress indicator (chunked transfer, TransferTracker)
+  - SFTP-12: Partial transfer resume (byte offset resume for downloads)
+  - SFTP-14: File overwrite protection (auto-versioning with timestamp suffix)
+  - SFTP-15: Batch file upload (multi-file upload with aggregate results)
+  - SFTP-16: Scheduled transfer (enhanced scheduler with demo/real mode)
+  - SFTP-20: Malformed file detection -> failed folder (Pandas validation, archive_path)
+  - SFTP-22: Duplicate file handling (SHA-256 hash-based dedup)
+  - SFTP-23: File archive after processing (/archive/processed/ and /archive/failed/)
+  - SFTP-25: Filter logs by date range (start_date, end_date params)
+  - SFTP-29: Download error log as CSV
+  - SFTP-30: Transfer speed metrics (avg/max/min speed, daily breakdown)
+  - SFTP-35: Daily summary report (files, success rate, store coverage, top errors, by type)
+- New route file: `/backend/routes/sftp_routes.py`
+- Enhanced: `/backend/sftp/sftp_service.py` (ConnectionPool, TransferTracker, full file ops)
+- Enhanced: `/backend/sftp/sftp_scheduler.py` (real scheduled transfer support)
+- Enhanced: `/backend/server.py` (status with pool/SSL/retry, logs with date filter, stats with speed/malformed/dup)
+- Frontend: Complete rewrite of SFTPMonitor.js with 5 tabs (Overview, Transfers, Logs, Speed Metrics, Daily Summary)
+- Testing: **100% (Iteration 28, 25/25 PASS)**
+- Note: All SFTP operations run in **DEMO MODE** (MOCKED) — no real SFTP server connected
 
 ## Test Coverage Summary
 
@@ -71,28 +105,31 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 | Stock-Out Analysis | 35 | 35 | 0 | 0 | **100%** |
 | Replenishment Planner | 32 | 32 | 0 | 0 | **100%** |
 | DOH Analysis | 35 | 35 | 0 | 0 | **100%** |
-| **Total** | **274** | **263** | **5** | **6** | **96%** |
+| Planogram Fill Rate | 32 | 32 | 0 | 0 | **100%** |
+| BI Dashboards | 35 | 35 | 0 | 0 | **100%** |
+| SFTP Monitor | 35 | 27 | 6 | 2 | **94%** |
+| **Total** | **396** | **357** | **11** | **8** | **96%** |
 
 ## Remaining Known Gaps
-- DASH-15: Revenue trend line chart (P1)
+- DASH-15: Revenue trend line chart (P0)
 - DASH-25: Offline detection UI (P1)
 - DASH-35: PDF export (P2)
-- UPLOAD-26/28: Real SFTP connection (MOCKED)
-- UPLOAD-33: Browser-level network retry
+- SFTP-31/32/33/34: Email/Slack alerts, dashboard notifications, alert thresholds (P1-P2)
+- SFTP-05/06: Host unreachable/permission denied messages (PARTIAL — generic errors)
+- Warehouse Module: 24 gaps out of 30 test cases
 
 ## Prioritized Backlog
 
 ### P0
-- None critical outstanding
+- DASH-15: Revenue trend line chart
+- Warehouse Module (30 test cases — 24 gaps)
 
 ### P1
-- Revenue trend line chart (DASH-15)
-- Offline detection UI (DASH-25)
-- Real SFTP integration
-- PDF report generation
+- DASH-25: Offline detection UI
+- SFTP alert/notification system (SFTP-31 to SFTP-34)
+- Modularize server.py — move Gap Analysis & Stock-Out endpoints to routes/
 
 ### P2
-- PDF export (DASH-35)
-- Modularize server.py (~4200 lines) — partially done with core_logic.py, replenishment.py, doh_analysis.py
+- DASH-35: PDF export
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
