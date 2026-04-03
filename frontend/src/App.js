@@ -7,7 +7,7 @@ import {
   MessageSquare, Menu, X, ChevronRight, Check, AlertCircle,
   Warehouse, Server, Award, XCircle, ShoppingCart, Clock,
   Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users, Shield, Zap,
-  FileSpreadsheet
+  FileSpreadsheet, Rocket
 } from "lucide-react";
 
 // Auth
@@ -35,6 +35,7 @@ import UserManagement from "./pages/UserManagement";
 import TenantAdminPanel from "./pages/TenantAdminPanel";
 import AIDemandPlanning from "./pages/AIDemandPlanning";
 import BuyPlanDashboard from "./pages/BuyPlanDashboard";
+import OnboardingWizard from "./pages/OnboardingWizard";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -44,6 +45,7 @@ export const API = `${BACKEND_URL}/api`;
 // permission: "module.resource.action" = filtered by hasPermission()
 const navItems = [
   { path: "/",              label: "Getting Started",      icon: Home,            permission: null },
+  { path: "/onboarding",    label: "Setup Wizard",         icon: Rocket,          permission: "settings.tenant.view" },
   { path: "/dashboard",     label: "Executive Dashboard",  icon: LayoutDashboard, permission: "dashboard.executive.view" },
   { path: "/upload",        label: "Data Upload",          icon: Upload,          permission: "data.upload.manage" },
   { path: "/config",        label: "Configuration",        icon: Settings,        permission: "data.config.manage" },
@@ -251,6 +253,8 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
 const AuthenticatedApp = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const fetchUploadStatus = useCallback(async () => {
     try {
@@ -262,6 +266,19 @@ const AuthenticatedApp = () => {
   }, []);
 
   useEffect(() => { fetchUploadStatus(); }, [fetchUploadStatus]);
+
+  // Check onboarding status once on mount
+  useEffect(() => {
+    axios.get(`${API}/onboarding/status`).then(res => {
+      setNeedsOnboarding(!res.data?.is_onboarded);
+      setOnboardingChecked(true);
+    }).catch(() => setOnboardingChecked(true));
+  }, []);
+
+  // Show full-page wizard for non-onboarded tenants
+  if (onboardingChecked && needsOnboarding) {
+    return <OnboardingWizard onComplete={() => { setNeedsOnboarding(false); window.location.href = "/upload"; }} />;
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FA]">
@@ -290,6 +307,7 @@ const AuthenticatedApp = () => {
             <Route path="/data-quality"  element={<ProtectedRoute permission="data.quality.view"><DataQuality /></ProtectedRoute>} />
             <Route path="/ai-demand"     element={<AIDemandPlanning />} />
             <Route path="/buy-plan"      element={<BuyPlanDashboard />} />
+            <Route path="/onboarding"    element={<OnboardingWizard onComplete={() => window.location.href = '/upload'} />} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
             <Route path="/tenant-admin"  element={<ProtectedRoute permission="settings.tenant.view"><TenantAdminPanel /></ProtectedRoute>} />
