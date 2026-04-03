@@ -50,6 +50,11 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Both `/filter-options` and `/ai-demand/options` endpoints benefit from fallback
 - Testing: **100% (Iteration 39, 15/15 PASS)**
 
+### Phase 37 — Deployment Health Check (Apr 2026)
+- Security fix: Removed hardcoded JWT_SECRET fallback, added `_refresh_jwt_secret()` startup validation
+- Deployment agent: All checks passed (compilation, env, CORS, DB, supervisor, ports)
+- Full system verified: Backend API + Frontend UI + MongoDB all operational
+
 ## Key API Endpoints
 
 ### Onboarding

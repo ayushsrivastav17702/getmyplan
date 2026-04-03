@@ -36,6 +36,7 @@ from services.tenant_data_provider import init_tenant_provider
 from multi_tenant import (
     TenantMiddleware,
     auth_router,
+    _refresh_jwt_secret,
     tenant_router,
     user_router,
     seed_rbac,
@@ -54,6 +55,7 @@ from multi_tenant.tenant_db import (
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+_refresh_jwt_secret()
 
 # MongoDB connection — kept for backward compat; tenant-aware helper below
 mongo_url = os.environ['MONGO_URL']

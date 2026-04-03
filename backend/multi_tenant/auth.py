@@ -17,9 +17,16 @@ logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "merch-saas-Kx9vQ2pR8wZm4jL7nY0dF5hT3bE6aU1c")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
+
+def _refresh_jwt_secret():
+    """Re-read JWT_SECRET after load_dotenv has been called."""
+    global JWT_SECRET
+    JWT_SECRET = os.environ.get("JWT_SECRET", "")
+    if not JWT_SECRET:
+        raise RuntimeError("JWT_SECRET environment variable is not set")
 
 
 # ---------- models ----------
