@@ -12,6 +12,7 @@ import os
 import logging
 
 from .tenant_db import get_shared_db, tenant_context
+from middleware.security import limiter, AUTH_RATE_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,7 @@ async def register(body: RegisterRequest, request: Request):
 
 
 @auth_router.post("/login")
+@limiter.limit(AUTH_RATE_LIMIT)
 async def login(body: LoginRequest, request: Request):
     """Login user to the current tenant (with trial checking)."""
     ctx = tenant_context.get()

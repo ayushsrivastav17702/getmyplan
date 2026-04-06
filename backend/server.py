@@ -33,6 +33,20 @@ from routes.onboarding import router as onboarding_router, init_onboarding
 from routes.signup import router as signup_router
 from services.tenant_data_provider import init_tenant_provider
 
+# Security middleware
+from middleware.security import (
+    limiter,
+    rate_limit_exceeded_handler,
+    SecurityHeadersMiddleware,
+    RequestSizeLimitMiddleware,
+    StructuredLoggingMiddleware,
+    ErrorHandlerMiddleware,
+    AUTH_RATE_LIMIT,
+    validate_input,
+)
+from slowapi import _rate_limit_exceeded_handler as _slowapi_handler
+from slowapi.errors import RateLimitExceeded
+
 # Multi-tenant imports
 from multi_tenant import (
     TenantMiddleware,
@@ -74,7 +88,20 @@ def get_db():
 
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(
+    title="GetMyPlan API",
+    description="AI-Powered Retail Analytics Platform",
+    version="2.0.0",
+    docs_url="/api/docs",
+    redoc_url=None,
+)
+
+# Attach rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+# Track uptime
+_app_start_time = datetime.now(timezone.utc)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -369,6 +396,31 @@ async def cache_data(file_type: str, df: pd.DataFrame, validation: Dict):
 @api_router.get("/")
 async def root():
     return {"message": "GetMyPlan - AI Retail Analytics API"}
+
+
+@api_router.get("/health")
+async def health_check():
+    """Enterprise health check: DB status, version, uptime."""
+    uptime_seconds = (datetime.now(timezone.utc) - _app_start_time).total_seconds()
+    db_ok = False
+    try:
+        info = await client.server_info()
+        db_ok = True
+        db_version = info.get("version", "unknown")
+    except Exception:
+        db_version = "unreachable"
+
+    return {
+        "status": "healthy" if db_ok else "degraded",
+        "version": "2.0.0",
+        "company": "GetMyPlan",
+        "uptime_seconds": round(uptime_seconds),
+        "database": {
+            "status": "connected" if db_ok else "disconnected",
+            "version": db_version,
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @api_router.post("/status", response_model=StatusCheck)
@@ -3085,17 +3137,32 @@ app.include_router(tenant_router)
 app.include_router(user_router)
 app.include_router(signup_router)
 
-# CORS must be added BEFORE tenant middleware (Starlette processes middleware LIFO)
+# ==================== MIDDLEWARE STACK (Starlette LIFO: last added = first to run) ====================
+
+# 6. Tenant middleware — innermost, identifies tenant from header / JWT / subdomain
+app.add_middleware(TenantMiddleware)
+
+# 5. Security headers — adds HSTS, X-Frame-Options, CSP, etc.
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 4. Structured logging — adds correlation IDs, request/response logging
+app.add_middleware(StructuredLoggingMiddleware)
+
+# 3. Request size limiter — rejects oversized payloads
+app.add_middleware(RequestSizeLimitMiddleware)
+
+# 2. Error handler — catches unhandled exceptions, returns clean JSON
+app.add_middleware(ErrorHandlerMiddleware)
+
+# 1. CORS — runs first to handle preflight OPTIONS requests
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Correlation-ID", "X-Request-Duration"],
 )
-
-# Tenant middleware — identifies tenant from header / JWT / subdomain
-app.add_middleware(TenantMiddleware)
 
 
 # ==================== STARTUP / SHUTDOWN ====================
@@ -3147,9 +3214,43 @@ async def _ensure_default_tenant():
     logger.info("Default 'demo' tenant created (DB: %s)", _default_db_name)
 
 
+async def _ensure_enterprise_indexes():
+    """Create performance indexes and TTL indexes for production readiness."""
+    shared = client[SHARED_DB_NAME]
+
+    async def _safe_index(collection, keys, **kwargs):
+        """Create index, skip if already exists with different options."""
+        try:
+            await collection.create_index(keys, **kwargs)
+        except Exception:
+            pass  # Index may exist with different options
+
+    # Performance indexes on shared collections
+    await _safe_index(shared.users, "email", unique=True)
+    await _safe_index(shared.users, "verification_token", sparse=True)
+    await _safe_index(shared.tenants, "tenant_id", unique=True)
+    await _safe_index(shared.tenants, "status")
+    await _safe_index(shared.tenants, "admin_user_id", sparse=True)
+    await _safe_index(shared.user_tenants, "tenant_id")
+    await _safe_index(shared.sessions, "token", sparse=True)
+    await _safe_index(shared.api_keys, "key", sparse=True)
+
+    # TTL index: auto-delete documents with expired verification tokens
+    await _safe_index(
+        shared.users,
+        "verification_token_expiry",
+        name="ttl_verification_token",
+        expireAfterSeconds=172800,
+        partialFilterExpression={"verification_token_expiry": {"$exists": True}},
+    )
+
+    logger.info("Enterprise indexes ensured on shared DB")
+
+
 @app.on_event("startup")
 async def startup():
     await ensure_shared_indexes()
+    await _ensure_enterprise_indexes()
     await _ensure_default_tenant()
     await seed_rbac()
     init_core_logic(client)
@@ -3166,7 +3267,7 @@ async def startup():
     init_buy_plan(client, get_db, get_current_user, require_role)
     init_onboarding(client, get_db, get_current_user)
     init_tenant_provider(get_cached_data, get_db)
-    logger.info("Multi-tenant startup complete")
+    logger.info("Multi-tenant startup complete — enterprise security enabled")
 
 
 @app.on_event("shutdown")

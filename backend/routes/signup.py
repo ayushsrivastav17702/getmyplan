@@ -2,7 +2,7 @@
 Self-service signup routes: register, verify-email, resend-verification.
 These are PUBLIC endpoints (no tenant context required).
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime, timezone, timedelta
 import secrets
@@ -13,6 +13,7 @@ import logging
 from multi_tenant.tenant_db import get_shared_db, get_mongo_client, clear_tenant_cache
 from multi_tenant.auth import _hash_password
 from services.smtp_email_service import email_service
+from middleware.security import limiter, AUTH_RATE_LIMIT, validate_input
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +71,14 @@ def _slug(name: str) -> str:
 # ────────── Routes ──────────
 
 @router.post("/register")
-async def register(body: SignupRequest, background_tasks: BackgroundTasks):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def register(body: SignupRequest, request: Request, background_tasks: BackgroundTasks):
     """Self-service registration: create user + tenant, send verification email."""
+    # Input sanitization check
+    input_issues = validate_input(body.model_dump())
+    if input_issues:
+        raise HTTPException(400, f"Invalid input: {'; '.join(input_issues)}")
+
     shared = get_shared_db()
 
     # Uniqueness checks
@@ -177,7 +184,8 @@ async def register(body: SignupRequest, background_tasks: BackgroundTasks):
 
 
 @router.post("/verify-email")
-async def verify_email(body: VerifyEmailRequest, background_tasks: BackgroundTasks):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def verify_email(body: VerifyEmailRequest, request: Request, background_tasks: BackgroundTasks):
     """Verify email token and activate account + tenant."""
     shared = get_shared_db()
 
@@ -236,7 +244,8 @@ async def verify_email(body: VerifyEmailRequest, background_tasks: BackgroundTas
 
 
 @router.post("/resend-verification")
-async def resend_verification(body: ResendVerificationRequest, background_tasks: BackgroundTasks):
+@limiter.limit("3/minute")
+async def resend_verification(body: ResendVerificationRequest, request: Request, background_tasks: BackgroundTasks):
     """Resend verification email with rate limiting."""
     shared = get_shared_db()
 
