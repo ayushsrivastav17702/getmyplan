@@ -1,7 +1,7 @@
 # GetMyPlan - AI-Powered Retail Analytics Platform — PRD
 
 ## Original Problem Statement
-Build a Fashion Retail Gap Analysis platform (now branded as **GetMyPlan**) with React + FastAPI featuring CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, GPT-5.2 FAQ Chatbot, multi-tenant architecture, and role-based access control.
+Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with React + FastAPI featuring CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, GPT-5.2 FAQ Chatbot, multi-tenant architecture, and role-based access control.
 
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme)
@@ -11,58 +11,66 @@ Build a Fashion Retail Gap Analysis platform (now branded as **GetMyPlan**) with
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 - **Auth**: JWT with bcrypt, RBAC with 8 built-in roles + custom roles + permission overrides
 - **Email**: SMTP via Hostinger (smtp.hostinger.com:465, SSL, info@getmyplan.in)
+- **Security**: Enterprise middleware stack (rate limiting, security headers, input sanitization, structured logging)
 - **Branding**: GetMyPlan (getmyplan.in)
 
 ## Completed Phases
 
-### Phase 1-32 (Previous sessions)
-- Full MVP analytics, filters, presets, 16+ analytics modules
-- MongoDB Multi-Tenancy + RBAC + User Management
-- Executive Dashboard, Data Upload, Configuration, Core Logics, Gap Analysis, Stock-Out, Replenishment, DOH, Planogram, BI Dashboards, Warehouse, SFTP, Data Quality, FAQ Chatbot
-- AI Demand Planning System (ML Forecast Engine)
-- DASH-35 PDF Export, TENANT-20 Tenant Branding
+### Phase 1-37 (Previous sessions)
+- Full MVP: 16+ analytics modules, Multi-Tenancy, RBAC, JWT Auth
+- AI Demand Planning, Buy Plan Generator, Executive Dashboard
+- TenantDataProvider refactoring, Onboarding Wizard
+- Deployment health check passed
 
-### Phase 33 — AI Buy Plan Generator (Apr 2026)
-- 4-step Wizard, ML-powered Plan Generation, Charts, Tables, Excel Workbook, History
-
-### Phase 34 — TenantDataProvider Refactoring (Apr 2026)
-- Core service for all analytics, `data_source` field in responses
-
-### Phase 35 — Onboarding Wizard (Apr 2026)
-- 3-step wizard: Marketplaces → Stores → Category Taxonomy
-
-### Phase 36 — Onboarding-to-Analytics Integration (Apr 2026)
-- TenantDataProvider merges onboarding data as fallback
-
-### Phase 37 — Deployment Health Check (Apr 2026)
-- Security fix for JWT_SECRET, all checks passed
-
-### Phase 38 — Self-Service Signup with Email Verification & Trial (Apr 2026)
+### Phase 38 — Self-Service Signup (Apr 2026)
 - `/api/signup/register`, `/verify-email`, `/resend-verification`
-- SMTP email service with verification & welcome emails
-- 7-day trial, 3-day grace period, trial_info in login response
-- Signup wizard, VerifyEmail page, TrialBanner
-- Testing: **96% (Iteration 42, 24/25 PASS)**
+- SMTP emails, 7-day trial, TrialBanner
+- Testing: 24/25 PASS (Iteration 42)
 
 ### Phase 39 — GetMyPlan Rebranding (Apr 2026)
-- Replaced ALL "Increff Analytics" / "Merchandising Tool" with "GetMyPlan"
-- Updated: LoginPage, Signup, CoreLogics, OnboardingWizard, ExecutiveDashboard, App.js sidebar, index.html, server.py, email templates, .env
-- Added password reset email template
-- Testing: **100% (Iteration 43, 27/27 PASS)**
+- All "Increff"/"Merchandising Tool" → "GetMyPlan"
+- Testing: 27/27 PASS (Iteration 43)
 
-## Key API Endpoints
+### Phase 40 — Enterprise Security Hardening (Apr 2026)
+- **Rate Limiting**: slowapi — 10/min auth, 200/min general
+- **Security Headers**: HSTS, X-Frame-Options=DENY, CSP, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control=no-store
+- **MongoDB Indexes**: Performance indexes + TTL for verification tokens
+- **Request Size Limits**: 1MB JSON, 50MB file uploads
+- **Enhanced Health Check**: DB status, version, uptime, timestamp
+- **Structured Logging**: JSON format, correlation IDs, tenant tracking
+- **Global Error Handler**: Clean JSON errors, no stack traces
+- **Input Sanitization**: NoSQL injection, XSS, path traversal detection
+- **Middleware Stack Order**: CORS → Error Handler → Size Limiter → Logging → Security Headers → Tenant
+- Testing: **29/29 PASS (Iteration 44)**
 
-### Signup (PUBLIC)
-- `POST /api/signup/register`, `/verify-email`, `/resend-verification`
+## Security Features Summary
+```
+Security Headers (every API response):
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; frame-ancestors 'none'
+  Cache-Control: no-store, no-cache, must-revalidate, private
 
-### Auth (Enhanced with trial checking)
-- `POST /api/auth/login` — returns `trial_info` for trial tenants
+Rate Limiting:
+  Auth endpoints: 10/minute (login, signup, verify-email)
+  General API: 200/minute
+  Resend verification: 3/minute
 
-### Onboarding
-- `GET /api/onboarding/status`, CRUD for marketplaces/stores/categories
+Input Sanitization:
+  NoSQL: $gt, $lt, $ne, $regex, $exists, $or, $and, $where
+  XSS: <script>, javascript:, on* event handlers
+  Path Traversal: ../ and ..\\
+```
 
-### Analytics
-- `GET /api/analytics/ai-demand/options`, `/filter-options`, `/buy-plan/options`
+## Key Files
+- `/app/backend/middleware/security.py` — All security middleware
+- `/app/backend/services/smtp_email_service.py` — SMTP email service
+- `/app/backend/routes/signup.py` — Self-service signup
+- `/app/backend/multi_tenant/auth.py` — JWT auth with trial checking
 
 ## Prioritized Backlog
 
