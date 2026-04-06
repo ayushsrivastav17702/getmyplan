@@ -10,6 +10,7 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - **AI**: GPT 5.2 via Emergent LLM Key
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 - **Auth**: JWT with bcrypt, RBAC with 8 built-in roles + custom roles + permission overrides
+- **Email**: SMTP via Hostinger (smtp.hostinger.com:465, SSL)
 - **Service Layer**: TenantDataProvider (`/backend/services/tenant_data_provider.py`) — single source of truth for tenant data with onboarding fallback
 
 ## Completed Phases
@@ -38,24 +39,27 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - Testing: **100% (Iteration 38, 31/31 PASS)**
 
 ### Phase 36 — Onboarding-to-Analytics Integration (Apr 2026)
-- TenantDataProvider now merges onboarding data as fallback when CSV data is missing
-- **CSV always takes precedence** — onboarding data fills gaps only
-- Fallback mapping:
-  - `ob_categories` (level 1) → `get_categories()` 
-  - `ob_categories` (level 2+) → `get_subcategories()`
-  - `ob_marketplaces` names → `get_channels()`
-  - `ob_stores` states → `get_regions()`
-  - `ob_stores` → `get_stores()` / `get_store_codes()`
-- `validate_data_availability()` includes `onboarding_fallback` and `has_onboarding_data` fields
-- Both `/filter-options` and `/ai-demand/options` endpoints benefit from fallback
+- TenantDataProvider merges onboarding data as fallback
 - Testing: **100% (Iteration 39, 15/15 PASS)**
 
 ### Phase 37 — Deployment Health Check (Apr 2026)
-- Security fix: Removed hardcoded JWT_SECRET fallback, added `_refresh_jwt_secret()` startup validation
-- Deployment agent: All checks passed (compilation, env, CORS, DB, supervisor, ports)
-- Full system verified: Backend API + Frontend UI + MongoDB all operational
+- Security fix: Removed hardcoded JWT_SECRET fallback
+- Deployment agent: All checks passed
+
+### Phase 38 — Self-Service Signup with Email Verification & Trial (Apr 2026)
+- **Backend**: `/api/signup/register`, `/verify-email`, `/resend-verification`
+- **SMTP Email Service**: Hostinger SMTP with verification & welcome emails, mock fallback
+- **Trial System**: 7-day trial, 3-day grace period, trial_info in login response
+- **Frontend**: 2-step Signup wizard, VerifyEmail page, TrialBanner, "Start free trial" link
+- **Coexistence**: Existing tenants (demo, acme_corp) unaffected, no trial_info returned
+- Testing: **96% (Iteration 42, 24/25 PASS, 1 PARTIAL expected)**
 
 ## Key API Endpoints
+
+### Signup (PUBLIC — no tenant context required)
+- `POST /api/signup/register` — Create user + tenant, send verification email
+- `POST /api/signup/verify-email` — Verify token, activate user + tenant
+- `POST /api/signup/resend-verification` — Resend email (60s rate limit)
 
 ### Onboarding
 - `GET /api/onboarding/status` — Progress, current step, is_onboarded
@@ -64,10 +68,17 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - `POST/GET/DELETE /api/onboarding/categories` — Category taxonomy CRUD (nested tree)
 - `POST /api/onboarding/skip`, `/complete`, `/reset`
 
+### Auth (Enhanced)
+- `POST /api/auth/login` — Login with trial checking (returns trial_info for trial tenants)
+
 ### Analytics Options (TenantDataProvider-powered with onboarding fallback)
 - `GET /api/analytics/ai-demand/options`
 - `GET /api/analytics/filter-options`
 - `GET /api/buy-plan/options`
+
+## Key DB Collections (New)
+- `merch_shared.users` — Added: `email_verified`, `verification_token`, `verification_token_expiry`, `is_active`
+- `merch_shared.tenants` — Added: `plan_type: "trial"`, `status: "pending_verification"`, `trial_start`, `trial_end`, `admin_user_id`
 
 ## Prioritized Backlog
 
@@ -78,6 +89,7 @@ Build a Fashion Retail Gap Analysis platform with React + FastAPI featuring CSV 
 - USER-17: Force password change on first login
 - Scheduled analysis jobs
 - Tenant billing/usage tracking
+- Plan upgrade page for trial users
 
 ### P3
 - USER-18: MFA
