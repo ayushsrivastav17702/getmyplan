@@ -28,6 +28,9 @@ PUBLIC_PATHS = {
     "/api/tenants/create",
     "/api/tenants/check-subdomain",
     "/api/users/accept-invite",
+    "/api/signup/register",
+    "/api/signup/verify-email",
+    "/api/signup/resend-verification",
     "/docs",
     "/openapi.json",
 }

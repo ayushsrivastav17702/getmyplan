@@ -142,9 +142,9 @@ async def register(body: RegisterRequest, request: Request):
     )
 
 
-@auth_router.post("/login", response_model=TokenResponse)
+@auth_router.post("/login")
 async def login(body: LoginRequest, request: Request):
-    """Login user to the current tenant."""
+    """Login user to the current tenant (with trial checking)."""
     ctx = tenant_context.get()
     if not ctx:
         raise HTTPException(status_code=400, detail="Tenant context required")
@@ -157,6 +157,10 @@ async def login(body: LoginRequest, request: Request):
     if not _verify_password(body.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # Block unverified users (from self-signup flow)
+    if user.get("email_verified") is False:
+        raise HTTPException(status_code=403, detail="Please verify your email before logging in")
+
     # Check tenant membership
     mapping = await shared.user_tenants.find_one({
         "email": body.email,
@@ -165,6 +169,39 @@ async def login(body: LoginRequest, request: Request):
     })
     if not mapping:
         raise HTTPException(status_code=401, detail="User not authorized for this tenant")
+
+    # Check tenant status
+    tenant_doc = await shared.tenants.find_one({"tenant_id": ctx.tenant_id})
+    if tenant_doc and tenant_doc.get("status") == "pending_verification":
+        raise HTTPException(status_code=403, detail="Please verify your email before logging in")
+    if tenant_doc and tenant_doc.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="Account suspended. Please contact support.")
+
+    # Trial checking
+    trial_info = None
+    if tenant_doc and tenant_doc.get("plan_type") == "trial" and tenant_doc.get("trial_end"):
+        trial_end_str = tenant_doc["trial_end"]
+        if isinstance(trial_end_str, str):
+            trial_end = datetime.fromisoformat(trial_end_str)
+        else:
+            trial_end = trial_end_str
+        if trial_end.tzinfo is None:
+            trial_end = trial_end.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        days_remaining = (trial_end - now).days
+
+        if days_remaining <= 0:
+            grace_end = trial_end + timedelta(days=3)
+            if now > grace_end:
+                raise HTTPException(status_code=403, detail="Trial expired. Please upgrade your plan.")
+
+        trial_info = {
+            "days_remaining": max(0, days_remaining),
+            "trial_end": trial_end.isoformat(),
+            "is_trial_active": days_remaining > 0,
+            "plan_type": "trial",
+        }
 
     role = mapping.get("role", "viewer")
     token = _create_token({
@@ -178,9 +215,16 @@ async def login(body: LoginRequest, request: Request):
     from .rbac import resolve_permissions
     perms = resolve_permissions(role)
 
-    return TokenResponse(
-        access_token=token,
-        user={
+    # Update last login
+    await shared.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"last_login": datetime.now(timezone.utc).isoformat()}},
+    )
+
+    response = {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
             "email": user["email"],
             "username": user.get("username", ""),
             "full_name": user.get("full_name", ""),
@@ -188,7 +232,11 @@ async def login(body: LoginRequest, request: Request):
             "tenant_id": ctx.tenant_id,
             "permissions": perms,
         },
-    )
+    }
+    if trial_info:
+        response["trial_info"] = trial_info
+
+    return response
 
 
 @auth_router.get("/me")

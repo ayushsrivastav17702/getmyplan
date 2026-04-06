@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 import { API } from "../App";
 import { useAuth } from "../context/AuthContext";
 import {
   Lock, Mail, Building2, ChevronRight, AlertCircle,
-  Eye, EyeOff, Loader2, UserPlus, LogIn
+  Eye, EyeOff, Loader2, UserPlus, LogIn, Rocket
 } from "lucide-react";
 
 const LoginPage = () => {
@@ -309,6 +310,11 @@ const LoginPage = () => {
         <p className="text-center text-xs text-slate-400 mt-6">
           Increff Analytics Platform v2.0 &middot; Multi-Tenant
         </p>
+        <div className="text-center mt-3">
+          <Link to="/signup" className="text-sm text-[#0176D3] hover:text-[#0161B0] font-medium inline-flex items-center gap-1" data-testid="login-signup-link">
+            <Rocket size={14} /> Start your 7-day free trial
+          </Link>
+        </div>
       </div>
     </div>
   );

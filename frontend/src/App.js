@@ -36,6 +36,8 @@ import TenantAdminPanel from "./pages/TenantAdminPanel";
 import AIDemandPlanning from "./pages/AIDemandPlanning";
 import BuyPlanDashboard from "./pages/BuyPlanDashboard";
 import OnboardingWizard from "./pages/OnboardingWizard";
+import Signup from "./pages/Signup";
+import VerifyEmail from "./pages/VerifyEmail";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -78,7 +80,7 @@ const ProtectedRoute = ({ permission, children }) => {
 // ─── Sidebar ───
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const location = useLocation();
-  const { user, tenantId, tenantInfo, branding, logout, hasPermission } = useAuth();
+  const { user, tenantId, tenantInfo, branding, logout, hasPermission, trialInfo } = useAuth();
   const [moduleConfig, setModuleConfig] = useState(null);
 
   const primaryColor = branding?.primary_color || "#0176D3";
@@ -154,9 +156,11 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
             </div>
             <div className="flex items-center justify-between mt-1">
               <span className="text-[10px] text-slate-500 uppercase tracking-wider">
-                {tenantInfo.plan_type || "starter"} plan
+                {trialInfo ? "trial" : (tenantInfo.plan_type || "starter")} plan
               </span>
-              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Active</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                trialInfo ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
+              }`}>{trialInfo ? `${trialInfo.days_remaining}d left` : "Active"}</span>
             </div>
           </div>
         )}
@@ -249,6 +253,36 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   );
 };
 
+// ─── Trial Banner ───
+const TrialBanner = () => {
+  const { trialInfo } = useAuth();
+  if (!trialInfo) return null;
+  const { days_remaining, is_trial_active } = trialInfo;
+  const urgent = days_remaining <= 2;
+
+  return (
+    <div
+      data-testid="trial-banner"
+      className={`px-4 py-2.5 text-sm font-medium flex items-center justify-between ${
+        urgent
+          ? "bg-amber-50 border-b border-amber-200 text-amber-800"
+          : "bg-blue-50 border-b border-blue-200 text-blue-800"
+      }`}
+    >
+      <span>
+        {is_trial_active
+          ? `Free trial: ${days_remaining} day${days_remaining !== 1 ? "s" : ""} remaining`
+          : "Trial expired — upgrade to continue using all features"}
+      </span>
+      <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+        urgent ? "bg-amber-200 text-amber-900" : "bg-blue-200 text-blue-900"
+      }`}>
+        Trial
+      </span>
+    </div>
+  );
+};
+
 // ─── Authenticated app with permission-guarded routes ───
 const AuthenticatedApp = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
@@ -285,6 +319,7 @@ const AuthenticatedApp = () => {
       <Sidebar uploadStatus={uploadStatus} isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
       <main className="flex-1 min-h-screen">
+        <TrialBanner />
         <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
           <Routes>
             {/* Always accessible */}
@@ -349,12 +384,19 @@ const OfflineBanner = () => {
   );
 };
 
-// ─── Root: gate on authentication ───
+// ─── Root: gate on authentication, with public routes for signup/verify ───
 const AppRouter = () => {
   const { isAuthenticated, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><div className="spinner" /></div>;
-  if (!isAuthenticated) return <LoginPage />;
-  return <AuthenticatedApp />;
+
+  // Public routes (signup, verify-email) available regardless of auth state
+  return (
+    <Routes>
+      <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <Signup />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/*" element={isAuthenticated ? <AuthenticatedApp /> : <LoginPage />} />
+    </Routes>
+  );
 };
 
 function App() {

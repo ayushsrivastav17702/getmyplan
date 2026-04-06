@@ -30,6 +30,7 @@ from routes.gap_analysis import router as gap_analysis_router, init_gap_analysis
 from routes.ai_demand import router as ai_demand_router, init_ai_demand
 from routes.buy_plan import router as buy_plan_router, init_buy_plan
 from routes.onboarding import router as onboarding_router, init_onboarding
+from routes.signup import router as signup_router
 from services.tenant_data_provider import init_tenant_provider
 
 # Multi-tenant imports
@@ -3082,6 +3083,7 @@ app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
 app.include_router(user_router)
+app.include_router(signup_router)
 
 # CORS must be added BEFORE tenant middleware (Starlette processes middleware LIFO)
 app.add_middleware(
