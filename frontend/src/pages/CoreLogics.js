@@ -149,8 +149,8 @@ const CoreLogics = () => {
     <div className="animate-fade-in-up" data-testid="core-logics-page">
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Increff Core Logics</h1>
-          <p className="text-slate-500">Advanced analytics powered by Increff algorithms</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">GetMyPlan Core Logics</h1>
+          <p className="text-slate-500">Advanced analytics powered by GetMyPlan algorithms</p>
         </div>
         <div className="flex items-center gap-3">
           <button data-testid="refresh-btn" onClick={fetchData} disabled={loading}

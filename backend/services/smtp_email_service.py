@@ -22,7 +22,7 @@ class SMTPEmailService:
             "user": os.environ.get("SMTP_USER", ""),
             "password": os.environ.get("SMTP_PASSWORD", ""),
             "from_email": os.environ.get("FROM_EMAIL", ""),
-            "from_name": os.environ.get("FROM_NAME", "Merchandising Tool"),
+            "from_name": os.environ.get("FROM_NAME", "GetMyPlan"),
             "use_ssl": os.environ.get("SMTP_USE_SSL", "true").lower() == "true",
             "app_url": os.environ.get("APP_URL", ""),
             "trial_days": int(os.environ.get("TRIAL_DAYS", "7")),
@@ -66,7 +66,7 @@ class SMTPEmailService:
 <body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f3f4f6;">
 <div style="max-width:600px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
   <div style="padding:28px 24px;background:#0176D3;text-align:center;">
-    <h1 style="margin:0;color:#fff;font-size:22px;">Merchandising Tool</h1>
+    <h1 style="margin:0;color:#fff;font-size:22px;">GetMyPlan</h1>
   </div>
   <div style="padding:32px 28px;">
     <h2 style="margin:0 0 12px;color:#1e293b;">Welcome to {company_name}!</h2>
@@ -84,7 +84,7 @@ class SMTPEmailService:
     </div>
   </div>
   <div style="padding:16px;text-align:center;background:#f8fafc;font-size:12px;color:#94a3b8;">
-    Merchandising Tool &mdash; AI-powered retail analytics
+    GetMyPlan &mdash; AI-powered retail analytics
   </div>
 </div>
 </body></html>"""
@@ -101,7 +101,7 @@ class SMTPEmailService:
 <body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f3f4f6;">
 <div style="max-width:600px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
   <div style="padding:28px 24px;background:#10b981;text-align:center;">
-    <h1 style="margin:0;color:#fff;font-size:22px;">Welcome to Merchandising Tool!</h1>
+    <h1 style="margin:0;color:#fff;font-size:22px;">Welcome to GetMyPlan!</h1>
   </div>
   <div style="padding:32px 28px;">
     <h2 style="margin:0 0 12px;color:#1e293b;">Your account is ready!</h2>
@@ -119,12 +119,39 @@ class SMTPEmailService:
     <p style="color:#475569;"><strong>Trial ends in {trial_days} days.</strong> Upgrade anytime to continue.</p>
   </div>
   <div style="padding:16px;text-align:center;background:#f8fafc;font-size:12px;color:#94a3b8;">
-    Merchandising Tool &mdash; AI-powered retail analytics
+    GetMyPlan &mdash; AI-powered retail analytics
   </div>
 </div>
 </body></html>"""
 
         return self.send_email(to_email, f"Welcome to {company_name}!", html)
+
+    def send_password_reset_email(self, to_email: str, token: str) -> bool:
+        cfg = self._cfg
+        reset_url = f"{cfg['app_url']}/reset-password?token={token}"
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f3f4f6;">
+<div style="max-width:600px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+  <div style="padding:28px 24px;background:#0176D3;text-align:center;">
+    <h1 style="margin:0;color:#fff;font-size:22px;">GetMyPlan</h1>
+  </div>
+  <div style="padding:32px 28px;">
+    <h2 style="margin:0 0 12px;color:#1e293b;">Reset Your Password</h2>
+    <p style="color:#475569;line-height:1.6;">Click the button below to reset your password. This link expires in 1 hour.</p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="{reset_url}" style="display:inline-block;padding:12px 32px;background:#0176D3;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Reset Password</a>
+    </div>
+    <p style="color:#64748b;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+  </div>
+  <div style="padding:16px;text-align:center;background:#f8fafc;font-size:12px;color:#94a3b8;">
+    GetMyPlan &mdash; AI-powered retail analytics
+  </div>
+</div>
+</body></html>"""
+
+        return self.send_email(to_email, "Reset your password - GetMyPlan", html)
 
 
 email_service = SMTPEmailService()

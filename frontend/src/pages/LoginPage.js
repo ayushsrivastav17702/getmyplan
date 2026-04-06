@@ -92,8 +92,8 @@ const LoginPage = () => {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#0176D3] mb-4">
             <Building2 size={28} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Increff Analytics</h1>
-          <p className="text-sm text-slate-500 mt-1">Multi-Tenant Fashion Retail Platform</p>
+          <h1 className="text-2xl font-bold text-slate-900">GetMyPlan</h1>
+          <p className="text-sm text-slate-500 mt-1">AI-Powered Retail Analytics</p>
         </div>
 
         {/* Card */}
@@ -308,7 +308,7 @@ const LoginPage = () => {
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">
-          Increff Analytics Platform v2.0 &middot; Multi-Tenant
+          GetMyPlan v2.0 &middot; Multi-Tenant
         </p>
         <div className="text-center mt-3">
           <Link to="/signup" className="text-sm text-[#0176D3] hover:text-[#0161B0] font-medium inline-flex items-center gap-1" data-testid="login-signup-link">

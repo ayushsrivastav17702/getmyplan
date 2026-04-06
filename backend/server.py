@@ -368,7 +368,7 @@ async def cache_data(file_type: str, df: pd.DataFrame, validation: Dict):
 
 @api_router.get("/")
 async def root():
-    return {"message": "Fashion Retail Gap Analysis API"}
+    return {"message": "GetMyPlan - AI Retail Analytics API"}
 
 
 @api_router.post("/status", response_model=StatusCheck)
@@ -2448,7 +2448,7 @@ async def chat_with_bot(message: ChatMessage, request: Request):
         
         session_id = message.session_id or str(uuid.uuid4())
         
-        system_message = f"""You are an expert assistant for the Fashion Retail Gap Analysis Platform.
+        system_message = f"""You are an expert assistant for GetMyPlan, an AI-Powered Retail Analytics Platform.
         
 Use this knowledge base to answer questions accurately and helpfully:
 {PLATFORM_KNOWLEDGE}

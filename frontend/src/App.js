@@ -141,7 +141,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
             <img src={logoUrl} alt="Logo" className="h-8 max-w-[180px] object-contain" data-testid="sidebar-logo" onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
           ) : null}
           <h1 className="text-xl font-semibold tracking-tight text-white" style={{ display: logoUrl ? 'none' : 'block' }} data-testid="sidebar-title">
-            {tenantInfo?.company_name || "Increff Analytics"}
+            {tenantInfo?.company_name || "GetMyPlan"}
           </h1>
         </div>
 

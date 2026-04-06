@@ -345,7 +345,7 @@ const Signup = () => {
         )}
 
         <p className="text-center text-xs text-slate-400 mt-6">
-          Merchandising Tool v2.0 &middot; AI-powered retail analytics
+          GetMyPlan v2.0 &middot; AI-powered retail analytics
         </p>
       </div>
     </div>

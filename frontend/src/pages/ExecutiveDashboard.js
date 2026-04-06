@@ -73,7 +73,7 @@ const ExecutiveDashboard = () => {
       // Footer
       pdf.setFontSize(8);
       pdf.setTextColor(150, 150, 150);
-      pdf.text("Increff Analytics - Confidential", 20, imgH + 85);
+      pdf.text("GetMyPlan Analytics - Confidential", 20, imgH + 85);
       pdf.text(`Page 1 of 1`, imgW + 20, imgH + 85, { align: "right" });
 
       pdf.save(`executive-dashboard-${new Date().toISOString().split("T")[0]}.pdf`);
