@@ -4,7 +4,7 @@
 Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with React + FastAPI featuring CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, GPT-5.2 FAQ Chatbot, multi-tenant architecture, and role-based access control.
 
 ## Architecture
-- **Frontend**: React with Tailwind CSS (Salesforce theme)
+- **Frontend**: React with Tailwind CSS (Salesforce theme for dashboard, Swiss+High-Contrast for marketing)
 - **Backend**: FastAPI with Python/Pandas
 - **Database**: MongoDB (multi-tenant: separate DB per tenant, shared registry in merch_shared)
 - **AI**: GPT 5.2 via Emergent LLM Key
@@ -13,6 +13,7 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Email**: SMTP via Hostinger (smtp.hostinger.com:465, SSL, info@getmyplan.in)
 - **Security**: Enterprise middleware stack (rate limiting, security headers, input sanitization, structured logging)
 - **Branding**: GetMyPlan (getmyplan.in)
+- **Fonts**: Cabinet Grotesk + Satoshi (marketing), Inter (dashboard)
 
 ## Completed Phases
 
@@ -32,55 +33,46 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Testing: 27/27 PASS (Iteration 43)
 
 ### Phase 40 — Enterprise Security Hardening (Apr 2026)
-- **Rate Limiting**: slowapi — 10/min auth, 200/min general
-- **Security Headers**: HSTS, X-Frame-Options=DENY, CSP, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control=no-store
-- **MongoDB Indexes**: Performance indexes + TTL for verification tokens
-- **Request Size Limits**: 1MB JSON, 50MB file uploads
-- **Enhanced Health Check**: DB status, version, uptime, timestamp
-- **Structured Logging**: JSON format, correlation IDs, tenant tracking
-- **Global Error Handler**: Clean JSON errors, no stack traces
-- **Input Sanitization**: NoSQL injection, XSS, path traversal detection
-- **Middleware Stack Order**: CORS -> Error Handler -> Size Limiter -> Logging -> Security Headers -> Tenant
-- Testing: **29/29 PASS (Iteration 44)**
+- Rate Limiting, Security Headers, MongoDB Indexes, Input Sanitization
+- Testing: 29/29 PASS (Iteration 44)
 
 ### Phase 41 — Website Product Report + CORS/Projection Fix (Apr 2026)
-- **WEBSITE_PRODUCT_REPORT.md**: Comprehensive 11-section report with real API data, screenshots, feature list, user flow, data models, differentiators, target customer — ready for website redesign
-- **CORS Lockdown**: Restricted from `*` to specific domains (`getmyplan.in`, `*.getmyplan.in`, `localhost:3000`, preview URL) with `allow_origin_regex` for subdomain pattern matching
-- **Query Projection Fix**: Added MongoDB projection to `get_cached_data()` at server.py:368 to exclude `_id` and limit returned fields
+- WEBSITE_PRODUCT_REPORT.md: 11-section report with real API data
+- CORS lockdown + query projection fix
 
-## Security Features Summary
-```
-Security Headers (every API response):
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
-  X-XSS-Protection: 1; mode=block
-  Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; frame-ancestors 'none'
-  Cache-Control: no-store, no-cache, must-revalidate, private
-
-CORS (production):
-  Exact origins: https://getmyplan.in, http://localhost:3000
-  Regex: https://*.getmyplan.in (via allow_origin_regex)
-
-Rate Limiting:
-  Auth endpoints: 10/minute (login, signup, verify-email)
-  General API: 200/minute
-  Resend verification: 3/minute
-
-Input Sanitization:
-  NoSQL: $gt, $lt, $ne, $regex, $exists, $or, $and, $where
-  XSS: <script>, javascript:, on* event handlers
-  Path Traversal: ../ and ..\\
-```
+### Phase 42 — Marketing Landing Page (Apr 2026)
+- **LandingPage.jsx**: Full marketing page with 9 sections: Navbar (glassmorphic), Hero, Stats Bar, Features Bento Grid (8 features), How It Works (4 steps), Pricing (3 tiers), Testimonials (3 reviews), CTA Banner, Footer
+- **Routing changes**: `/` (unauth) → LandingPage, `/login` → LoginPage, `/signup` → Signup
+- **Updated login links**: Signup, VerifyEmail, LoginPage all cross-link correctly
+- **Design**: Cabinet Grotesk + Satoshi fonts, #2563eb primary, framer-motion animations, mobile responsive
+- **Testing: 27/27 PASS (Iteration 45)**
 
 ## Key Files
-- `/app/backend/middleware/security.py` — All security middleware
-- `/app/backend/services/smtp_email_service.py` — SMTP email service
+- `/app/frontend/src/pages/LandingPage.jsx` — Marketing landing page (9 sections)
+- `/app/frontend/src/App.js` — Routing: LandingPage at / for unauth, /login for login
+- `/app/backend/middleware/security.py` — Enterprise security middleware
 - `/app/backend/routes/signup.py` — Self-service signup
-- `/app/backend/multi_tenant/auth.py` — JWT auth with trial checking
-- `/app/memory/WEBSITE_PRODUCT_REPORT.md` — Complete website product report (11 sections)
+- `/app/memory/WEBSITE_PRODUCT_REPORT.md` — Complete website product report
+
+## Route Map
+```
+UNAUTHENTICATED:
+  /           → Marketing Landing Page
+  /login      → Login Page
+  /signup     → Signup Page (2-step wizard)
+  /verify-email → Email Verification
+
+AUTHENTICATED:
+  /           → Getting Started (Dashboard Home)
+  /dashboard  → Executive Dashboard
+  /upload     → Data Upload
+  /config     → Configuration
+  /gap-analysis → Gap Analysis
+  /stock-out  → Stock-Out Analysis
+  /ai-demand  → AI Demand Planning
+  /buy-plan   → Buy Plan Generator
+  ... (18 more routes)
+```
 
 ## Prioritized Backlog
 
