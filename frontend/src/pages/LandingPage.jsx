@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
 import TrustBar from "../components/landing/TrustBar";
@@ -11,14 +11,20 @@ import Testimonials from "../components/landing/Testimonials";
 import FAQ from "../components/landing/FAQ";
 import CTASection from "../components/landing/CTASection";
 import Footer from "../components/landing/Footer";
+import ProductTour from "../components/landing/ProductTour";
 
 export default function LandingPage() {
+  const [showTour, setShowTour] = useState(false);
+
   useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  const openTour = useCallback(() => setShowTour(true), []);
+  const closeTour = useCallback(() => setShowTour(false), []);
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero />
+      <Hero onWatchDemo={openTour} />
       <TrustBar />
       <StatsSection />
       <Features />
@@ -29,6 +35,7 @@ export default function LandingPage() {
       <FAQ />
       <CTASection />
       <Footer />
+      <ProductTour isOpen={showTour} onClose={closeTour} />
     </div>
   );
 }

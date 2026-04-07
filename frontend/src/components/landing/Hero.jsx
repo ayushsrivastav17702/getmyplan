@@ -2,7 +2,7 @@ import { ArrowRight, CheckCircle, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
-export default function Hero() {
+export default function Hero({ onWatchDemo }) {
   return (
     <section data-testid="hero-section" className="relative pt-32 pb-20 overflow-hidden bg-gradient-to-br from-gray-50 via-white to-blue-50">
       {/* Animated blobs */}
@@ -50,7 +50,7 @@ export default function Hero() {
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition" />
             </Link>
             <button
-              onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
+              onClick={onWatchDemo}
               className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
               data-testid="hero-demo-btn"
             >
