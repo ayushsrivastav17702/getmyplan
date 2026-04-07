@@ -83,9 +83,10 @@ async def register(body: SignupRequest, request: Request, background_tasks: Back
 
     # Uniqueness checks
     if await shared.users.find_one({"email": body.email}):
-        raise HTTPException(400, "Email already registered")
-    if await shared.tenants.find_one({"subdomain": body.subdomain}):
-        raise HTTPException(400, "Subdomain already taken")
+        raise HTTPException(400, "Email already registered. Please sign in instead.")
+    existing_tenant = await shared.tenants.find_one({"subdomain": body.subdomain})
+    if existing_tenant:
+        raise HTTPException(400, f"This workspace already exists. Ask your admin to invite you from the User Management page, or choose a different workspace URL.")
 
     tenant_id = _slug(body.company_name)
     # Ensure tenant_id is unique (handle collisions)
