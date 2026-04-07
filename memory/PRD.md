@@ -28,7 +28,7 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Testing: 24/25 PASS (Iteration 42)
 
 ### Phase 39 — GetMyPlan Rebranding (Apr 2026)
-- All "Increff"/"Merchandising Tool" → "GetMyPlan"
+- All "Increff"/"Merchandising Tool" -> "GetMyPlan"
 - Testing: 27/27 PASS (Iteration 43)
 
 ### Phase 40 — Enterprise Security Hardening (Apr 2026)
@@ -40,8 +40,13 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Structured Logging**: JSON format, correlation IDs, tenant tracking
 - **Global Error Handler**: Clean JSON errors, no stack traces
 - **Input Sanitization**: NoSQL injection, XSS, path traversal detection
-- **Middleware Stack Order**: CORS → Error Handler → Size Limiter → Logging → Security Headers → Tenant
+- **Middleware Stack Order**: CORS -> Error Handler -> Size Limiter -> Logging -> Security Headers -> Tenant
 - Testing: **29/29 PASS (Iteration 44)**
+
+### Phase 41 — Website Product Report + CORS/Projection Fix (Apr 2026)
+- **WEBSITE_PRODUCT_REPORT.md**: Comprehensive 11-section report with real API data, screenshots, feature list, user flow, data models, differentiators, target customer — ready for website redesign
+- **CORS Lockdown**: Restricted from `*` to specific domains (`getmyplan.in`, `*.getmyplan.in`, `localhost:3000`, preview URL) with `allow_origin_regex` for subdomain pattern matching
+- **Query Projection Fix**: Added MongoDB projection to `get_cached_data()` at server.py:368 to exclude `_id` and limit returned fields
 
 ## Security Features Summary
 ```
@@ -54,6 +59,10 @@ Security Headers (every API response):
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: default-src 'self'; frame-ancestors 'none'
   Cache-Control: no-store, no-cache, must-revalidate, private
+
+CORS (production):
+  Exact origins: https://getmyplan.in, http://localhost:3000
+  Regex: https://*.getmyplan.in (via allow_origin_regex)
 
 Rate Limiting:
   Auth endpoints: 10/minute (login, signup, verify-email)
@@ -71,6 +80,7 @@ Input Sanitization:
 - `/app/backend/services/smtp_email_service.py` — SMTP email service
 - `/app/backend/routes/signup.py` — Self-service signup
 - `/app/backend/multi_tenant/auth.py` — JWT auth with trial checking
+- `/app/memory/WEBSITE_PRODUCT_REPORT.md` — Complete website product report (11 sections)
 
 ## Prioritized Backlog
 

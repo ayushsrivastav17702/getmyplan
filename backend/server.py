@@ -365,7 +365,7 @@ def validate_file(df: pd.DataFrame, file_type: str) -> Dict[str, Any]:
 async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
     """Retrieve cached data from tenant-aware MongoDB"""
     tdb = get_db()
-    doc = await tdb.uploaded_files.find_one({"file_type": file_type})
+    doc = await tdb.uploaded_files.find_one({"file_type": file_type}, {"_id": 0, "file_type": 1, "data": 1})
     if doc and 'data' in doc:
         return pd.DataFrame(doc['data'])
     return None
@@ -3155,10 +3155,14 @@ app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
 
 # 1. CORS — runs first to handle preflight OPTIONS requests
+_cors_raw = os.environ.get('CORS_ORIGINS', '*').split(',')
+_cors_origins = [o.strip() for o in _cors_raw if '*' not in o]
+_cors_regex = r"https://.*\.getmyplan\.in" if any('*' in o for o in _cors_raw) else None
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=_cors_origins if _cors_origins else ["*"],
+    allow_origin_regex=_cors_regex,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Correlation-ID", "X-Request-Duration"],
