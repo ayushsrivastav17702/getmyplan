@@ -89,8 +89,14 @@ const Signup = () => {
       const detail = err.response?.data?.detail;
       if (typeof detail === "object" && Array.isArray(detail)) {
         setError(detail.map(d => d.msg || d).join(", "));
+      } else if (detail) {
+        setError(detail);
+      } else if (err.response?.status === 429) {
+        setError("Too many attempts. Please wait a minute and try again.");
+      } else if (!err.response) {
+        setError("Network error. Please check your connection and try again.");
       } else {
-        setError(detail || "Registration failed. Please try again.");
+        setError("Registration failed. Please try again.");
       }
     } finally {
       setLoading(false);
