@@ -146,11 +146,7 @@ async def register(body: RegisterRequest, request: Request):
 @auth_router.post("/login")
 @limiter.limit(AUTH_RATE_LIMIT)
 async def login(body: LoginRequest, request: Request):
-    """Login user to the current tenant (with trial checking)."""
-    ctx = tenant_context.get()
-    if not ctx:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-
+    """Login user — auto-resolves tenant from email."""
     shared = get_shared_db()
     user = await shared.users.find_one({"email": body.email})
     if not user:
@@ -163,17 +159,32 @@ async def login(body: LoginRequest, request: Request):
     if user.get("email_verified") is False:
         raise HTTPException(status_code=403, detail="Please verify your email before logging in")
 
-    # Check tenant membership
+    # Auto-resolve tenant from user_tenants mapping
+    # If X-Tenant-ID header is provided, use it; otherwise look up
+    ctx = tenant_context.get(None)
+    if ctx:
+        resolved_tenant_id = ctx.tenant_id
+    else:
+        # Look up tenant from user_tenants collection
+        mapping = await shared.user_tenants.find_one({
+            "email": body.email,
+            "is_active": True,
+        }, {"_id": 0, "tenant_id": 1})
+        if not mapping:
+            raise HTTPException(status_code=401, detail="No active workspace found for this email")
+        resolved_tenant_id = mapping["tenant_id"]
+
+    # Verify tenant membership
     mapping = await shared.user_tenants.find_one({
         "email": body.email,
-        "tenant_id": ctx.tenant_id,
+        "tenant_id": resolved_tenant_id,
         "is_active": True,
     })
     if not mapping:
-        raise HTTPException(status_code=401, detail="User not authorized for this tenant")
+        raise HTTPException(status_code=401, detail="User not authorized for this workspace")
 
     # Check tenant status
-    tenant_doc = await shared.tenants.find_one({"tenant_id": ctx.tenant_id})
+    tenant_doc = await shared.tenants.find_one({"tenant_id": resolved_tenant_id})
     if tenant_doc and tenant_doc.get("status") == "pending_verification":
         raise HTTPException(status_code=403, detail="Please verify your email before logging in")
     if tenant_doc and tenant_doc.get("status") == "suspended":
@@ -209,7 +220,7 @@ async def login(body: LoginRequest, request: Request):
     token = _create_token({
         "user_id": str(user["_id"]),
         "email": user["email"],
-        "tenant_id": ctx.tenant_id,
+        "tenant_id": resolved_tenant_id,
         "role": role,
     })
 
@@ -236,9 +247,10 @@ async def login(body: LoginRequest, request: Request):
             "username": user.get("username", ""),
             "full_name": user.get("full_name", ""),
             "role": role,
-            "tenant_id": ctx.tenant_id,
+            "tenant_id": resolved_tenant_id,
             "permissions": perms,
         },
+        "tenant_id": resolved_tenant_id,
         "plan_info": plan_info,
         "plan_type": plan_type,
     }

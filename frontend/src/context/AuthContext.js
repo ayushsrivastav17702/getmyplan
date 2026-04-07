@@ -77,50 +77,46 @@ export const AuthProvider = ({ children }) => {
 
   const clearSessionExpired = useCallback(() => setSessionExpired(false), []);
 
-  const login = useCallback(async (email, password, selectedTenantId) => {
+  const login = useCallback(async (email, password) => {
     setSessionExpired(false);
-    const resp = await axios.post(`${API}/auth/login`, { email, password }, {
-      headers: { "X-Tenant-ID": selectedTenantId },
-    });
-    const { access_token, user: userData, trial_info, plan_info } = resp.data;
+    const resp = await axios.post(`${API}/auth/login`, { email, password });
+    const { access_token, user: userData, trial_info, plan_info, tenant_id: resolvedTenantId } = resp.data;
+    const tid = resolvedTenantId || userData.tenant_id;
     const userPerms = userData.permissions || [];
     const trialData = trial_info || null;
     const planData = plan_info || null;
+
+    // Set auth headers immediately so subsequent calls work
+    axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
+    axios.defaults.headers.common["X-Tenant-ID"] = tid;
 
     // Fetch tenant info + branding
     let tInfo = null;
     let brandData = null;
     try {
       const [tResp, bResp] = await Promise.all([
-        axios.get(`${API}/tenants/${selectedTenantId}/status`, {
-          headers: { "X-Tenant-ID": selectedTenantId, Authorization: `Bearer ${access_token}` },
-        }),
-        axios.get(`${API}/tenants/${selectedTenantId}/branding`, {
-          headers: { "X-Tenant-ID": selectedTenantId, Authorization: `Bearer ${access_token}` },
-        }).catch(() => ({ data: null })),
+        axios.get(`${API}/tenants/${tid}/status`),
+        axios.get(`${API}/tenants/${tid}/branding`).catch(() => ({ data: null })),
       ]);
       tInfo = tResp.data;
       brandData = bResp.data;
     } catch (e) {
-      tInfo = { tenant_id: selectedTenantId, company_name: selectedTenantId };
+      tInfo = { tenant_id: tid, company_name: tid };
     }
 
     setUser(userData);
     setToken(access_token);
-    setTenantId(selectedTenantId);
+    setTenantId(tid);
     setTenantInfo(tInfo);
     setBranding(brandData);
     setPermissions(userPerms);
     setTrialInfo(trialData);
     setPlanInfo(planData);
 
-    axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
-    axios.defaults.headers.common["X-Tenant-ID"] = selectedTenantId;
-
     localStorage.setItem("merch_auth", JSON.stringify({
       user: userData,
       token: access_token,
-      tenantId: selectedTenantId,
+      tenantId: tid,
       tenantInfo: tInfo,
       branding: brandData,
       permissions: userPerms,

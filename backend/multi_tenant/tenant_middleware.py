@@ -31,6 +31,7 @@ PUBLIC_PATHS = {
     "/api/signup/register",
     "/api/signup/verify-email",
     "/api/signup/resend-verification",
+    "/api/auth/login",
     "/docs",
     "/openapi.json",
 }
