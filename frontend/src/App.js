@@ -38,6 +38,7 @@ import BuyPlanDashboard from "./pages/BuyPlanDashboard";
 import OnboardingWizard from "./pages/OnboardingWizard";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
+import LandingPage from "./pages/LandingPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -384,17 +385,25 @@ const OfflineBanner = () => {
   );
 };
 
-// ─── Root: gate on authentication, with public routes for signup/verify ───
+// ─── Root: gate on authentication, with public routes for signup/verify/landing ───
 const AppRouter = () => {
   const { isAuthenticated, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><div className="spinner" /></div>;
 
-  // Public routes (signup, verify-email) available regardless of auth state
+  // Public routes available regardless of auth state
   return (
     <Routes>
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <Signup />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
-      <Route path="/*" element={isAuthenticated ? <AuthenticatedApp /> : <LoginPage />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
+      {isAuthenticated ? (
+        <Route path="/*" element={<AuthenticatedApp />} />
+      ) : (
+        <>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="*" element={<LandingPage />} />
+        </>
+      )}
     </Routes>
   );
 };

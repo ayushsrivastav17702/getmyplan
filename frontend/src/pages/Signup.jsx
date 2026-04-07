@@ -324,7 +324,7 @@ const Signup = () => {
               </button>
 
               <div className="mt-6 pt-6 border-t border-slate-100">
-                <Link to="/" className="text-sm text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-go-login">
+                <Link to="/login" className="text-sm text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-go-login">
                   Go to Sign In
                 </Link>
               </div>
@@ -337,7 +337,7 @@ const Signup = () => {
           <div className="text-center mt-6">
             <p className="text-sm text-slate-500">
               Already have an account?{" "}
-              <Link to="/" className="text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-login-link">
+              <Link to="/login" className="text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-login-link">
                 Sign in
               </Link>
             </p>

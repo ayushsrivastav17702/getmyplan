@@ -60,7 +60,7 @@ const VerifyEmail = () => {
                 <h2 className="text-xl font-bold text-slate-900 mb-2" data-testid="verify-status-success">Email Verified!</h2>
                 <p className="text-slate-600 mb-6">{message}</p>
                 <Link
-                  to="/"
+                  to="/login"
                   data-testid="verify-go-login"
                   className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#0176D3] hover:bg-[#0161B0] text-white font-medium rounded-lg transition-colors"
                 >
@@ -91,7 +91,7 @@ const VerifyEmail = () => {
                     Back to Signup
                   </Link>
                   <Link
-                    to="/"
+                    to="/login"
                     data-testid="verify-go-login-err"
                     className="block w-full py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium rounded-lg transition-colors text-center"
                   >

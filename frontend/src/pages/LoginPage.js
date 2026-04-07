@@ -310,10 +310,15 @@ const LoginPage = () => {
         <p className="text-center text-xs text-slate-400 mt-6">
           GetMyPlan v2.0 &middot; Multi-Tenant
         </p>
-        <div className="text-center mt-3">
+        <div className="text-center mt-3 space-y-2">
           <Link to="/signup" className="text-sm text-[#0176D3] hover:text-[#0161B0] font-medium inline-flex items-center gap-1" data-testid="login-signup-link">
             <Rocket size={14} /> Start your 7-day free trial
           </Link>
+          <div>
+            <Link to="/" className="text-xs text-slate-400 hover:text-slate-600 transition" data-testid="login-back-home">
+              &larr; Back to home
+            </Link>
+          </div>
         </div>
       </div>
     </div>
