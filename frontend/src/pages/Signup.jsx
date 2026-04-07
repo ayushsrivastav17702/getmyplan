@@ -34,7 +34,13 @@ const Signup = () => {
     if (sub.length < 3) { setSubdomainAvailable(null); return; }
     setCheckingSubdomain(true);
     try {
-      const resp = await axios.get(`${API}/tenants/check-subdomain?subdomain=${sub}`);
+      const resp = await axios.get(`${API}/tenants/check-subdomain?subdomain=${sub}`, {
+        transformRequest: [(data, headers) => {
+          delete headers["Authorization"];
+          delete headers["X-Tenant-ID"];
+          return data;
+        }],
+      });
       setSubdomainAvailable(resp.data.available);
     } catch {
       setSubdomainAvailable(null);
@@ -76,11 +82,22 @@ const Signup = () => {
     setLoading(true);
     setError("");
     try {
+      // Use a clean axios instance without auth headers for registration
       const resp = await axios.post(`${API}/signup/register`, {
         company_name: formData.company_name,
         email: formData.email,
         password: formData.password,
         subdomain: formData.subdomain,
+      }, {
+        headers: {
+          "Content-Type": "application/json",
+          // Explicitly exclude any auth/tenant headers
+        },
+        transformRequest: [(data, headers) => {
+          delete headers["Authorization"];
+          delete headers["X-Tenant-ID"];
+          return JSON.stringify(data);
+        }],
       });
       setRegisteredEmail(formData.email);
       setRegisteredSubdomain(formData.subdomain);

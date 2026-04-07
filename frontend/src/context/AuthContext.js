@@ -79,6 +79,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (email, password) => {
     setSessionExpired(false);
+    // Clear any stale auth headers before login
+    delete axios.defaults.headers.common["Authorization"];
+    delete axios.defaults.headers.common["X-Tenant-ID"];
     const resp = await axios.post(`${API}/auth/login`, { email, password });
     const { access_token, user: userData, trial_info, plan_info, tenant_id: resolvedTenantId } = resp.data;
     const tid = resolvedTenantId || userData.tenant_id;
