@@ -3162,9 +3162,8 @@ _cors_origins = [o.strip() for o in _cors_raw if '*' not in o]
 _cors_regex = r"https://.*\.getmyplan\.in" if any('*' in o for o in _cors_raw) else None
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=_cors_origins if _cors_origins else ["*"],
-    allow_origin_regex=_cors_regex,
+    allow_credentials=False,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Correlation-ID", "X-Request-Duration"],
