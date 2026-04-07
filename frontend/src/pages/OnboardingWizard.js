@@ -140,7 +140,26 @@ export default function OnboardingWizard({ onComplete }) {
     try {
       await axios.post(`${API}/onboarding/skip?step=${step}`);
       const s = await refreshStatus();
-      setStep(s.current_step);
+      if (s.current_step >= 4 || s.is_onboarded) {
+        // All steps done/skipped — complete onboarding
+        await axios.post(`${API}/onboarding/complete`);
+        if (onComplete) onComplete();
+      } else {
+        setStep(s.current_step);
+      }
+    } catch { setError("Skip failed"); }
+    setLoading(false);
+  };
+
+  const skipAll = async () => {
+    if (!window.confirm("Skip the entire setup? You can configure everything later from Settings.")) return;
+    setLoading(true);
+    try {
+      for (let s = step; s <= 3; s++) {
+        await axios.post(`${API}/onboarding/skip?step=${s}`);
+      }
+      await axios.post(`${API}/onboarding/complete`);
+      if (onComplete) onComplete();
     } catch { setError("Skip failed"); }
     setLoading(false);
   };
@@ -388,6 +407,14 @@ export default function OnboardingWizard({ onComplete }) {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome to GetMyPlan</h1>
           <p className="text-slate-500">Let's get your store configured in 3 simple steps</p>
+          <button
+            data-testid="skip-all-btn"
+            onClick={skipAll}
+            disabled={loading}
+            className="mt-3 text-sm text-slate-400 hover:text-[#0176D3] underline transition"
+          >
+            Skip setup and go to dashboard
+          </button>
         </div>
 
         {/* Progress Steps */}

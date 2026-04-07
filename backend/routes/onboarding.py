@@ -293,9 +293,14 @@ async def skip_step(request: Request, step: int = Query(..., ge=1, le=3)):
     db = _get_db()
 
     field_map = {1: "step_1_marketplaces_complete", 2: "step_2_stores_complete", 3: "step_3_taxonomy_complete"}
+    update = {
+        field_map[step]: True,
+        "current_step": step + 1,
+        "last_activity": datetime.now(timezone.utc).isoformat(),
+    }
     await db.onboarding_status.update_one(
         {"tenant_id": tenant_id},
-        {"$set": {field_map[step]: True, "last_activity": datetime.now(timezone.utc).isoformat()}},
+        {"$set": update},
         upsert=True,
     )
     return {"success": True, "message": f"Step {step} skipped"}
