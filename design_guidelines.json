@@ -1,84 +1,100 @@
 {
-  "theme": "light",
-  "archetype": "4",
-  "archetype_name": "Swiss & High-Contrast (Enterprise Salesforce Variant)",
+  "project_context": {
+    "brand": "GetMyPlan (getmyplan.in)",
+    "product": "AI-powered demand planning platform for fashion retailers",
+    "theme": "light",
+    "archetype": "Archetype 4: Swiss & High-Contrast (Fashion Tech Variant)"
+  },
   "colors": {
-    "background": "#F8F9FA",
-    "surface": "#FFFFFF",
-    "primary": "#0176D3",
-    "primary_hover": "#014486",
-    "text_main": "#0F172A",
-    "text_muted": "#64748B",
-    "border": "#E2E8F0",
-    "accent_blue": "#0176D3",
-    "danger": "#DC2626"
+    "primary": "#2563eb",
+    "secondary": "#4f46e5",
+    "background": "#fafafa",
+    "surface": "#ffffff",
+    "text_main": "#0a0a0a",
+    "text_muted": "#525252",
+    "border": "rgba(0,0,0,0.08)"
   },
   "typography": {
-    "heading_font": "Chivo",
-    "body_font": "IBM Plex Sans",
-    "h1": "text-3xl sm:text-4xl font-bold tracking-tight text-slate-900",
-    "h2": "text-xl sm:text-2xl font-semibold tracking-tight text-slate-900",
-    "h3": "text-lg sm:text-xl font-medium tracking-tight text-slate-900",
-    "body": "text-sm text-slate-700 leading-relaxed",
-    "label": "text-xs font-semibold tracking-wider uppercase text-slate-500"
+    "headings": "Cabinet Grotesk",
+    "body": "Satoshi",
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl lg:text-7xl tracking-tighter font-black",
+      "h2": "text-3xl sm:text-4xl lg:text-5xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "body": "text-base sm:text-lg leading-relaxed text-muted",
+      "overline": "text-xs font-bold tracking-[0.2em] uppercase text-primary"
+    },
+    "setup_instruction": "Inject Fontshare CDN link in index.html for Cabinet Grotesk and Satoshi: <link href=\"https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@900,800,700,500&f[]=satoshi@700,500,400&display=swap\" rel=\"stylesheet\">"
   },
   "spacing_and_layout": {
-    "page_padding": "p-6 md:p-8 lg:p-12",
-    "filter_panel_padding": "p-6",
-    "grid_system": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
-    "container_radius": "rounded-md",
-    "button_radius": "rounded"
+    "section_padding": "py-24 sm:py-32",
+    "container": "max-w-7xl mx-auto px-6 lg:px-8",
+    "grid_strategy": "Bento Grid (Mode A) - asymmetrical spans, wide gaps (gap-6 to gap-12)",
+    "border_radius": "rounded-2xl for main cards, rounded-[32px] for hero image wrappers"
   },
   "components": {
-    "top_bar_trigger": {
-      "style": "flex items-center justify-between w-full bg-white border border-slate-200 shadow-sm p-4 rounded-md hover:bg-slate-50 transition-colors",
-      "active_badge": "inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-blue-600 rounded-full ml-2"
-    },
-    "collapsible_panel": {
-      "style": "bg-white border border-slate-200 border-t-0 rounded-b-md shadow-lg p-6 overflow-hidden",
-      "animation": "framer-motion height transition (0 to auto)"
-    },
-    "inputs": {
-      "style": "flex h-10 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all",
-      "label": "mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-600"
-    },
     "buttons": {
-      "apply": "bg-[#0176D3] hover:bg-[#014486] text-white font-medium py-2 px-6 rounded transition-colors shadow-sm",
-      "reset": "bg-transparent hover:bg-slate-100 text-slate-600 border border-slate-300 font-medium py-2 px-6 rounded transition-colors"
+      "primary": "bg-[#2563eb] text-white font-medium hover:bg-[#4f46e5] transition-all hover:-translate-y-0.5 shadow-lg shadow-blue-500/25 px-6 py-3 rounded-full",
+      "secondary": "bg-white text-[#0a0a0a] border border-black/10 font-medium hover:bg-black/5 transition-all px-6 py-3 rounded-full"
     },
-    "slider": {
-      "style": "w-full",
-      "thumb": "h-4 w-4 rounded-full border-2 border-blue-600 bg-white ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2",
-      "track": "relative h-1.5 w-full grow overflow-hidden rounded-full bg-slate-200",
-      "range": "absolute h-full bg-blue-600"
-    }
+    "cards": "Surface strategy: 'Grid Borders' or 'Tactile Neumorphism'. 1px solid border (border-black/10), soft ambient shadow (shadow-sm), solid white background to pop against #fafafa.",
+    "navbar": "Crystal glassmorphism: bg-white/70 backdrop-blur-xl border-b border-black/5. Sticky top-0 z-50.",
+    "icons": "Use lucide-react (stroke-width 1.5) or @phosphor-icons/react for a premium look."
   },
-  "motion_and_interactions": {
-    "hover_states": "Buttons and interactive elements must darken on hover or change background. Links should have an underline effect or color shift.",
-    "focus_states": "All inputs must have focus:ring-2 focus:ring-blue-600.",
-    "panel_animation": "Use framer-motion AnimatePresence to slide down the panel smoothly.",
-    "staggered_entrance": "Filter inputs should fade in slightly staggered when the panel opens."
+  "animation": {
+    "general": "Use framer-motion for smooth scroll-triggered reveal animations. (initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}).",
+    "hover": "Hover state transitions MUST explicitly define colors (e.g. hover:text-white) and use 'transition-all duration-300 ease-out'."
   },
-  "accessibility": {
-    "test_ids": "MUST include data-testid on every interactive element (e.g., data-testid='filter-toggle-btn', data-testid='filter-apply-btn', data-testid='filter-reset-btn', data-testid='category-select').",
-    "aria_labels": "Include aria-expanded on the toggle button and aria-controls linking to the panel.",
-    "contrast": "Ensure text contrast meets APCA/WCAG standards. The blue-600 (#0176D3) on white is accessible."
+  "image_urls": {
+    "hero": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/21697566-4f36-4e78-b414-71f3602c796e/images/50d31835ab63300b16f5667f742c693c54f447be6bd4b26cb2760023e3733b17.png",
+      "description": "Hero section 3D abstract element. Use as an offset image alongside the main headline or masked into an arched/pill shape."
+    },
+    "feature_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/21697566-4f36-4e78-b414-71f3602c796e/images/68f5c79e13b59158fa92f98400c384b7f8aaf9a9a3d80af3e0ef0ad695a8827e.png",
+      "description": "Background texture for the main Features Bento grid (use absolute positioning, object-cover, opacity-30)."
+    },
+    "how_it_works": {
+      "url": "https://images.unsplash.com/photo-1761952199686-e5d0f76e4f5e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwcmV0YWlsJTIwd2FyZWhvdXNlJTIwaW52ZW50b3J5fGVufDB8fHx8MTc3NTU2MTMxOXww&ixlib=rb-4.1.0&q=85",
+      "description": "Visual representation of inventory/warehouse for the How it Works execution phase."
+    },
+    "testimonials": [
+      {
+        "url": "https://images.unsplash.com/photo-1584940121258-c2553b66a739?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwZXhlY3V0aXZlJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1NTYxMzE5fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Fashion retail executive portrait 1"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1582274528667-1e8a10ded835?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxmYXNoaW9uJTIwZXhlY3V0aXZlJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1NTYxMzE5fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Fashion retail executive portrait 2"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1584554376766-ac0f2c65e949?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwzfHxmYXNoaW9uJTIwZXhlY3V0aXZlJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1NTYxMzE5fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Fashion retail executive portrait 3"
+      }
+    ],
+    "trust_badges": [
+      {
+        "url": "https://images.unsplash.com/photo-1586867026567-b9b63ae58472?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHw0fHxicmFuZCUyMGxvZ28lMjB3aGl0ZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc1NTYxMzMxfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Marshall logo (Apply grayscale, brightness-0, opacity-40 in CSS)"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1700887938966-01f0450aee8c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwzfHxicmFuZCUyMGxvZ28lMjB3aGl0ZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc1NTYxMzMxfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Coca Cola wall sign (Apply grayscale, brightness-0, opacity-40 in CSS)"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1644166186783-35d911470ff0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHxicmFuZCUyMGxvZ28lMjB3aGl0ZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc1NTYxMzMxfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Mercedes emblem (Apply grayscale, brightness-0, opacity-40 in CSS)"
+      }
+    ]
   },
-  "iconography": {
-    "library": "lucide-react",
-    "instructions": "Use Filter, ChevronDown, ChevronUp, X for reset, Calendar for date picker."
-  },
-  "image_urls": {},
   "instructions_to_main_agent": [
-    "Build the dashboard layout with a Top Navigation and main content area.",
-    "Implement the Collapsible Filter Panel at the top of the content area. The panel trigger should always be visible and display an active filter count badge when filters are applied.",
-    "Use standard HTML + Tailwind for structural layouts, but utilize Shadcn UI components for complex interactions: Select (for dropdowns), Popover+Calendar (for Date Range), Slider (for thresholds).",
-    "Ensure the panel layout uses a responsive grid (1 col mobile, 2 cols tablet, 4 cols desktop) for the filter inputs.",
-    "Include an action bar at the bottom of the expanded panel with 'Reset Filters' (ghost/outline) on the left and 'Apply Filters' (solid blue) on the right.",
-    "Make sure inputs have labels styled with uppercase, small text, and wide tracking.",
-    "Use Framer Motion for the expand/collapse animation of the filter panel.",
-    "Use Shadcn UI components but override their default rounded-md to rounded (2px to 4px max) to fit the Salesforce Enterprise aesthetic.",
-    "Add data-testid attributes to all interactive elements for testing.",
-    "Note: Ensure to output in .js/.jsx not .tsx files."
+    "NEVER USE PLACEHOLDER IMAGES. Always use the specific image URLs provided in the image_urls section.",
+    "Apply all fonts strictly! Add Fontshare CDN in the public index.html. Use Cabinet Grotesk for Headings and Satoshi for body text.",
+    "Build a custom HTML/Tailwind layout for the marketing page matching route '/' for unauthenticated users.",
+    "Routing requirement: 'Login' CTA points to '/login', 'Start Free Trial' points to '/signup'.",
+    "Section Checklist: Navbar (Glassmorphic), Hero (with Hero image), Stats bar (4 stats), Features (8 features in a Bento Grid Mode A), Pricing (3 tiers, emphasize Professional), How It Works (4 steps + warehouse image), Testimonials (with portraits), Footer.",
+    "Testing: Add 'data-testid' attributes to all interactive elements (buttons, nav links, form elements).",
+    "Use framer-motion to add subtle fade-up animations to each major section.",
+    "Avoid standard Bootstrap/Tailwind blocky layouts. Break symmetry, use overlapping elements slightly, and ensure there's generous whitespace (p-12, py-32)."
   ]
 }
