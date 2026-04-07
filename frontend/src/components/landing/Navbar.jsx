@@ -1,0 +1,95 @@
+import { useState, useEffect } from "react";
+import { Menu, X, ChevronDown, Zap } from "lucide-react";
+import { Link } from "react-router-dom";
+
+export default function Navbar() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return (
+    <nav
+      data-testid="landing-navbar"
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+        scrolled ? "bg-white/95 backdrop-blur-md shadow-lg" : "bg-transparent"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          <Link to="/" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+              <Zap className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+              GetMyPlan
+            </span>
+          </Link>
+
+          <div className="hidden md:flex items-center space-x-8">
+            <a href="#features" className="text-gray-600 hover:text-gray-900 transition">Features</a>
+            <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition">How It Works</a>
+            <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition">Pricing</a>
+            <a href="#customers" className="text-gray-600 hover:text-gray-900 transition">Customers</a>
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+                className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition"
+                data-testid="nav-resources-dropdown"
+              >
+                Resources
+                <ChevronDown className={`h-4 w-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              {dropdownOpen && (
+                <div className="absolute top-8 right-0 w-48 bg-white rounded-xl shadow-lg py-2 border border-gray-100 animate-fadeIn">
+                  <a href="#faq" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">FAQ</a>
+                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Documentation</a>
+                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API Reference</a>
+                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Blog</a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="hidden md:flex items-center gap-3">
+            <Link to="/login" data-testid="nav-login-btn" className="px-4 py-2 text-gray-600 hover:text-gray-900 transition">
+              Log in
+            </Link>
+            <Link
+              to="/signup"
+              data-testid="nav-signup-btn"
+              className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all hover:scale-105"
+            >
+              Start Free Trial
+            </Link>
+          </div>
+
+          <button className="md:hidden text-gray-600" onClick={() => setIsOpen(!isOpen)} data-testid="mobile-nav-toggle">
+            {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
+
+        {isOpen && (
+          <div className="md:hidden pb-4 space-y-3 animate-fadeIn">
+            <a href="#features" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Features</a>
+            <a href="#how-it-works" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">How It Works</a>
+            <a href="#pricing" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Pricing</a>
+            <a href="#customers" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Customers</a>
+            <div className="pt-3 border-t border-gray-100">
+              <Link to="/login" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Log in</Link>
+              <Link to="/signup" onClick={() => setIsOpen(false)} className="block py-2 text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg mt-2">
+                Start Free Trial
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
