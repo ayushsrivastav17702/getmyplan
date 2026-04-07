@@ -39,67 +39,70 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Initial landing page — 27/27 PASS (Iteration 45)
 
 ### Phase 43 — Enterprise SaaS Landing Page Redesign (Apr 2026)
-- **12 separate components** in `/components/landing/`:
-  1. **Navbar** — Glassmorphic with scroll effect, resources dropdown
-  2. **Hero** — Animated gradient blobs, live badge, dashboard preview mockup
-  3. **TrustBar** — 5 customer logos with hover effects
-  4. **StatsSection** — 4 animated counters (91%, 33, 15 min, 3)
-  5. **Features** — 8 cards with hover icon color inversion + Popular badges
-  6. **HowItWorks** — 4 steps with gradient connecting line
-  7. **ComparisonTable** — vs Excel vs ERP (10 rows, all green for GetMyPlan)
-  8. **Pricing** — Monthly/Yearly billing toggle, Most Popular gradient badge, 3 tiers
-  9. **Testimonials** — Dark carousel with prev/next arrows, dot nav, summary stats
-  10. **FAQ** — 6-item accordion with expand/collapse
-  11. **CTASection** — Gradient background with glow effects
-  12. **Footer** — Newsletter signup, 5-column layout, social links
-- Plan-Based Access Control architecture (`plan_access.py`, `PlanGuard.jsx`)
-- **Testing: 23/24 PASS (Iteration 46)** — 1 test env timing issue, not a real bug
+- 12 landing components, Plan-Based Access Control architecture
+- **Testing: 23/24 PASS (Iteration 46)**
 
 ### Phase 44 — Interactive Product Tour (Apr 2026)
-- **5-step interactive product tour** triggered by "Watch Demo" button:
-  1. **Upload Data** — Drag-drop zone, 7 CSV file type badges, animated file list with progress
-  2. **Executive Dashboard** — 4 KPI cards (Revenue, Sell-Through, Inventory, Health Score) + bar chart
-  3. **AI Demand Forecast** — SVG line chart with confidence bands, 91% accuracy badge, stats cards
-  4. **Stock-Out Alerts** — Severity badges (Critical/Warning/Watch), alert list, auto-replenishment
-  5. **Buy Plan Generator** — Revenue target card, category breakdown table, Export button
-- **Features**: Auto-play with progress bar (6s interval), step dots navigation with tooltips, keyboard navigation (Arrow keys + Escape), backdrop click close, framer-motion slide animations
-- **Component**: `/app/frontend/src/components/landing/ProductTour.jsx`
+- 5-step interactive product tour (Upload, Dashboard, Forecast, Stock-Out, Buy Plan)
+- Auto-play, keyboard nav, sessionStorage resume
 - **Testing: 44/44 PASS (Iteration 47)**
+
+### Phase 45 — PlanGuard Module Access + SFTP Notification System (Apr 2026)
+- **PlanGuard Applied to All Routes**:
+  - 13 routes wrapped with `<PlanGuard module="...">` in App.js
+  - Sidebar nav shows lock icons (locked modules) and "View" badges (view-only)
+  - Starter: 7 full, 3 view-only, 3 locked | Professional/Enterprise: all full
+  - PlanGuard reads planInfo from AuthContext automatically
+- **SFTP Alert/Notification System**:
+  - Backend: `/api/notifications` CRUD routes (get, unread-count, mark-read, mark-all-read, clear, trigger-daily-summary)
+  - Alert triggers: upload failures, malformed files, processing errors, SLA misses, daily summary
+  - Email alerts for critical/warning severity (via Hostinger SMTP)
+  - Slack webhook integration (optional, via SLACK_WEBHOOK_URL env var)
+  - Frontend: `NotificationBell` component with badge count, dropdown panel, mark-all-read
+  - Polls unread count every 30 seconds
+- **Tour Resume**: ProductTour saves progress to sessionStorage, resumes on reopen
+- **Testing: 30/30 PASS (Iteration 48)** — Backend 12/12, Frontend 18/18
 
 ## Route Map
 ```
 UNAUTHENTICATED:
   /           -> Marketing Landing Page (12 sections + Product Tour)
-  /login      -> Login Page (with "Back to home" link)
+  /login      -> Login Page
   /signup     -> Signup Page (2-step wizard)
   /verify-email -> Email Verification
 
-AUTHENTICATED:
+AUTHENTICATED (All routes PlanGuard-wrapped):
   /           -> Getting Started (Dashboard Home)
-  /dashboard  -> Executive Dashboard
-  /upload     -> Data Upload
-  /config     -> Configuration
-  /gap-analysis -> Gap Analysis
-  /stock-out  -> Stock-Out Analysis
-  /ai-demand  -> AI Demand Planning
-  /buy-plan   -> Buy Plan Generator
-  ... (18 more routes)
+  /dashboard  -> Executive Dashboard [PlanGuard: dashboard]
+  /upload     -> Data Upload [PlanGuard: data_upload]
+  /config     -> Configuration [PlanGuard: config]
+  /core-logics -> Core Logics [PlanGuard: topseller]
+  /gap-analysis -> Gap Analysis [PlanGuard: gap_analysis]
+  /stock-out  -> Stock-Out Analysis [PlanGuard: stock_out]
+  /replenishment -> Replenishment [PlanGuard: replenishment]
+  /doh        -> DOH Analysis [PlanGuard: doh_analysis]
+  /planogram  -> Planogram Fill Rate [PlanGuard: planogram]
+  /bi-dashboards -> BI Dashboards [PlanGuard: multi_channel]
+  /warehouse  -> Warehouse [PlanGuard: warehouse]
+  /ai-demand  -> AI Demand Planning [PlanGuard: ai_forecasting]
+  /buy-plan   -> Buy Plan Generator [PlanGuard: buy_plan]
+  /sftp-monitor -> SFTP Monitor (no PlanGuard)
+  /data-quality -> Data Quality (no PlanGuard)
+  /chatbot    -> FAQ Chatbot (no PlanGuard)
+  /users      -> User Management (RBAC only)
+  /tenant-admin -> Tenant Admin (RBAC only)
 ```
 
 ## Key Files
 - `/app/frontend/src/components/landing/*` — 13 landing page components (incl. ProductTour)
-- `/app/frontend/src/pages/LandingPage.jsx` — Landing page composition
-- `/app/frontend/src/components/PlanGuard.jsx` — Plan-based module access guard
-- `/app/frontend/src/App.js` — Routing with /login + LandingPage at /
+- `/app/frontend/src/components/PlanGuard.jsx` — Plan-based module access guard + NAV_PLAN_MODULE_MAP
+- `/app/frontend/src/components/NotificationBell.jsx` — Dashboard notification bell + panel
+- `/app/frontend/src/App.js` — Routing with PlanGuard wrapping + NotificationBell
+- `/app/backend/routes/notification_routes.py` — Notification CRUD + alert triggers
 - `/app/backend/core/plan_access.py` — Plan-based module access definitions
-- `/app/backend/middleware/security.py` — Enterprise security
-- `/app/memory/WEBSITE_PRODUCT_REPORT.md` — Complete product report
+- `/app/backend/routes/sftp_routes.py` — SFTP routes with notification triggers
 
 ## Prioritized Backlog
-
-### P1
-- Apply PlanGuard to application modules (infrastructure built, needs wrapping)
-- SFTP alert/notification system (SFTP-31 to SFTP-34)
 
 ### P2
 - USER-17: Force password change on first login
