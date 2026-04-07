@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [branding, setBranding] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [trialInfo, setTrialInfo] = useState(null);
+  const [planInfo, setPlanInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
   const interceptorId = useRef(null);
@@ -35,6 +36,7 @@ export const AuthProvider = ({ children }) => {
             setBranding(null);
             setPermissions([]);
             setTrialInfo(null);
+            setPlanInfo(null);
             delete axios.defaults.headers.common["Authorization"];
             delete axios.defaults.headers.common["X-Tenant-ID"];
             localStorage.removeItem("merch_auth");
@@ -63,6 +65,7 @@ export const AuthProvider = ({ children }) => {
         setBranding(data.branding || null);
         setPermissions(data.permissions || data.user?.permissions || []);
         setTrialInfo(data.trialInfo || null);
+        setPlanInfo(data.planInfo || null);
         axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
         axios.defaults.headers.common["X-Tenant-ID"] = data.tenantId;
       } catch (e) {
@@ -79,9 +82,10 @@ export const AuthProvider = ({ children }) => {
     const resp = await axios.post(`${API}/auth/login`, { email, password }, {
       headers: { "X-Tenant-ID": selectedTenantId },
     });
-    const { access_token, user: userData, trial_info } = resp.data;
+    const { access_token, user: userData, trial_info, plan_info } = resp.data;
     const userPerms = userData.permissions || [];
     const trialData = trial_info || null;
+    const planData = plan_info || null;
 
     // Fetch tenant info + branding
     let tInfo = null;
@@ -108,6 +112,7 @@ export const AuthProvider = ({ children }) => {
     setBranding(brandData);
     setPermissions(userPerms);
     setTrialInfo(trialData);
+    setPlanInfo(planData);
 
     axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
     axios.defaults.headers.common["X-Tenant-ID"] = selectedTenantId;
@@ -120,6 +125,7 @@ export const AuthProvider = ({ children }) => {
       branding: brandData,
       permissions: userPerms,
       trialInfo: trialData,
+      planInfo: planData,
     }));
 
     return userData;
@@ -133,6 +139,7 @@ export const AuthProvider = ({ children }) => {
     setBranding(null);
     setPermissions([]);
     setTrialInfo(null);
+    setPlanInfo(null);
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     localStorage.removeItem("merch_auth");
@@ -155,7 +162,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, token, tenantId, tenantInfo, branding, permissions, trialInfo,
+      user, token, tenantId, tenantInfo, branding, permissions, trialInfo, planInfo,
       loading, isAuthenticated, sessionExpired,
       login, logout, hasPermission, hasRole, clearSessionExpired,
     }}>

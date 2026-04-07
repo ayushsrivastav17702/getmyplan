@@ -217,6 +217,11 @@ async def login(body: LoginRequest, request: Request):
     from .rbac import resolve_permissions
     perms = resolve_permissions(role)
 
+    # Plan info for module access control
+    from core.plan_access import get_plan_info
+    plan_type = tenant_doc.get("plan_type", "starter") if tenant_doc else "starter"
+    plan_info = get_plan_info(plan_type)
+
     # Update last login
     await shared.users.update_one(
         {"_id": user["_id"]},
@@ -234,6 +239,8 @@ async def login(body: LoginRequest, request: Request):
             "tenant_id": ctx.tenant_id,
             "permissions": perms,
         },
+        "plan_info": plan_info,
+        "plan_type": plan_type,
     }
     if trial_info:
         response["trial_info"] = trial_info

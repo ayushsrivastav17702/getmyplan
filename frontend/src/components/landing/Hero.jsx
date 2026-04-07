@@ -49,14 +49,14 @@ export default function Hero() {
               Start Free Trial
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition" />
             </Link>
-            <a
-              href="#how-it-works"
+            <button
+              onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
               className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
               data-testid="hero-demo-btn"
             >
               <Play className="h-5 w-5" />
               Watch Demo
-            </a>
+            </button>
           </div>
 
           <div className="mt-6 flex flex-wrap justify-center gap-6 text-sm text-gray-500">

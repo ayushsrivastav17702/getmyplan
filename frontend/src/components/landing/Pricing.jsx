@@ -2,16 +2,17 @@ import { useState, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { Check, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
+import ContactModal from "./ContactModal";
 
 const plans = [
   {
-    name: "Starter", priceM: "4,999", priceY: "49,999", periodM: "/month", periodY: "/year",
+    name: "Starter", priceM: "15,000", priceY: "1,50,000", periodM: "/month", periodY: "/year",
     desc: "Perfect for growing D2C brands",
-    features: ["Up to 10 stores", "3 users included", "All 33 analytics features", "CSV/Excel upload", "Email support", "7-day free trial"],
+    features: ["Up to 10 stores", "3 users included", "Basic analytics", "CSV/Excel upload", "Email support", "7-day free trial"],
     cta: "Start Free Trial", popular: false
   },
   {
-    name: "Professional", priceM: "9,999", priceY: "99,999", periodM: "/month", periodY: "/year",
+    name: "Professional", priceM: "25,000", priceY: "2,50,000", periodM: "/month", periodY: "/year",
     desc: "For multi-channel retailers",
     features: ["Up to 50 stores", "10 users included", "AI demand forecasting", "Buy plan generator", "SFTP integration", "Priority support", "API access", "Multi-channel sync"],
     cta: "Start Free Trial", popular: true
@@ -26,10 +27,12 @@ const plans = [
 
 export default function Pricing() {
   const [billing, setBilling] = useState("monthly");
+  const [showContact, setShowContact] = useState(false);
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true });
 
   return (
+    <>
     <section id="pricing" data-testid="pricing-section" className="py-20 bg-white" ref={ref}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
@@ -105,17 +108,27 @@ export default function Pricing() {
                 ))}
               </ul>
 
-              <Link
-                to="/signup"
-                data-testid={`pricing-cta-${plan.name.toLowerCase()}`}
-                className={`mt-8 block text-center py-3 rounded-lg font-semibold transition ${
-                  plan.popular
-                    ? "bg-white text-blue-600 hover:bg-gray-100"
-                    : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg"
-                }`}
-              >
-                {plan.cta}
-              </Link>
+              {plan.name === "Enterprise" ? (
+                <button
+                  onClick={() => setShowContact(true)}
+                  data-testid={`pricing-cta-${plan.name.toLowerCase()}`}
+                  className="mt-8 w-full text-center py-3 rounded-lg font-semibold transition bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg"
+                >
+                  {plan.cta}
+                </button>
+              ) : (
+                <Link
+                  to="/signup"
+                  data-testid={`pricing-cta-${plan.name.toLowerCase()}`}
+                  className={`mt-8 block text-center py-3 rounded-lg font-semibold transition ${
+                    plan.popular
+                      ? "bg-white text-blue-600 hover:bg-gray-100"
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg"
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+              )}
 
               {plan.priceM !== "Custom" && (
                 <p className={`text-center text-xs mt-3 ${plan.popular ? "text-white/50" : "text-gray-400"}`}>
@@ -127,5 +140,7 @@ export default function Pricing() {
         </div>
       </div>
     </section>
+    <ContactModal isOpen={showContact} onClose={() => setShowContact(false)} />
+    </>
   );
 }

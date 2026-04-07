@@ -1,4 +1,4 @@
-import { Mail, Phone, MapPin, Zap } from "lucide-react";
+import { Mail, MapPin, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Footer() {
@@ -60,7 +60,6 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">Contact</h4>
             <ul className="space-y-2.5 text-sm text-gray-400">
               <li className="flex items-center gap-2"><Mail size={14} /> <a href="mailto:info@getmyplan.in" className="hover:text-white transition">info@getmyplan.in</a></li>
-              <li className="flex items-center gap-2"><Phone size={14} /> <span>+91-XXXXXXXXXX</span></li>
               <li className="flex items-center gap-2"><MapPin size={14} /> <span>Mumbai, India</span></li>
             </ul>
           </div>
