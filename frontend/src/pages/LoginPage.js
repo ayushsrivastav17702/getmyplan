@@ -109,6 +109,12 @@ const LoginPage = () => {
                 {loading ? "Signing in..." : "Sign In"}
               </button>
             </form>
+
+            <div className="mt-3 text-right">
+              <Link to="/forgot-password" className="text-xs text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="forgot-password-link">
+                Forgot password?
+              </Link>
+            </div>
           </div>
         </div>
 

@@ -86,7 +86,7 @@ async def register(body: SignupRequest, request: Request, background_tasks: Back
         raise HTTPException(400, "Email already registered. Please sign in instead.")
     existing_tenant = await shared.tenants.find_one({"subdomain": body.subdomain})
     if existing_tenant:
-        raise HTTPException(400, f"This workspace already exists. Ask your admin to invite you from the User Management page, or choose a different workspace URL.")
+        raise HTTPException(400, "This workspace already exists. Ask your admin to invite you from the User Management page, or choose a different workspace URL.")
 
     tenant_id = _slug(body.company_name)
     # Ensure tenant_id is unique (handle collisions)
@@ -297,3 +297,68 @@ async def resend_verification(body: ResendVerificationRequest, request: Request,
     )
 
     return {"success": True, "message": "Verification email resent"}
+
+
+
+# ────────── Forgot Password ──────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(..., min_length=8)
+
+
+@router.post("/forgot-password")
+@limiter.limit(AUTH_RATE_LIMIT)
+async def forgot_password(body: ForgotPasswordRequest, request: Request, background_tasks: BackgroundTasks):
+    """Send password reset email. Always returns success to prevent email enumeration."""
+    shared = get_shared_db()
+    user = await shared.users.find_one({"email": body.email})
+
+    if user:
+        token = secrets.token_urlsafe(32)
+        expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+        await shared.users.update_one(
+            {"email": body.email},
+            {"$set": {"reset_token": token, "reset_token_expiry": expiry}},
+        )
+
+        background_tasks.add_task(email_service.send_password_reset_email, body.email, token)
+        logger.info(f"Password reset email queued for {body.email}")
+
+    # Always return success to avoid leaking which emails exist
+    return {"success": True, "message": "If an account exists with this email, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+@limiter.limit(AUTH_RATE_LIMIT)
+async def reset_password(body: ResetPasswordRequest, request: Request):
+    """Reset password using the token from the email link."""
+    shared = get_shared_db()
+    user = await shared.users.find_one({"reset_token": body.token})
+
+    if not user:
+        raise HTTPException(400, "Invalid or expired reset link. Please request a new one.")
+
+    # Check expiry
+    expiry_str = user.get("reset_token_expiry", "")
+    if expiry_str:
+        expiry = datetime.fromisoformat(expiry_str)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expiry:
+            raise HTTPException(400, "Reset link has expired. Please request a new one.")
+
+    # Update password and clear token
+    hashed = _hash_password(body.password)
+    await shared.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"hashed_password": hashed}, "$unset": {"reset_token": "", "reset_token_expiry": ""}},
+    )
+
+    logger.info(f"Password reset successful for {user['email']}")
+    return {"success": True, "message": "Password updated successfully. You can now log in."}

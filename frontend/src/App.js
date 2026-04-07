@@ -40,6 +40,8 @@ import BuyPlanDashboard from "./pages/BuyPlanDashboard";
 import OnboardingWizard from "./pages/OnboardingWizard";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import LandingPage from "./pages/LandingPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -418,6 +420,8 @@ const AppRouter = () => {
     <Routes>
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <Signup />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
       {isAuthenticated ? (
         <Route path="/*" element={<AuthenticatedApp />} />
