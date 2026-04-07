@@ -23,8 +23,13 @@ from slowapi.errors import RateLimitExceeded
 # ─── 1. Rate Limiter (per IP + per tenant) ───
 
 def _get_rate_limit_key(request: Request) -> str:
-    """Composite key: IP + tenant for per-tenant rate limiting."""
-    ip = get_remote_address(request)
+    """Composite key: real client IP + tenant for per-tenant rate limiting."""
+    # In K8s, use X-Forwarded-For to get real client IP
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+    else:
+        ip = get_remote_address(request)
     tenant = request.headers.get("x-tenant-id", "anon")
     return f"{ip}:{tenant}"
 
@@ -36,7 +41,7 @@ limiter = Limiter(
 )
 
 # Endpoint-specific limits (applied via decorators or in middleware)
-AUTH_RATE_LIMIT = "10/minute"      # Login/signup: prevent brute force
+AUTH_RATE_LIMIT = "30/minute"      # Login/signup: prevent brute force
 UPLOAD_RATE_LIMIT = "20/minute"    # File uploads: prevent abuse
 GENERAL_RATE_LIMIT = "200/minute"  # General API calls
 
