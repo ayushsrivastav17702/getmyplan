@@ -1,16 +1,26 @@
-import { Lock, ArrowUpRight } from "lucide-react";
+import { Lock, ArrowUpRight, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const MODULE_NAMES = {
-  ai_forecasting: "AI Demand Forecasting",
-  buy_plan: "Buy Plan Generator",
-  multi_channel: "Multi-Channel Analytics",
+  dashboard: "Executive Dashboard",
+  topseller: "Top Seller Analysis",
+  gap_analysis: "Gap Analysis",
   stock_out: "Stock-Out Analysis",
   doh_analysis: "DOH Analysis",
   planogram: "Planogram Fill Rate",
+  replenishment: "Replenishment Planner",
+  ai_forecasting: "AI Demand Forecasting",
+  buy_plan: "Buy Plan Generator",
+  multi_channel: "Multi-Channel Analytics",
+  warehouse: "Warehouse Analysis",
+  data_upload: "Data Upload",
+  config: "Configuration",
 };
 
-export default function PlanGuard({ children, module, planInfo }) {
+export default function PlanGuard({ children, module }) {
+  const { planInfo } = useAuth();
+
   if (!planInfo || !planInfo.modules) return children;
 
   const mod = planInfo.modules[module];
@@ -44,7 +54,10 @@ export default function PlanGuard({ children, module, planInfo }) {
     return (
       <div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center justify-between" data-testid={`plan-guard-viewonly-${module}`}>
-          <span className="text-sm text-amber-800 font-medium">View-only mode — Upgrade to Professional for full access</span>
+          <div className="flex items-center gap-2">
+            <Eye size={16} className="text-amber-600" />
+            <span className="text-sm text-amber-800 font-medium">View-only mode — Upgrade to Professional for full access</span>
+          </div>
           <Link to="/signup" className="text-sm text-amber-800 underline font-medium hover:text-amber-900">
             Upgrade
           </Link>
@@ -56,3 +69,20 @@ export default function PlanGuard({ children, module, planInfo }) {
 
   return children;
 }
+
+/** Map nav paths to plan module keys */
+export const NAV_PLAN_MODULE_MAP = {
+  "/dashboard": "dashboard",
+  "/core-logics": "topseller",
+  "/gap-analysis": "gap_analysis",
+  "/stock-out": "stock_out",
+  "/doh": "doh_analysis",
+  "/planogram": "planogram",
+  "/replenishment": "replenishment",
+  "/ai-demand": "ai_forecasting",
+  "/buy-plan": "buy_plan",
+  "/bi-dashboards": "multi_channel",
+  "/warehouse": "warehouse",
+  "/upload": "data_upload",
+  "/config": "config",
+};

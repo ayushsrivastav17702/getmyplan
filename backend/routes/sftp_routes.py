@@ -14,12 +14,25 @@ router = APIRouter(prefix="/admin/sftp", tags=["SFTP"])
 
 _get_db = None
 _sftp = None
+_notify = None
 
 
 def init_sftp_routes(get_db_func, sftp_svc):
-    global _get_db, _sftp
+    global _get_db, _sftp, _notify
     _get_db = get_db_func
     _sftp = sftp_svc
+    # Lazy-import notification helpers
+    try:
+        from routes.notification_routes import (
+            alert_upload_failure, alert_processing_error, alert_malformed_file
+        )
+        _notify = {
+            "upload_failure": alert_upload_failure,
+            "processing_error": alert_processing_error,
+            "malformed": alert_malformed_file,
+        }
+    except ImportError:
+        _notify = None
 
 
 def get_db():
@@ -50,6 +63,12 @@ async def upload_file_to_sftp(
             'file_size': len(data), 'archive_path': archive,
             'processed_at': now_iso, 'transfer_id': transfer_id,
         })
+        # Trigger malformed file alert
+        if _notify:
+            try:
+                await _notify["malformed"](file.filename, validation['error'])
+            except Exception as e:
+                logger.error(f"Notification error: {e}")
         return {'status': 'malformed', 'transfer_id': transfer_id,
                 'error': validation['error'], 'archive_path': archive}
 
@@ -83,6 +102,12 @@ async def upload_file_to_sftp(
         'error_message': result.get('error'),
         'processed_at': now_iso, 'transfer_id': transfer_id,
     })
+    # Trigger upload failure alert if error
+    if result.get('status') == 'error' and _notify:
+        try:
+            await _notify["upload_failure"](file.filename, result.get('error', 'Unknown'), transfer_id)
+        except Exception as e:
+            logger.error(f"Notification error: {e}")
     return result
 
 

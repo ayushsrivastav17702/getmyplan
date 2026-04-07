@@ -425,6 +425,7 @@ export default function ProductTour({ isOpen, onClose }) {
     setDirection(dir);
     setCurrent(idx);
     setProgress(0);
+    sessionStorage.setItem("tour_progress", String(idx));
   }, []);
 
   const next = useCallback(() => {
@@ -438,6 +439,15 @@ export default function ProductTour({ isOpen, onClose }) {
   const prev = useCallback(() => {
     if (current > 0) goTo(current - 1, -1);
   }, [current, goTo]);
+
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
+  const handleFinish = useCallback(() => {
+    sessionStorage.removeItem("tour_progress");
+    onClose();
+  }, [onClose]);
 
   // Auto-play
   useEffect(() => {
@@ -464,18 +474,20 @@ export default function ProductTour({ isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
       if (e.key === "ArrowRight") next();
       if (e.key === "ArrowLeft") prev();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [isOpen, next, prev, onClose]);
+  }, [isOpen, next, prev, handleClose]);
 
-  // Reset on open
+  // Restore saved progress or reset on open
   useEffect(() => {
     if (isOpen) {
-      setCurrent(0);
+      const saved = parseInt(sessionStorage.getItem("tour_progress") || "0", 10);
+      const startStep = saved > 0 && saved < steps.length ? saved : 0;
+      setCurrent(startStep);
       setDirection(1);
       setAutoPlay(false);
       setProgress(0);
@@ -495,7 +507,7 @@ export default function ProductTour({ isOpen, onClose }) {
           exit={{ opacity: 0 }}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
 
           {/* Modal */}
           <motion.div
@@ -519,7 +531,7 @@ export default function ProductTour({ isOpen, onClose }) {
 
             {/* Close button */}
             <button
-              onClick={onClose}
+              onClick={handleClose}
               data-testid="product-tour-close"
               className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition text-gray-500 hover:text-gray-700"
             >
@@ -654,7 +666,7 @@ export default function ProductTour({ isOpen, onClose }) {
 
                 {/* Skip */}
                 <button
-                  onClick={onClose}
+                  onClick={handleClose}
                   data-testid="tour-skip-btn"
                   className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 transition"
                 >
@@ -683,7 +695,7 @@ export default function ProductTour({ isOpen, onClose }) {
                   </button>
                 ) : (
                   <button
-                    onClick={onClose}
+                    onClick={handleFinish}
                     data-testid="tour-finish-btn"
                     className="flex items-center gap-1 px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg text-xs font-semibold text-white transition hover:opacity-90"
                   >

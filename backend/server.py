@@ -23,6 +23,7 @@ from routes.doh_analysis import router as doh_router, init_doh
 from routes.planogram import router as planogram_router, init_planogram
 from routes.bi_dashboard import router as bi_router, init_bi
 from routes.sftp_routes import router as sftp_ext_router, init_sftp_routes
+from routes.notification_routes import router as notification_router, init_notification_routes
 from routes.warehouse import router as warehouse_router, init_warehouse
 from routes.data_quality import router as dq_router, init_data_quality
 from routes.stock_out import router as stock_out_router, init_stock_out, get_stock_out_analysis as _so_analysis
@@ -3124,6 +3125,7 @@ api_router.include_router(doh_router)
 api_router.include_router(planogram_router)
 api_router.include_router(bi_router)
 api_router.include_router(sftp_ext_router)
+api_router.include_router(notification_router)
 api_router.include_router(warehouse_router)
 api_router.include_router(dq_router)
 api_router.include_router(stock_out_router)
@@ -3263,6 +3265,11 @@ async def startup():
     init_planogram(client)
     init_bi(client)
     init_sftp_routes(get_db, sftp_service)
+    try:
+        from services.smtp_email_service import email_service
+        init_notification_routes(get_db, email_service)
+    except Exception:
+        init_notification_routes(get_db)
     init_warehouse(client, get_db)
     init_data_quality(client)
     init_stock_out(client, get_cached_data, get_db, apply_date_filter, apply_channel_filter, apply_region_filter, apply_category_filter)

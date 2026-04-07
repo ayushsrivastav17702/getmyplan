@@ -7,13 +7,15 @@ import {
   MessageSquare, Menu, X, ChevronRight, Check, AlertCircle,
   Warehouse, Server, Award, XCircle, ShoppingCart, Clock,
   Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users, Shield, Zap,
-  FileSpreadsheet, Rocket
+  FileSpreadsheet, Rocket, Lock
 } from "lucide-react";
 
 // Auth
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import Unauthorized from "./pages/Unauthorized";
+import PlanGuard, { NAV_PLAN_MODULE_MAP } from "./components/PlanGuard";
+import NotificationBell from "./components/NotificationBell";
 
 // Pages
 import GettingStarted from "./pages/GettingStarted";
@@ -81,7 +83,7 @@ const ProtectedRoute = ({ permission, children }) => {
 // ─── Sidebar ───
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const location = useLocation();
-  const { user, tenantId, tenantInfo, branding, logout, hasPermission, trialInfo } = useAuth();
+  const { user, tenantId, tenantInfo, branding, logout, hasPermission, trialInfo, planInfo } = useAuth();
   const [moduleConfig, setModuleConfig] = useState(null);
 
   const primaryColor = branding?.primary_color || "#0176D3";
@@ -108,6 +110,13 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
 
   const { uploaded, total } = getUploadCount();
   const allUploaded = uploaded === total;
+
+  // Helper: get plan access status for a nav item
+  const getPlanAccess = (path) => {
+    const modKey = NAV_PLAN_MODULE_MAP[path];
+    if (!modKey || !planInfo?.modules) return "full";
+    return planInfo.modules[modKey]?.access || "full";
+  };
 
   // Filter nav items by permission AND module toggles
   const visibleNavItems = navItems.filter(item => {
@@ -185,6 +194,9 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
+            const access = getPlanAccess(item.path);
+            const isLocked = access === "none";
+            const isViewOnly = access === "view_only";
             return (
               <NavLink
                 key={item.path}
@@ -195,12 +207,20 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
                   flex items-center gap-3 px-4 py-2.5 text-sm rounded transition-all duration-200
                   ${isActive
                     ? "text-white shadow-sm"
+                    : isLocked
+                    ? "text-slate-400 hover:bg-slate-50"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}
                 `}
                 style={isActive ? { backgroundColor: primaryColor } : undefined}
               >
                 <Icon size={18} strokeWidth={1.5} />
-                <span className="font-medium">{item.label}</span>
+                <span className="font-medium flex-1">{item.label}</span>
+                {isLocked && !isActive && (
+                  <Lock size={13} className="text-slate-300" data-testid={`nav-lock-${item.path.replace("/", "")}`} />
+                )}
+                {isViewOnly && !isActive && (
+                  <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-600 rounded font-semibold uppercase" data-testid={`nav-viewonly-${item.path.replace("/", "")}`}>View</span>
+                )}
                 {isActive && <ChevronRight size={16} className="ml-auto" />}
               </NavLink>
             );
@@ -321,28 +341,31 @@ const AuthenticatedApp = () => {
 
       <main className="flex-1 min-h-screen">
         <TrialBanner />
-        <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-8">
+        <div className="flex items-center justify-end px-6 lg:px-10 pt-4 pb-0">
+          <NotificationBell />
+        </div>
+        <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-4">
           <Routes>
             {/* Always accessible */}
             <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
 
-            {/* Permission-guarded routes */}
-            <Route path="/dashboard"     element={<ProtectedRoute permission="dashboard.executive.view"><ExecutiveDashboard /></ProtectedRoute>} />
-            <Route path="/upload"        element={<ProtectedRoute permission="data.upload.manage"><DataUpload onUploadComplete={fetchUploadStatus} /></ProtectedRoute>} />
-            <Route path="/config"        element={<ProtectedRoute permission="data.config.manage"><Configuration /></ProtectedRoute>} />
-            <Route path="/core-logics"   element={<ProtectedRoute permission="analytics.core_logics.view"><CoreLogics /></ProtectedRoute>} />
-            <Route path="/gap-analysis"  element={<ProtectedRoute permission="analytics.gap.view"><GapAnalysis /></ProtectedRoute>} />
-            <Route path="/stock-out"     element={<ProtectedRoute permission="analytics.stockout.view"><StockOutAnalysis /></ProtectedRoute>} />
-            <Route path="/replenishment" element={<ProtectedRoute permission="analytics.replenishment.view"><ReplenishmentPlanner /></ProtectedRoute>} />
-            <Route path="/doh"           element={<ProtectedRoute permission="analytics.doh.view"><DOHAnalysis /></ProtectedRoute>} />
-            <Route path="/planogram"     element={<ProtectedRoute permission="analytics.planogram.view"><PlanogramFillRate /></ProtectedRoute>} />
-            <Route path="/bi-dashboards" element={<ProtectedRoute permission="dashboard.bi.view"><BIDashboards /></ProtectedRoute>} />
-            <Route path="/warehouse"     element={<ProtectedRoute permission="dashboard.warehouse.view"><WarehouseAnalysis /></ProtectedRoute>} />
+            {/* Permission + Plan guarded routes */}
+            <Route path="/dashboard"     element={<ProtectedRoute permission="dashboard.executive.view"><PlanGuard module="dashboard"><ExecutiveDashboard /></PlanGuard></ProtectedRoute>} />
+            <Route path="/upload"        element={<ProtectedRoute permission="data.upload.manage"><PlanGuard module="data_upload"><DataUpload onUploadComplete={fetchUploadStatus} /></PlanGuard></ProtectedRoute>} />
+            <Route path="/config"        element={<ProtectedRoute permission="data.config.manage"><PlanGuard module="config"><Configuration /></PlanGuard></ProtectedRoute>} />
+            <Route path="/core-logics"   element={<ProtectedRoute permission="analytics.core_logics.view"><PlanGuard module="topseller"><CoreLogics /></PlanGuard></ProtectedRoute>} />
+            <Route path="/gap-analysis"  element={<ProtectedRoute permission="analytics.gap.view"><PlanGuard module="gap_analysis"><GapAnalysis /></PlanGuard></ProtectedRoute>} />
+            <Route path="/stock-out"     element={<ProtectedRoute permission="analytics.stockout.view"><PlanGuard module="stock_out"><StockOutAnalysis /></PlanGuard></ProtectedRoute>} />
+            <Route path="/replenishment" element={<ProtectedRoute permission="analytics.replenishment.view"><PlanGuard module="replenishment"><ReplenishmentPlanner /></PlanGuard></ProtectedRoute>} />
+            <Route path="/doh"           element={<ProtectedRoute permission="analytics.doh.view"><PlanGuard module="doh_analysis"><DOHAnalysis /></PlanGuard></ProtectedRoute>} />
+            <Route path="/planogram"     element={<ProtectedRoute permission="analytics.planogram.view"><PlanGuard module="planogram"><PlanogramFillRate /></PlanGuard></ProtectedRoute>} />
+            <Route path="/bi-dashboards" element={<ProtectedRoute permission="dashboard.bi.view"><PlanGuard module="multi_channel"><BIDashboards /></PlanGuard></ProtectedRoute>} />
+            <Route path="/warehouse"     element={<ProtectedRoute permission="dashboard.warehouse.view"><PlanGuard module="warehouse"><WarehouseAnalysis /></PlanGuard></ProtectedRoute>} />
             <Route path="/sftp-monitor"  element={<ProtectedRoute permission="data.sftp.view"><SFTPMonitor /></ProtectedRoute>} />
             <Route path="/data-quality"  element={<ProtectedRoute permission="data.quality.view"><DataQuality /></ProtectedRoute>} />
-            <Route path="/ai-demand"     element={<AIDemandPlanning />} />
-            <Route path="/buy-plan"      element={<BuyPlanDashboard />} />
+            <Route path="/ai-demand"     element={<PlanGuard module="ai_forecasting"><AIDemandPlanning /></PlanGuard>} />
+            <Route path="/buy-plan"      element={<PlanGuard module="buy_plan"><BuyPlanDashboard /></PlanGuard>} />
             <Route path="/onboarding"    element={<OnboardingWizard onComplete={() => window.location.href = '/upload'} />} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
