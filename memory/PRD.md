@@ -52,12 +52,24 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
   10. **FAQ** — 6-item accordion with expand/collapse
   11. **CTASection** — Gradient background with glow effects
   12. **Footer** — Newsletter signup, 5-column layout, social links
+- Plan-Based Access Control architecture (`plan_access.py`, `PlanGuard.jsx`)
 - **Testing: 23/24 PASS (Iteration 46)** — 1 test env timing issue, not a real bug
+
+### Phase 44 — Interactive Product Tour (Apr 2026)
+- **5-step interactive product tour** triggered by "Watch Demo" button:
+  1. **Upload Data** — Drag-drop zone, 7 CSV file type badges, animated file list with progress
+  2. **Executive Dashboard** — 4 KPI cards (Revenue, Sell-Through, Inventory, Health Score) + bar chart
+  3. **AI Demand Forecast** — SVG line chart with confidence bands, 91% accuracy badge, stats cards
+  4. **Stock-Out Alerts** — Severity badges (Critical/Warning/Watch), alert list, auto-replenishment
+  5. **Buy Plan Generator** — Revenue target card, category breakdown table, Export button
+- **Features**: Auto-play with progress bar (6s interval), step dots navigation with tooltips, keyboard navigation (Arrow keys + Escape), backdrop click close, framer-motion slide animations
+- **Component**: `/app/frontend/src/components/landing/ProductTour.jsx`
+- **Testing: 44/44 PASS (Iteration 47)**
 
 ## Route Map
 ```
 UNAUTHENTICATED:
-  /           -> Marketing Landing Page (12 sections)
+  /           -> Marketing Landing Page (12 sections + Product Tour)
   /login      -> Login Page (with "Back to home" link)
   /signup     -> Signup Page (2-step wizard)
   /verify-email -> Email Verification
@@ -75,15 +87,18 @@ AUTHENTICATED:
 ```
 
 ## Key Files
-- `/app/frontend/src/components/landing/*` — 12 landing page components
+- `/app/frontend/src/components/landing/*` — 13 landing page components (incl. ProductTour)
 - `/app/frontend/src/pages/LandingPage.jsx` — Landing page composition
+- `/app/frontend/src/components/PlanGuard.jsx` — Plan-based module access guard
 - `/app/frontend/src/App.js` — Routing with /login + LandingPage at /
+- `/app/backend/core/plan_access.py` — Plan-based module access definitions
 - `/app/backend/middleware/security.py` — Enterprise security
 - `/app/memory/WEBSITE_PRODUCT_REPORT.md` — Complete product report
 
 ## Prioritized Backlog
 
 ### P1
+- Apply PlanGuard to application modules (infrastructure built, needs wrapping)
 - SFTP alert/notification system (SFTP-31 to SFTP-34)
 
 ### P2
