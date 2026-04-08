@@ -6,7 +6,7 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 ## Architecture
 - **Frontend**: React with Tailwind CSS (Salesforce theme for dashboard, Enterprise SaaS for marketing)
 - **Backend**: FastAPI with Python/Pandas
-- **Database**: MongoDB (multi-tenant: separate DB per tenant, shared registry in merch_shared)
+- **Database**: MongoDB (multi-tenant: separate DB per tenant, shared registry in DB_NAME database)
 - **AI**: GPT 5.2 via Emergent LLM Key
 - **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
 - **Auth**: JWT with bcrypt, RBAC with 8 built-in roles + custom roles + permission overrides
@@ -107,7 +107,18 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
   /scheduled-jobs -> Scheduled Jobs (all users)
 ```
 
+### Phase 48 — Production MongoDB Authorization Fix (Apr 2026)
+- **Critical Fix**: Changed `get_shared_db_name()` resolution order from `SHARED_DB_NAME > DB_NAME > URL > merch_shared` to `DB_NAME > SHARED_DB_NAME > URL > RuntimeError`
+- `DB_NAME` (Emergent-authorized database) now takes priority over `SHARED_DB_NAME`
+- Removed hardcoded `"merch_shared"` fallback — app fails fast if no DB name configured
+- Added `OperationFailure` handling to registration write operations in `signup.py`
+- Improved frontend `Signup.jsx` error handling (shows actual server errors, handles network failures)
+- Added temporary `/api/debug/config`, `/api/debug/database`, `/api/debug/db-permission-test` diagnostic endpoints
+- Added startup database configuration logging
+
 ## Key Files
+- `/app/backend/multi_tenant/tenant_db.py` — DB resolution (DB_NAME-first priority)
+- `/app/backend/routes/debug.py` — Temporary diagnostic endpoints (remove after prod verification)
 - `/app/backend/routes/data_quality_rules.py` — Rules Engine CRUD + evaluate
 - `/app/frontend/src/components/DataQualityRules.jsx` — Rules Engine UI component
 - `/app/frontend/src/pages/DataQuality.js` — Data Quality page (incl. Custom Rules tab)
