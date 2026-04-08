@@ -15,11 +15,15 @@ router = APIRouter(prefix="/debug", tags=["debug"])
 async def debug_config():
     """Shows environment variable resolution for database configuration."""
     mongo_url = os.getenv("MONGO_URL", "")
+    mongodb_uri = os.getenv("MONGODB_URI", "")
     return {
         "environment": {
             "SHARED_DB_NAME": os.getenv("SHARED_DB_NAME", "NOT_SET"),
             "DB_NAME": os.getenv("DB_NAME", "NOT_SET"),
             "MONGO_URL_prefix": (mongo_url[:30] + "...") if mongo_url else "NOT_SET",
+            "MONGODB_URI_prefix": (mongodb_uri[:30] + "...") if mongodb_uri else "NOT_SET",
+            "MONGO_URL_is_localhost": "localhost" in mongo_url,
+            "MONGODB_URI_synced_to_MONGO_URL": mongo_url == mongodb_uri if mongodb_uri else "N/A",
             "SHARED_DB_NAME_RAW": repr(os.getenv("SHARED_DB_NAME")),
             "IS_MERCH_SHARED": os.getenv("SHARED_DB_NAME") == "merch_shared",
         },

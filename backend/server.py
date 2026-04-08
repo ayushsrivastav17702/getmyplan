@@ -6,6 +6,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Emergent platform sets MONGODB_URI; our code reads MONGO_URL.
+# Sync them so all downstream code works in both local and production.
+import os as _os
+if _os.environ.get('MONGODB_URI') and ('localhost' in _os.environ.get('MONGO_URL', 'localhost')):
+    _os.environ['MONGO_URL'] = _os.environ['MONGODB_URI']
+
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -3270,6 +3276,7 @@ async def startup():
     logger.warning(f"SHARED_DB_NAME from env: {os.getenv('SHARED_DB_NAME', 'NOT SET')}")
     logger.warning(f"DB_NAME from env: {os.getenv('DB_NAME', 'NOT SET')}")
     logger.warning(f"MONGO_URL prefix: {os.getenv('MONGO_URL', '')[:40]}...")
+    logger.warning(f"MONGODB_URI prefix: {os.getenv('MONGODB_URI', 'NOT SET')[:40] if os.getenv('MONGODB_URI') else 'NOT SET'}...")
     logger.warning(f"Resolved shared DB name: {get_shared_db_name()}")
     try:
         shared = get_shared_db()
