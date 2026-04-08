@@ -3262,9 +3262,16 @@ async def startup():
     try:
         await _ensure_enterprise_indexes()
     except Exception as e:
-        logger.warning(f"Enterprise index creation failed (may lack permissions): {e}")
-    await _ensure_default_tenant()
-    await seed_rbac()
+        logger.warning(f"Enterprise index creation skipped: {e}")
+    try:
+        await _ensure_default_tenant()
+    except Exception as e:
+        logger.warning(f"Default tenant seeding skipped: {e}")
+    try:
+        await seed_rbac()
+    except Exception as e:
+        logger.warning(f"RBAC seeding skipped: {e}")
+    logger.info("Multi-tenant startup complete — enterprise security enabled")
     init_core_logic(client)
     init_replenishment(client)
     init_doh(client)
@@ -3284,7 +3291,6 @@ async def startup():
     init_buy_plan(client, get_db, get_current_user, require_role)
     init_onboarding(client, get_db, get_current_user)
     init_tenant_provider(get_cached_data, get_db)
-    logger.info("Multi-tenant startup complete — enterprise security enabled")
 
 
 @app.on_event("shutdown")
