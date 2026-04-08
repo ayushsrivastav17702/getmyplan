@@ -515,10 +515,14 @@ async def password_reset(body: PasswordResetRequest, current_user: dict = Depend
 
     await shared.users.update_one(
         {"email": body.email},
-        {"$set": {"hashed_password": _hash_password(body.new_password), "password_updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {
+            "hashed_password": _hash_password(body.new_password),
+            "password_updated_at": datetime.now(timezone.utc).isoformat(),
+            "must_change_password": True,
+        }},
     )
     await _log_audit(current_user["email"], ctx.tenant_id, "PASSWORD_RESET", {"email": body.email})
-    return {"message": f"Password reset for {body.email}"}
+    return {"message": f"Password reset for {body.email}. User will be prompted to change on next login."}
 
 
 # ──────────── USER-23: Edit Custom Role ────────────

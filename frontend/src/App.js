@@ -7,7 +7,7 @@ import {
   MessageSquare, Menu, X, ChevronRight, Check, AlertCircle,
   Warehouse, Server, Award, XCircle, ShoppingCart, Clock,
   Layout as LayoutIcon, LayoutDashboard, LogOut, Building2, Users, Shield, Zap,
-  FileSpreadsheet, Rocket, Lock
+  FileSpreadsheet, Rocket, Lock, Crown
 } from "lucide-react";
 
 // Auth
@@ -42,6 +42,9 @@ import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ChangePassword from "./pages/ChangePassword";
+import PlanUpgrade from "./pages/PlanUpgrade";
+import ScheduledJobs from "./pages/ScheduledJobs";
 import LandingPage from "./pages/LandingPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -71,6 +74,8 @@ const navItems = [
   { path: "/chatbot",       label: "FAQ Chatbot",          icon: MessageSquare,   permission: "chatbot.faq.view" },
   { path: "/users",         label: "User Management",      icon: Users,           permission: "users.list.view" },
   { path: "/tenant-admin",  label: "Tenant Admin",         icon: Shield,          permission: "settings.tenant.view" },
+  { path: "/plan-upgrade",  label: "Plan & Billing",       icon: Crown,           permission: null },
+  { path: "/scheduled-jobs",label: "Scheduled Jobs",       icon: Clock,           permission: null },
 ];
 
 // ─── Route guard: renders child only if the user has the required permission ───
@@ -372,6 +377,8 @@ const AuthenticatedApp = () => {
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
             <Route path="/tenant-admin"  element={<ProtectedRoute permission="settings.tenant.view"><TenantAdminPanel /></ProtectedRoute>} />
+            <Route path="/plan-upgrade"  element={<PlanUpgrade />} />
+            <Route path="/scheduled-jobs" element={<ScheduledJobs />} />
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -412,8 +419,17 @@ const OfflineBanner = () => {
 
 // ─── Root: gate on authentication, with public routes for signup/verify/landing ───
 const AppRouter = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, mustChangePassword } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><div className="spinner" /></div>;
+
+  // Force password change screen — blocks all other routes
+  if (isAuthenticated && mustChangePassword) {
+    return (
+      <Routes>
+        <Route path="*" element={<ChangePassword />} />
+      </Routes>
+    );
+  }
 
   // Public routes available regardless of auth state
   return (

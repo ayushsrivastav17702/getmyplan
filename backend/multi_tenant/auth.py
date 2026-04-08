@@ -217,6 +217,8 @@ async def login(body: LoginRequest, request: Request):
         }
 
     role = mapping.get("role", "viewer")
+    must_change_pw = user.get("must_change_password", False)
+
     token = _create_token({
         "user_id": str(user["_id"]),
         "email": user["email"],
@@ -256,6 +258,8 @@ async def login(body: LoginRequest, request: Request):
     }
     if trial_info:
         response["trial_info"] = trial_info
+    if must_change_pw:
+        response["must_change_password"] = True
 
     return response
 
@@ -268,3 +272,36 @@ async def me(user: dict = Depends(get_current_user)):
         "tenant_id": user.get("tenant_id"),
         "role": user.get("role"),
     }
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+@auth_router.post("/change-password")
+async def change_password(body: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    """Authenticated user changes their own password. Also clears must_change_password flag."""
+    shared = get_shared_db()
+    user = await shared.users.find_one({"email": current_user["email"]})
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if not _verify_password(body.current_password, user["hashed_password"]):
+        raise HTTPException(400, "Current password is incorrect")
+
+    if body.current_password == body.new_password:
+        raise HTTPException(400, "New password must be different from current password")
+
+    await shared.users.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "hashed_password": _hash_password(body.new_password),
+                "password_updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$unset": {"must_change_password": ""},
+        },
+    )
+
+    return {"success": True, "message": "Password changed successfully"}

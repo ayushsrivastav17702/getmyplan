@@ -503,3 +503,52 @@ async def export_tenants():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=tenants_export.csv"},
     )
+
+
+# ──────────── Plan Usage Endpoint ────────────
+
+@tenant_router.get("/{tenant_id}/plan-usage")
+async def get_plan_usage(tenant_id: str, current_user: dict = Depends(get_current_user)):
+    """Get current plan usage statistics for upgrade page."""
+    shared = get_shared_db()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    plan_type = tenant.get("plan_type", "starter")
+    limits = PLAN_LIMITS.get(plan_type, PLAN_LIMITS["starter"])
+
+    # Count active users
+    active_users = await shared.user_tenants.count_documents({"tenant_id": tenant_id, "is_active": True})
+
+    # Count stores from tenant DB
+    tdb = get_mongo_client()[tenant["db_name"]]
+    store_count = await tdb.stores.count_documents({})
+    file_count = await tdb.uploaded_files.count_documents({})
+
+    # Trial info
+    trial_info = None
+    if plan_type == "trial":
+        trial_end = tenant.get("trial_end")
+        if trial_end:
+            from datetime import timedelta
+            trial_end_dt = datetime.fromisoformat(trial_end) if isinstance(trial_end, str) else trial_end
+            if trial_end_dt.tzinfo is None:
+                trial_end_dt = trial_end_dt.replace(tzinfo=timezone.utc)
+            days_remaining = max(0, (trial_end_dt - datetime.now(timezone.utc)).days)
+            trial_info = {
+                "trial_end": trial_end,
+                "days_remaining": days_remaining,
+            }
+
+    return {
+        "plan_type": plan_type,
+        "company_name": tenant.get("company_name", ""),
+        "limits": limits,
+        "usage": {
+            "active_users": active_users,
+            "stores": store_count,
+            "uploaded_files": file_count,
+        },
+        "trial_info": trial_info,
+    }

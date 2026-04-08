@@ -15,6 +15,7 @@ export const AuthProvider = ({ children }) => {
   const [permissions, setPermissions] = useState([]);
   const [trialInfo, setTrialInfo] = useState(null);
   const [planInfo, setPlanInfo] = useState(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
   const interceptorId = useRef(null);
@@ -83,7 +84,7 @@ export const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     const resp = await axios.post(`${API}/auth/login`, { email, password });
-    const { access_token, user: userData, trial_info, plan_info, tenant_id: resolvedTenantId } = resp.data;
+    const { access_token, user: userData, trial_info, plan_info, tenant_id: resolvedTenantId, must_change_password } = resp.data;
     const tid = resolvedTenantId || userData.tenant_id;
     const userPerms = userData.permissions || [];
     const trialData = trial_info || null;
@@ -107,6 +108,8 @@ export const AuthProvider = ({ children }) => {
       tInfo = { tenant_id: tid, company_name: tid };
     }
 
+    const mustChangePw = !!must_change_password;
+
     setUser(userData);
     setToken(access_token);
     setTenantId(tid);
@@ -115,6 +118,7 @@ export const AuthProvider = ({ children }) => {
     setPermissions(userPerms);
     setTrialInfo(trialData);
     setPlanInfo(planData);
+    setMustChangePassword(mustChangePw);
 
     localStorage.setItem("merch_auth", JSON.stringify({
       user: userData,
@@ -125,6 +129,7 @@ export const AuthProvider = ({ children }) => {
       permissions: userPerms,
       trialInfo: trialData,
       planInfo: planData,
+      mustChangePassword: mustChangePw,
     }));
 
     return userData;
@@ -139,9 +144,22 @@ export const AuthProvider = ({ children }) => {
     setPermissions([]);
     setTrialInfo(null);
     setPlanInfo(null);
+    setMustChangePassword(false);
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     localStorage.removeItem("merch_auth");
+  }, []);
+
+  const clearMustChangePassword = useCallback(() => {
+    setMustChangePassword(false);
+    const stored = localStorage.getItem("merch_auth");
+    if (stored) {
+      try {
+        const data = JSON.parse(stored);
+        data.mustChangePassword = false;
+        localStorage.setItem("merch_auth", JSON.stringify(data));
+      } catch {}
+    }
   }, []);
 
   const hasPermission = useCallback((perm) => {
@@ -162,8 +180,8 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, token, tenantId, tenantInfo, branding, permissions, trialInfo, planInfo,
-      loading, isAuthenticated, sessionExpired,
-      login, logout, hasPermission, hasRole, clearSessionExpired,
+      mustChangePassword, loading, isAuthenticated, sessionExpired,
+      login, logout, hasPermission, hasRole, clearSessionExpired, clearMustChangePassword,
     }}>
       {children}
     </AuthContext.Provider>
