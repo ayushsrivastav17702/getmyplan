@@ -39,6 +39,7 @@ from routes.onboarding import router as onboarding_router, init_onboarding
 from routes.signup import router as signup_router
 from routes.scheduled_jobs import router as scheduled_jobs_router
 from routes.data_quality_rules import router as dq_rules_router
+from routes.debug import router as debug_router
 from services.tenant_data_provider import init_tenant_provider
 
 # Security middleware
@@ -3140,6 +3141,7 @@ api_router.include_router(buy_plan_router)
 api_router.include_router(onboarding_router)
 api_router.include_router(scheduled_jobs_router)
 api_router.include_router(dq_rules_router)
+api_router.include_router(debug_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -3261,6 +3263,24 @@ async def _ensure_enterprise_indexes():
 
 @app.on_event("startup")
 async def startup():
+    # === DATABASE CONFIGURATION DEBUG (remove after production verification) ===
+    logger.warning("=" * 60)
+    logger.warning("DATABASE CONFIGURATION DEBUG")
+    logger.warning("=" * 60)
+    logger.warning(f"SHARED_DB_NAME from env: {os.getenv('SHARED_DB_NAME', 'NOT SET')}")
+    logger.warning(f"DB_NAME from env: {os.getenv('DB_NAME', 'NOT SET')}")
+    logger.warning(f"MONGO_URL prefix: {os.getenv('MONGO_URL', '')[:40]}...")
+    logger.warning(f"Resolved shared DB name: {get_shared_db_name()}")
+    try:
+        shared = get_shared_db()
+        logger.warning(f"Actual shared database object name: {shared.name}")
+        colls = await shared.list_collection_names()
+        logger.warning(f"Can list collections: {colls}")
+    except Exception as e:
+        logger.error(f"Database connection test failed: {e}")
+    logger.warning("=" * 60)
+    # === END DEBUG ===
+
     await ensure_shared_indexes()
     try:
         await _ensure_enterprise_indexes()
