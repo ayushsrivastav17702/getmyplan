@@ -1,11 +1,21 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+import { Link } from "react-router-dom";
 import { API } from "../App";
 import {
   Mail, Lock, Building2, Globe, CheckCircle, AlertCircle,
   Loader2, ArrowRight, ArrowLeft, Eye, EyeOff, Rocket
 } from "lucide-react";
+
+// Use native fetch for ALL signup calls — completely isolated from axios defaults
+async function signupFetch(url, options = {}) {
+  const resp = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw { response: { status: resp.status, data } };
+  return data;
+}
 
 const Signup = () => {
   const [step, setStep] = useState(1);
@@ -23,24 +33,18 @@ const Signup = () => {
     confirm_password: "",
     subdomain: "",
   });
-  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError("");
   };
 
-  // Create a clean axios instance for signup calls (no auth headers)
-  const cleanAxios = axios.create({
-    headers: { "Content-Type": "application/json" },
-  });
-
   const checkSubdomain = async (sub) => {
     if (sub.length < 3) { setSubdomainAvailable(null); return; }
     setCheckingSubdomain(true);
     try {
-      const resp = await cleanAxios.get(`${API}/tenants/check-subdomain?subdomain=${sub}`);
-      setSubdomainAvailable(resp.data.available);
+      const data = await signupFetch(`${API}/tenants/check-subdomain?subdomain=${sub}`);
+      setSubdomainAvailable(data.available);
     } catch {
       setSubdomainAvailable(null);
     } finally {
@@ -48,47 +52,54 @@ const Signup = () => {
     }
   };
 
-  const validateStep1 = () => {
-    if (!formData.company_name.trim()) { setError("Company name is required"); return false; }
-    if (!formData.email.trim()) { setError("Email is required"); return false; }
-    if (!formData.password) { setError("Password is required"); return false; }
-    if (formData.password.length < 8) { setError("Password must be at least 8 characters"); return false; }
-    if (!/[A-Za-z]/.test(formData.password)) { setError("Password must contain at least one letter"); return false; }
-    if (!/\d/.test(formData.password)) { setError("Password must contain at least one number"); return false; }
-    if (formData.password !== formData.confirm_password) { setError("Passwords do not match"); return false; }
-    return true;
-  };
-
-  const validateStep2 = () => {
-    if (!formData.subdomain.trim()) { setError("Subdomain is required"); return false; }
-    if (!/^[a-z0-9-]+$/.test(formData.subdomain)) { setError("Subdomain can only contain lowercase letters, numbers, and hyphens"); return false; }
-    if (formData.subdomain.length < 3) { setError("Subdomain must be at least 3 characters"); return false; }
-    const reserved = ["www", "api", "app", "admin", "mail", "ftp", "localhost", "demo", "test"];
-    if (reserved.includes(formData.subdomain)) { setError("This subdomain is reserved"); return false; }
-    if (subdomainAvailable === false) { setError("This subdomain is already taken"); return false; }
-    return true;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (step === 1) {
-      if (!validateStep1()) return;
-      setStep(2);
-      return;
+  const handleSubdomainChange = (e) => {
+    const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+    setFormData({ ...formData, subdomain: val });
+    setError("");
+    if (val.length >= 3) {
+      clearTimeout(window._subCheck);
+      window._subCheck = setTimeout(() => checkSubdomain(val), 500);
+    } else {
+      setSubdomainAvailable(null);
     }
-    if (!validateStep2()) return;
+  };
+
+  const handleContinue = () => {
+    setError("");
+    if (!formData.company_name.trim()) { setError("Company name is required"); return; }
+    if (!formData.email.trim()) { setError("Email is required"); return; }
+    if (formData.password.length < 8) { setError("Password must be at least 8 characters"); return; }
+    if (formData.password !== formData.confirm_password) { setError("Passwords don't match"); return; }
+    setStep(2);
+    const suggested = formData.company_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!formData.subdomain && suggested.length >= 3) {
+      setFormData(prev => ({ ...prev, subdomain: suggested }));
+      checkSubdomain(suggested);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!formData.subdomain || formData.subdomain.length < 3) {
+      setError("Workspace URL must be at least 3 characters"); return;
+    }
+    if (subdomainAvailable === false) {
+      setError("This workspace URL is taken. Please choose another."); return;
+    }
 
     setLoading(true);
     setError("");
     try {
-      const resp = await cleanAxios.post(`${API}/signup/register`, {
-        company_name: formData.company_name,
-        email: formData.email,
-        password: formData.password,
-        subdomain: formData.subdomain,
+      const data = await signupFetch(`${API}/signup/register`, {
+        method: "POST",
+        body: JSON.stringify({
+          company_name: formData.company_name,
+          email: formData.email,
+          password: formData.password,
+          subdomain: formData.subdomain,
+        }),
       });
       setRegisteredEmail(formData.email);
-      setRegisteredSubdomain(formData.subdomain);
+      setRegisteredSubdomain(data.subdomain || formData.subdomain);
       setStep(3);
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -96,10 +107,6 @@ const Signup = () => {
         setError(detail.map(d => d.msg || d).join(", "));
       } else if (detail) {
         setError(detail);
-      } else if (err.response?.status === 429) {
-        setError("Too many attempts. Please wait a minute and try again.");
-      } else if (!err.response) {
-        setError("Network error. Please check your connection and try again.");
       } else {
         setError("Registration failed. Please try again.");
       }
@@ -112,8 +119,11 @@ const Signup = () => {
     setLoading(true);
     setError("");
     try {
-      await cleanAxios.post(`${API}/signup/resend-verification`, { email: registeredEmail });
-      setError(""); // clear any previous error
+      await signupFetch(`${API}/signup/resend-verification`, {
+        method: "POST",
+        body: JSON.stringify({ email: registeredEmail }),
+      });
+      setError("");
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to resend verification email.");
     } finally {
@@ -139,33 +149,44 @@ const Signup = () => {
             {[
               { n: 1, label: "Account" },
               { n: 2, label: "Workspace" },
-            ].map(({ n, label }) => (
-              <div key={n} className="flex flex-col items-center">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
-                  step > n ? "bg-green-500 text-white" : step === n ? "bg-[#0176D3] text-white" : "bg-slate-200 text-slate-400"
-                }`}>
-                  {step > n ? <CheckCircle size={18} /> : n}
+            ].map((s) => (
+              <div key={s.n} className="flex flex-col items-center gap-1.5">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition
+                    ${step >= s.n ? "bg-[#0176D3] text-white" : "bg-gray-200 text-gray-500"}`}
+                >
+                  {step > s.n ? <CheckCircle size={16} /> : s.n}
                 </div>
-                <span className={`text-xs mt-1.5 font-medium ${step >= n ? "text-[#0176D3]" : "text-slate-400"}`}>{label}</span>
+                <span className={`text-xs font-medium ${step >= s.n ? "text-[#0176D3]" : "text-gray-400"}`}>{s.label}</span>
               </div>
             ))}
           </div>
         )}
 
-        {/* Step 1: Account details */}
-        {step === 1 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden" data-testid="signup-step1">
-            <div className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Card */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
+          <div className="p-6">
+            {error && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg" data-testid="signup-error">
+                <AlertCircle size={16} className="flex-shrink-0" /> {error}
+              </div>
+            )}
+
+            {/* Step 1: Account */}
+            {step === 1 && (
+              <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Company Name</label>
                   <div className="relative">
                     <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-company"
-                      type="text" name="company_name" value={formData.company_name} onChange={handleChange}
-                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
-                      placeholder="Acme Corporation" required
+                      name="company_name"
+                      value={formData.company_name}
+                      onChange={handleChange}
+                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                      placeholder="Your company"
+                      required
                     />
                   </div>
                 </div>
@@ -175,9 +196,13 @@ const Signup = () => {
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-email"
-                      type="email" name="email" value={formData.email} onChange={handleChange}
-                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
-                      placeholder="admin@acme.com" required
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                      placeholder="you@company.com"
+                      required
                     />
                   </div>
                 </div>
@@ -187,16 +212,20 @@ const Signup = () => {
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-password"
-                      type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange}
-                      className="w-full border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
-                      placeholder="Min 8 chars with letters & numbers" required
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="w-full border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                      placeholder="Min 8 characters"
+                      required
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">Must be at least 8 characters with letters and numbers</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Must be at least 8 characters with letters and numbers</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Confirm Password</label>
@@ -204,160 +233,125 @@ const Signup = () => {
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-confirm-password"
-                      type="password" name="confirm_password" value={formData.confirm_password} onChange={handleChange}
-                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
-                      placeholder="Confirm password" required
+                      name="confirm_password"
+                      type={showPassword ? "text" : "password"}
+                      value={formData.confirm_password}
+                      onChange={handleChange}
+                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                      placeholder="Confirm password"
+                      required
                     />
                   </div>
                 </div>
-
-                {error && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg" data-testid="signup-error">
-                    <AlertCircle size={16} className="flex-shrink-0" /> <span>{error}</span>
-                  </div>
-                )}
-
                 <button
                   data-testid="signup-continue-btn"
-                  type="submit"
+                  onClick={handleContinue}
                   className="w-full bg-[#0176D3] hover:bg-[#0161B0] text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   Continue <ArrowRight size={16} />
                 </button>
-              </form>
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* Step 2: Workspace / Subdomain */}
-        {step === 2 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden" data-testid="signup-step2">
-            <div className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Step 2: Workspace */}
+            {step === 2 && (
+              <div className="space-y-5">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Your Workspace URL</label>
                   <div className="relative">
                     <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-subdomain"
-                      type="text" name="subdomain" value={formData.subdomain}
-                      onChange={(e) => {
-                        const v = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-                        setFormData({ ...formData, subdomain: v });
-                        setError("");
-                        checkSubdomain(v);
-                      }}
-                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
-                      placeholder="acme" required
+                      name="subdomain"
+                      value={formData.subdomain}
+                      onChange={handleSubdomainChange}
+                      className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
+                      placeholder="your-company"
                     />
-                    {checkingSubdomain && (
-                      <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
-                    )}
-                    {!checkingSubdomain && subdomainAvailable !== null && (
-                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium ${subdomainAvailable ? "text-green-600" : "text-red-500"}`}>
-                        {subdomainAvailable ? "Available" : "Taken"}
-                      </span>
-                    )}
                   </div>
+                  {checkingSubdomain && <p className="text-xs text-slate-400 mt-1">Checking...</p>}
+                  {!checkingSubdomain && subdomainAvailable === true && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1" data-testid="subdomain-available">
+                      <CheckCircle size={12} /> Available
+                    </p>
+                  )}
+                  {!checkingSubdomain && subdomainAvailable === false && (
+                    <p className="text-xs text-red-500 mt-1" data-testid="subdomain-taken">Taken — please choose another</p>
+                  )}
                   <p className="text-xs text-slate-400 mt-1">This will be your unique workspace identifier</p>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
-                  <p className="text-sm text-blue-800 flex items-start gap-2">
-                    <CheckCircle size={16} className="mt-0.5 flex-shrink-0" />
-                    Your 7-day free trial starts after email verification. No credit card required.
-                  </p>
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
+                  Your 7-day free trial starts after email verification. No credit card required.
                 </div>
 
-                <div className="bg-slate-50 border border-slate-100 p-4 rounded-lg text-xs text-slate-500">
-                  <p className="font-medium text-slate-600 mb-1">Account Summary</p>
-                  <p>Company: <span className="text-slate-700 font-medium">{formData.company_name}</span></p>
-                  <p>Email: <span className="text-slate-700 font-medium">{formData.email}</span></p>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Account Summary</h4>
+                  <div className="text-sm"><span className="text-slate-500">Company:</span> <span className="font-medium text-slate-800">{formData.company_name}</span></div>
+                  <div className="text-sm"><span className="text-slate-500">Email:</span> <span className="font-medium text-slate-800">{formData.email}</span></div>
                 </div>
-
-                {error && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg" data-testid="signup-error">
-                    <AlertCircle size={16} className="flex-shrink-0" /> <span>{error}</span>
-                  </div>
-                )}
 
                 <div className="flex gap-3">
                   <button
-                    data-testid="signup-back-btn"
-                    type="button" onClick={() => { setStep(1); setError(""); }}
-                    className="flex-1 py-2.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 font-medium flex items-center justify-center gap-2 transition-colors"
+                    onClick={() => setStep(1)}
+                    className="px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-1"
                   >
-                    <ArrowLeft size={16} /> Back
+                    <ArrowLeft size={14} /> Back
                   </button>
                   <button
                     data-testid="signup-submit-btn"
-                    type="submit" disabled={loading || subdomainAvailable === false}
-                    className="flex-1 py-2.5 bg-[#0176D3] hover:bg-[#0161B0] text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    onClick={handleRegister}
+                    disabled={loading || subdomainAvailable === false}
+                    className="flex-1 bg-[#0176D3] hover:bg-[#0161B0] text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : null}
                     {loading ? "Creating..." : "Create Workspace"}
                   </button>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Verification Sent */}
-        {step === 3 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden" data-testid="signup-step3">
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Mail size={28} className="text-green-600" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">Check your email</h2>
-              <p className="text-slate-600 mb-4">
-                We've sent a verification link to <strong className="text-slate-800">{registeredEmail}</strong>
-              </p>
-              <div className="bg-slate-50 border border-slate-100 p-4 rounded-lg mb-6 text-left">
-                <p className="text-sm text-slate-600">Click the link in the email to verify your account and activate your 7-day trial.</p>
-                <p className="text-xs text-slate-400 mt-2">The link expires in 24 hours.</p>
-              </div>
+            )}
 
-              {error && (
-                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg mb-4" data-testid="signup-error">
-                  <AlertCircle size={16} className="flex-shrink-0" /> <span>{error}</span>
+            {/* Step 3: Verification */}
+            {step === 3 && (
+              <div className="text-center py-4" data-testid="signup-step3">
+                <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Mail size={28} className="text-green-500" />
                 </div>
-              )}
-
-              <button
-                data-testid="signup-resend-btn"
-                onClick={resendVerification} disabled={loading}
-                className="text-[#0176D3] hover:text-[#0161B0] text-sm font-medium flex items-center justify-center gap-1 mx-auto"
-              >
-                {loading && <Loader2 size={14} className="animate-spin" />}
-                Didn't receive it? Click to resend
-              </button>
-
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <Link to="/login" className="text-sm text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-go-login">
-                  Go to Sign In
-                </Link>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Check your email</h3>
+                <p className="text-sm text-slate-500">
+                  We've sent a verification link to<br />
+                  <strong className="text-slate-800">{registeredEmail}</strong>
+                </p>
+                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600 text-left">
+                  <p>Click the link in the email to verify your account and activate your 7-day trial.</p>
+                  <p className="text-xs text-gray-400 mt-2">The link expires in 24 hours.</p>
+                </div>
+                <button
+                  onClick={resendVerification}
+                  disabled={loading}
+                  className="mt-4 text-sm text-[#0176D3] hover:text-[#0161B0] font-medium"
+                  data-testid="resend-btn"
+                >
+                  {loading ? "Sending..." : "Didn't receive it? Click to resend"}
+                </button>
+                <div className="mt-4">
+                  <Link to="/login" className="text-sm text-slate-400 hover:text-slate-600 font-medium">Go to Sign In</Link>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Footer link */}
         {step < 3 && (
-          <div className="text-center mt-6">
+          <div className="text-center mt-6 space-y-2">
             <p className="text-sm text-slate-500">
-              Already have an account?{" "}
-              <Link to="/login" className="text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-login-link">
-                Sign in
-              </Link>
+              Already have an account? <Link to="/login" className="text-[#0176D3] hover:text-[#0161B0] font-medium" data-testid="signup-login-link">Sign In</Link>
             </p>
+            <Link to="/" className="text-xs text-slate-400 hover:text-slate-600 transition">&larr; Back to home</Link>
           </div>
         )}
 
-        <p className="text-center text-xs text-slate-400 mt-6">
-          GetMyPlan v2.0 &middot; AI-powered retail analytics
-        </p>
+        <p className="text-center text-xs text-slate-400 mt-6">GetMyPlan v2.0 - AI-powered retail analytics</p>
       </div>
     </div>
   );
