@@ -82,8 +82,12 @@ def clear_tenant_cache(tenant_id: str = None):
 async def ensure_shared_indexes():
     """Create indexes on shared collections — call once at startup."""
     shared = get_shared_db()
-    await shared.tenants.create_index("tenant_id", unique=True)
-    await shared.tenants.create_index("subdomain", unique=True)
-    await shared.users.create_index("email", unique=True)
-    await shared.user_tenants.create_index([("user_id", 1), ("tenant_id", 1)], unique=True)
-    logger.info("Shared DB indexes ensured")
+    try:
+        await shared.tenants.create_index("tenant_id", unique=True)
+        await shared.tenants.create_index("subdomain", unique=True)
+        await shared.users.create_index("email", unique=True)
+        await shared.user_tenants.create_index([("user_id", 1), ("tenant_id", 1)], unique=True)
+        logger.info("Shared DB indexes ensured")
+    except Exception as e:
+        logger.warning(f"Could not create shared DB indexes (may lack permissions): {e}")
+        logger.info("Continuing startup without index creation — indexes may already exist")

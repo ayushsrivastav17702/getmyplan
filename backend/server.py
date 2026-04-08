@@ -3259,7 +3259,10 @@ async def _ensure_enterprise_indexes():
 @app.on_event("startup")
 async def startup():
     await ensure_shared_indexes()
-    await _ensure_enterprise_indexes()
+    try:
+        await _ensure_enterprise_indexes()
+    except Exception as e:
+        logger.warning(f"Enterprise index creation failed (may lack permissions): {e}")
     await _ensure_default_tenant()
     await seed_rbac()
     init_core_logic(client)
