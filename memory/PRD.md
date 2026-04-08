@@ -53,22 +53,22 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Testing: 30/30 PASS (Iteration 48)**
 
 ### Phase 46 — P2 Features: Force Password Change, Plan Upgrade, Scheduled Jobs (Apr 2026)
-- **USER-17: Force Password Change on First Login**:
-  - Admin password reset sets `must_change_password: true` on user
-  - Login response includes `must_change_password` flag
-  - Frontend blocks all routes and shows `ChangePassword.jsx` page
-  - POST `/api/auth/change-password` validates old password, sets new, clears flag
-  - AuthContext tracks `mustChangePassword` state
-- **Plan Upgrade Page**:
-  - GET `/api/tenants/{id}/plan-usage` returns plan type, limits, usage stats
-  - Frontend shows current plan banner, usage metrics, plan comparison cards
-  - INR/USD currency toggle, upgrade request flow (MOCKED - no payment gateway)
-- **Scheduled Analysis Jobs**:
-  - Full CRUD: POST/GET/PUT/DELETE `/api/scheduled-jobs/`
-  - Toggle active, run-now, execution history endpoints
-  - 8 analysis types, 3 frequencies (daily/weekly/monthly)
-  - Frontend: job list cards, create form with conditional fields, action buttons
+- USER-17: Force Password Change on First Login
+- Plan Upgrade Page with usage stats + plan comparison
+- Scheduled Analysis Jobs — full CRUD with daily/weekly/monthly frequencies
 - **Testing: 40/40 PASS (Iteration 49)** — Backend 23/23, Frontend 17/17
+
+### Phase 47 — Data Quality Rules Engine (Apr 2026)
+- **6 Rule Types**: threshold, null_check, pattern, uniqueness, cross_reference, range
+- **Backend**: Full CRUD at `/api/quality/rules/` with evaluate, toggle, file-columns endpoints
+- **Rule Evaluation**: Runs active rules against uploaded tenant data, returns per-rule pass/fail with affected record counts
+- **Frontend**: "Custom Rules" tab in Data Quality page with:
+  - Rule list with toggle/edit/delete actions
+  - Dynamic create/edit form (fields change based on rule type)
+  - "Run Rules" button with results panel showing pass counts and progress bars
+  - Severity levels (error/warning/info) with color-coded badges
+  - Auto-loads available columns from uploaded files for easy rule building
+- **Testing: 35/35 PASS (Iteration 50)** — Backend 20/20, Frontend 15/15
 
 ## Route Map
 ```
@@ -99,7 +99,7 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
   /ai-demand  -> AI Demand Planning [PlanGuard: ai_forecasting]
   /buy-plan   -> Buy Plan Generator [PlanGuard: buy_plan]
   /sftp-monitor -> SFTP Monitor (no PlanGuard)
-  /data-quality -> Data Quality (no PlanGuard)
+  /data-quality -> Data Quality & SLA (with Custom Rules tab)
   /chatbot    -> FAQ Chatbot (no PlanGuard)
   /users      -> User Management (RBAC only)
   /tenant-admin -> Tenant Admin (RBAC only)
@@ -108,19 +108,16 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
 ```
 
 ## Key Files
-- `/app/frontend/src/components/landing/*` — 13 landing page components (incl. ProductTour)
-- `/app/frontend/src/components/PlanGuard.jsx` — Plan-based module access guard
-- `/app/frontend/src/components/NotificationBell.jsx` — Dashboard notification bell
+- `/app/backend/routes/data_quality_rules.py` — Rules Engine CRUD + evaluate
+- `/app/frontend/src/components/DataQualityRules.jsx` — Rules Engine UI component
+- `/app/frontend/src/pages/DataQuality.js` — Data Quality page (incl. Custom Rules tab)
+- `/app/backend/routes/scheduled_jobs.py` — Scheduled jobs CRUD
+- `/app/frontend/src/pages/ScheduledJobs.jsx` — Scheduled jobs management
 - `/app/frontend/src/pages/ChangePassword.jsx` — Force password change page
 - `/app/frontend/src/pages/PlanUpgrade.jsx` — Plan comparison + upgrade page
-- `/app/frontend/src/pages/ScheduledJobs.jsx` — Scheduled jobs management
 - `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state + mustChangePassword
 - `/app/frontend/src/App.js` — Routing with PlanGuard + force password redirect
 - `/app/backend/multi_tenant/auth.py` — Login + change-password endpoint
-- `/app/backend/multi_tenant/user_routes.py` — Admin password reset (sets flag)
-- `/app/backend/multi_tenant/tenant_routes.py` — Plan usage endpoint
-- `/app/backend/routes/scheduled_jobs.py` — Scheduled jobs CRUD
-- `/app/backend/routes/notification_routes.py` — Notification CRUD + alert triggers
 - `/app/backend/core/plan_access.py` — Plan-based module access definitions
 
 ## Prioritized Backlog
@@ -129,4 +126,3 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
 - USER-18: MFA (Multi-factor authentication)
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
-- Data Quality Rules Engine (Tenant-specific custom validation rules)
