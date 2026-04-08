@@ -6,10 +6,10 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Emergent platform sets MONGODB_URI; our code reads MONGO_URL.
-# Sync them so all downstream code works in both local and production.
+# Emergent platform sets MONGODB_URI (custom key) and MONGO_URL (system key).
+# If user provides their own MONGODB_URI (e.g., their Atlas cluster), it ALWAYS takes priority.
 import os as _os
-if _os.environ.get('MONGODB_URI') and ('localhost' in _os.environ.get('MONGO_URL', 'localhost')):
+if _os.environ.get('MONGODB_URI'):
     _os.environ['MONGO_URL'] = _os.environ['MONGODB_URI']
 
 from starlette.middleware.cors import CORSMiddleware

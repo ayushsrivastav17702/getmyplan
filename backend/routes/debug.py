@@ -20,12 +20,10 @@ async def debug_config():
         "environment": {
             "SHARED_DB_NAME": os.getenv("SHARED_DB_NAME", "NOT_SET"),
             "DB_NAME": os.getenv("DB_NAME", "NOT_SET"),
-            "MONGO_URL_prefix": (mongo_url[:30] + "...") if mongo_url else "NOT_SET",
-            "MONGODB_URI_prefix": (mongodb_uri[:30] + "...") if mongodb_uri else "NOT_SET",
-            "MONGO_URL_is_localhost": "localhost" in mongo_url,
-            "MONGODB_URI_synced_to_MONGO_URL": mongo_url == mongodb_uri if mongodb_uri else "N/A",
-            "SHARED_DB_NAME_RAW": repr(os.getenv("SHARED_DB_NAME")),
-            "IS_MERCH_SHARED": os.getenv("SHARED_DB_NAME") == "merch_shared",
+            "MONGO_URL_prefix": (mongo_url[:40] + "...") if len(mongo_url) > 40 else mongo_url or "NOT_SET",
+            "MONGODB_URI_prefix": (mongodb_uri[:40] + "...") if len(mongodb_uri) > 40 else mongodb_uri or "NOT_SET",
+            "MONGODB_URI_overrides_MONGO_URL": bool(mongodb_uri),
+            "using_atlas": "mongodb+srv" in mongo_url,
         },
         "resolved": {
             "get_shared_db_name_result": _get_resolved_name(),
