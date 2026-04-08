@@ -189,12 +189,20 @@ async def register(body: SignupRequest, request: Request, background_tasks: Back
 
     clear_tenant_cache()
 
+    # Detect caller's origin for email links (works for both preview and production)
+    origin = request.headers.get("origin") or request.headers.get("referer", "").rstrip("/")
+    if origin and "://" in origin:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
     # Send verification email in background
     background_tasks.add_task(
         email_service.send_verification_email,
         to_email=body.email,
         company_name=body.company_name,
         token=verification_token,
+        app_url=origin or None,
     )
 
     return {
@@ -252,11 +260,19 @@ async def verify_email(body: VerifyEmailRequest, request: Request, background_ta
             )
             clear_tenant_cache(tenant["tenant_id"])
 
+            # Detect caller's origin for email links
+            origin = request.headers.get("origin") or request.headers.get("referer", "").rstrip("/")
+            if origin and "://" in origin:
+                from urllib.parse import urlparse
+                parsed = urlparse(origin)
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+
             # Send welcome email
             background_tasks.add_task(
                 email_service.send_welcome_email,
                 to_email=user["email"],
                 company_name=tenant["company_name"],
+                app_url=origin or None,
             )
 
     return {
@@ -312,11 +328,19 @@ async def resend_verification(body: ResendVerificationRequest, request: Request,
         if tenant:
             company_name = tenant["company_name"]
 
+    # Detect caller's origin for email links
+    origin = request.headers.get("origin") or request.headers.get("referer", "").rstrip("/")
+    if origin and "://" in origin:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
     background_tasks.add_task(
         email_service.send_verification_email,
         to_email=body.email,
         company_name=company_name,
         token=new_token,
+        app_url=origin or None,
     )
 
     return {"success": True, "message": "Verification email resent"}
@@ -339,6 +363,13 @@ class ResetPasswordRequest(BaseModel):
 async def forgot_password(body: ForgotPasswordRequest, request: Request, background_tasks: BackgroundTasks):
     """Send password reset email. Always returns success to prevent email enumeration."""
     shared = get_shared_db()
+
+    # Detect caller's origin for email links
+    origin = request.headers.get("origin") or request.headers.get("referer", "").rstrip("/")
+    if origin and "://" in origin:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
 
     try:
         user = await shared.users.find_one({"email": body.email})
@@ -365,7 +396,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request, backgro
                                     detail="Service temporarily unavailable. Please try again later.")
             raise
 
-        background_tasks.add_task(email_service.send_password_reset_email, body.email, token)
+        background_tasks.add_task(email_service.send_password_reset_email, body.email, token, app_url=origin or None)
         logger.info(f"Password reset email queued for {body.email}")
 
     # Always return success to avoid leaking which emails exist

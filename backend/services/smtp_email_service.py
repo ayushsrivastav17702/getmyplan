@@ -56,9 +56,10 @@ class SMTPEmailService:
             logger.error("Failed to send email to %s: %s", to_email, e)
             return False
 
-    def send_verification_email(self, to_email: str, company_name: str, token: str) -> bool:
+    def send_verification_email(self, to_email: str, company_name: str, token: str, app_url: str = None) -> bool:
         cfg = self._cfg
-        verify_url = f"{cfg['app_url']}/verify-email?token={token}"
+        base_url = app_url or cfg['app_url']
+        verify_url = f"{base_url}/verify-email?token={token}"
         trial_days = cfg["trial_days"]
 
         html = f"""<!DOCTYPE html>
@@ -91,9 +92,9 @@ class SMTPEmailService:
 
         return self.send_email(to_email, f"Verify your email - {company_name}", html)
 
-    def send_welcome_email(self, to_email: str, company_name: str) -> bool:
+    def send_welcome_email(self, to_email: str, company_name: str, app_url: str = None) -> bool:
         cfg = self._cfg
-        dashboard_url = cfg["app_url"]
+        dashboard_url = app_url or cfg["app_url"]
         trial_days = cfg["trial_days"]
 
         html = f"""<!DOCTYPE html>
@@ -126,9 +127,10 @@ class SMTPEmailService:
 
         return self.send_email(to_email, f"Welcome to {company_name}!", html)
 
-    def send_password_reset_email(self, to_email: str, token: str) -> bool:
+    def send_password_reset_email(self, to_email: str, token: str, app_url: str = None) -> bool:
         cfg = self._cfg
-        reset_url = f"{cfg['app_url']}/reset-password?token={token}"
+        base_url = app_url or cfg['app_url']
+        reset_url = f"{base_url}/reset-password?token={token}"
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
