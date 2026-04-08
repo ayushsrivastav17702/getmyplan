@@ -1,10 +1,15 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request
 from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env BEFORE any imports that read environment variables
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
-from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
@@ -71,8 +76,6 @@ from multi_tenant.tenant_db import (
     SHARED_DB_NAME,
 )
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
 _refresh_jwt_secret()
 
 # MongoDB connection — kept for backward compat; tenant-aware helper below

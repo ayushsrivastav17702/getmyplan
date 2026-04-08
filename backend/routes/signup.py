@@ -2,8 +2,9 @@
 Self-service signup routes: register, verify-email, resend-verification.
 These are PUBLIC endpoints (no tenant context required).
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
+from pymongo.errors import OperationFailure
 from datetime import datetime, timezone, timedelta
 import secrets
 import re
@@ -81,12 +82,21 @@ async def register(body: SignupRequest, request: Request, background_tasks: Back
 
     shared = get_shared_db()
 
-    # Uniqueness checks
-    if await shared.users.find_one({"email": body.email}):
-        raise HTTPException(400, "Email already registered. Please sign in instead.")
-    existing_tenant = await shared.tenants.find_one({"subdomain": body.subdomain})
-    if existing_tenant:
-        raise HTTPException(400, "This workspace already exists. Ask your admin to invite you from the User Management page, or choose a different workspace URL.")
+    try:
+        # Uniqueness checks
+        if await shared.users.find_one({"email": body.email}):
+            raise HTTPException(400, "Email already registered. Please sign in instead.")
+        existing_tenant = await shared.tenants.find_one({"subdomain": body.subdomain})
+        if existing_tenant:
+            raise HTTPException(400, "This workspace already exists. Ask your admin to invite you from the User Management page, or choose a different workspace URL.")
+    except HTTPException:
+        raise
+    except OperationFailure as e:
+        if e.code == 13:
+            logger.error(f"MongoDB permission denied during registration: {e.details.get('errmsg', str(e))}")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail="Service temporarily unavailable. Please try again later.")
+        raise
 
     tenant_id = _slug(body.company_name)
     # Ensure tenant_id is unique (handle collisions)
@@ -316,16 +326,31 @@ class ResetPasswordRequest(BaseModel):
 async def forgot_password(body: ForgotPasswordRequest, request: Request, background_tasks: BackgroundTasks):
     """Send password reset email. Always returns success to prevent email enumeration."""
     shared = get_shared_db()
-    user = await shared.users.find_one({"email": body.email})
+
+    try:
+        user = await shared.users.find_one({"email": body.email})
+    except OperationFailure as e:
+        if e.code == 13:
+            logger.error(f"MongoDB permission denied during forgot-password: {e.details.get('errmsg', str(e))}")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail="Service temporarily unavailable. Please try again later.")
+        raise
 
     if user:
         token = secrets.token_urlsafe(32)
         expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 
-        await shared.users.update_one(
-            {"email": body.email},
-            {"$set": {"reset_token": token, "reset_token_expiry": expiry}},
-        )
+        try:
+            await shared.users.update_one(
+                {"email": body.email},
+                {"$set": {"reset_token": token, "reset_token_expiry": expiry}},
+            )
+        except OperationFailure as e:
+            if e.code == 13:
+                logger.error(f"MongoDB permission denied updating reset token: {e.details.get('errmsg', str(e))}")
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                    detail="Service temporarily unavailable. Please try again later.")
+            raise
 
         background_tasks.add_task(email_service.send_password_reset_email, body.email, token)
         logger.info(f"Password reset email queued for {body.email}")
@@ -339,7 +364,15 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request, backgro
 async def reset_password(body: ResetPasswordRequest, request: Request):
     """Reset password using the token from the email link."""
     shared = get_shared_db()
-    user = await shared.users.find_one({"reset_token": body.token})
+
+    try:
+        user = await shared.users.find_one({"reset_token": body.token})
+    except OperationFailure as e:
+        if e.code == 13:
+            logger.error(f"MongoDB permission denied during reset-password: {e.details.get('errmsg', str(e))}")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail="Service temporarily unavailable. Please try again later.")
+        raise
 
     if not user:
         raise HTTPException(400, "Invalid or expired reset link. Please request a new one.")
@@ -355,10 +388,17 @@ async def reset_password(body: ResetPasswordRequest, request: Request):
 
     # Update password and clear token
     hashed = _hash_password(body.password)
-    await shared.users.update_one(
-        {"_id": user["_id"]},
-        {"$set": {"hashed_password": hashed}, "$unset": {"reset_token": "", "reset_token_expiry": ""}},
-    )
+    try:
+        await shared.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"hashed_password": hashed}, "$unset": {"reset_token": "", "reset_token_expiry": ""}},
+        )
+    except OperationFailure as e:
+        if e.code == 13:
+            logger.error(f"MongoDB permission denied updating password: {e.details.get('errmsg', str(e))}")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail="Service temporarily unavailable. Please try again later.")
+        raise
 
     logger.info(f"Password reset successful for {user['email']}")
     return {"success": True, "message": "Password updated successfully. You can now log in."}
