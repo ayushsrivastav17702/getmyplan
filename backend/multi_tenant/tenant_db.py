@@ -40,19 +40,22 @@ def _extract_db_from_mongo_url() -> Optional[str]:
 
 def get_shared_db_name() -> str:
     """Lazily resolve the shared DB name at first call, not at import time.
-    Fallback chain: SHARED_DB_NAME env > DB_NAME env > MONGO_URL path > 'merch_shared'
+    Fallback chain: DB_NAME env (Emergent-authorized) > SHARED_DB_NAME env > MONGO_URL path.
+    Never falls back to hardcoded 'merch_shared' — if nothing is configured, fails fast.
     """
     global _resolved_shared_db_name
     if _resolved_shared_db_name is not None:
         return _resolved_shared_db_name
 
-    name = os.environ.get("SHARED_DB_NAME")
+    # DB_NAME is the primary source — Emergent platform guarantees this is the authorized database
+    name = os.environ.get("DB_NAME")
     if not name:
-        name = os.environ.get("DB_NAME")
+        name = os.environ.get("SHARED_DB_NAME")
     if not name:
         name = _extract_db_from_mongo_url()
     if not name:
-        name = "merch_shared"
+        logger.error("FATAL: No database name configured. Set DB_NAME environment variable.")
+        raise RuntimeError("No database name configured. Set DB_NAME environment variable.")
 
     _resolved_shared_db_name = name
     logger.info(f"Shared DB resolved to: {name}")
