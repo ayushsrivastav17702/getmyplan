@@ -15,8 +15,14 @@ import time
 import logging
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
-from sklearn.linear_model import LinearRegression
 from services.tenant_data_provider import get_tenant_provider
+
+try:
+    from sklearn.linear_model import LinearRegression
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    LinearRegression = None
 
 logger = logging.getLogger(__name__)
 
@@ -327,11 +333,14 @@ async def topseller_prediction(
             if len(revs) < 2: continue
             first = revs[0] if revs[0] > 0 else 1
             growth = ((revs[-1] - first) / first) * 100
-            x = np.arange(len(revs)).reshape(-1, 1)
-            lr = LinearRegression()
-            lr.fit(x, revs)
-            future = lr.predict([[len(revs)], [len(revs) + 1], [len(revs) + 2]])
-            predicted_3m = round(float(sum(future)), 2)
+            if SKLEARN_AVAILABLE and LinearRegression is not None:
+                x = np.arange(len(revs)).reshape(-1, 1)
+                lr = LinearRegression()
+                lr.fit(x, revs)
+                future = lr.predict([[len(revs)], [len(revs) + 1], [len(revs) + 2]])
+                predicted_3m = round(float(sum(future)), 2)
+            else:
+                predicted_3m = round(float(np.mean(revs[-3:])) * 3, 2) if len(revs) >= 3 else round(float(np.mean(revs)) * 3, 2)
             current_avg = round(float(np.mean(revs[-3:])), 2) if len(revs) >= 3 else round(float(np.mean(revs)), 2)
             # X Factor: style revenue vs category average
             style_x_factor = round(current_avg / cat_avg, 2) if cat_avg > 0 else 1.0

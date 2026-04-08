@@ -6,11 +6,20 @@ Models: Holt-Winters, Random Forest, Seasonal Decomposition, Ensemble
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
 import warnings
 import logging
+
+try:
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import mean_squared_error, r2_score
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    RandomForestRegressor = None
+    LinearRegression = None
+    mean_squared_error = None
+    r2_score = None
 
 warnings.filterwarnings('ignore')
 logger = logging.getLogger(__name__)
@@ -67,7 +76,7 @@ class MLForecastEngine:
     def random_forest_forecast(
         self, data: List[float], forecast_horizon: int = 12
     ) -> Optional[Dict]:
-        if len(data) < 24:
+        if not SKLEARN_AVAILABLE or len(data) < 24:
             return None
         try:
             df = pd.DataFrame({'value': data})
@@ -127,7 +136,7 @@ class MLForecastEngine:
     def seasonal_decomposition_forecast(
         self, data: List[float], seasonal_periods: int = 12, forecast_horizon: int = 12
     ) -> Optional[Dict]:
-        if not STATSMODELS_AVAILABLE or len(data) < seasonal_periods * 2:
+        if not STATSMODELS_AVAILABLE or not SKLEARN_AVAILABLE or len(data) < seasonal_periods * 2:
             return None
         try:
             decomp = seasonal_decompose(data, model='additive', period=seasonal_periods, extrapolate_trend='freq')
@@ -214,6 +223,11 @@ class MLForecastEngine:
     def _accuracy(actual: list, predicted: list) -> Dict:
         if not actual or not predicted or len(actual) != len(predicted):
             return {}
+        if not SKLEARN_AVAILABLE:
+            a = np.array(actual, dtype=float)
+            p = np.array(predicted, dtype=float)
+            mape = float(np.mean(np.abs((a - p) / np.where(a == 0, 1, a)))) * 100
+            return {'mape': round(mape, 1)}
         a = np.array(actual, dtype=float)
         p = np.array(predicted, dtype=float)
         mape = float(np.mean(np.abs((a - p) / np.where(a == 0, 1, a)))) * 100
