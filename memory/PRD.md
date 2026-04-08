@@ -114,6 +114,8 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
 - Added `OperationFailure` handling to registration write operations in `signup.py`
 - Improved frontend `Signup.jsx` error handling (shows actual server errors, handles network failures)
 - Added temporary `/api/debug/config`, `/api/debug/database`, `/api/debug/db-permission-test` diagnostic endpoints
+- Added `/api/debug/email-config` and `/api/debug/email-test` SMTP diagnostic endpoints
+- **Critical Fix**: Made sklearn/statsmodels imports lazy (try/except) to prevent 502 crashes in resource-constrained K8s
 - Added startup database configuration logging
 
 ## Key Files
