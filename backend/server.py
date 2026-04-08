@@ -73,7 +73,7 @@ from multi_tenant.tenant_db import (
     get_mongo_client as mt_get_mongo_client,
     get_tenant_db as mt_get_tenant_db,
     ensure_shared_indexes,
-    SHARED_DB_NAME,
+    get_shared_db_name,
 )
 
 _refresh_jwt_secret()
@@ -3181,7 +3181,7 @@ app.add_middleware(
 
 async def _ensure_default_tenant():
     """Create a default 'demo' tenant so existing data keeps working."""
-    shared = client[SHARED_DB_NAME]
+    shared = client[get_shared_db_name()]
     existing = await shared.tenants.find_one({"tenant_id": "demo"})
     if existing:
         return
@@ -3228,7 +3228,7 @@ async def _ensure_default_tenant():
 
 async def _ensure_enterprise_indexes():
     """Create performance indexes and TTL indexes for production readiness."""
-    shared = client[SHARED_DB_NAME]
+    shared = client[get_shared_db_name()]
 
     async def _safe_index(collection, keys, **kwargs):
         """Create index, skip if already exists with different options."""

@@ -17,8 +17,46 @@ tenant_context: ContextVar[Optional["TenantContext"]] = ContextVar("tenant_conte
 
 _mongo_client: Optional[AsyncIOMotorClient] = None
 _tenant_cache: Dict[str, dict] = {}
+_resolved_shared_db_name: Optional[str] = None
 
-SHARED_DB_NAME = os.environ.get("SHARED_DB_NAME", os.environ.get("DB_NAME", "merch_shared"))
+
+def _extract_db_from_mongo_url() -> Optional[str]:
+    """Extract database name from MONGO_URL connection string path component."""
+    try:
+        url = os.environ.get("MONGO_URL", "")
+        if not url:
+            return None
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        db = parsed.path.strip("/")
+        if db and "?" not in db:
+            return db
+        if "?" in db:
+            return db.split("?")[0]
+    except Exception:
+        pass
+    return None
+
+
+def get_shared_db_name() -> str:
+    """Lazily resolve the shared DB name at first call, not at import time.
+    Fallback chain: SHARED_DB_NAME env > DB_NAME env > MONGO_URL path > 'merch_shared'
+    """
+    global _resolved_shared_db_name
+    if _resolved_shared_db_name is not None:
+        return _resolved_shared_db_name
+
+    name = os.environ.get("SHARED_DB_NAME")
+    if not name:
+        name = os.environ.get("DB_NAME")
+    if not name:
+        name = _extract_db_from_mongo_url()
+    if not name:
+        name = "merch_shared"
+
+    _resolved_shared_db_name = name
+    logger.info(f"Shared DB resolved to: {name}")
+    return name
 
 
 @dataclass
@@ -37,7 +75,7 @@ def get_mongo_client() -> AsyncIOMotorClient:
 
 
 def get_shared_db() -> AsyncIOMotorDatabase:
-    return get_mongo_client()[SHARED_DB_NAME]
+    return get_mongo_client()[get_shared_db_name()]
 
 
 def get_tenant_db(tenant_id: Optional[str] = None) -> AsyncIOMotorDatabase:
