@@ -91,7 +91,7 @@ class MLForecastEngine:
             X_train, X_val = X[:split], X[split:]
             y_train, y_val = y[:split], y[split:]
 
-            model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+            model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=1)
             model.fit(X_train, y_train)
 
             # recursive prediction
