@@ -48,28 +48,40 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Testing: 44/44 PASS (Iteration 47)**
 
 ### Phase 45 — PlanGuard Module Access + SFTP Notification System (Apr 2026)
-- **PlanGuard Applied to All Routes**:
-  - 13 routes wrapped with `<PlanGuard module="...">` in App.js
-  - Sidebar nav shows lock icons (locked modules) and "View" badges (view-only)
-  - Starter: 7 full, 3 view-only, 3 locked | Professional/Enterprise: all full
-  - PlanGuard reads planInfo from AuthContext automatically
-- **SFTP Alert/Notification System**:
-  - Backend: `/api/notifications` CRUD routes (get, unread-count, mark-read, mark-all-read, clear, trigger-daily-summary)
-  - Alert triggers: upload failures, malformed files, processing errors, SLA misses, daily summary
-  - Email alerts for critical/warning severity (via Hostinger SMTP)
-  - Slack webhook integration (optional, via SLACK_WEBHOOK_URL env var)
-  - Frontend: `NotificationBell` component with badge count, dropdown panel, mark-all-read
-  - Polls unread count every 30 seconds
-- **Tour Resume**: ProductTour saves progress to sessionStorage, resumes on reopen
-- **Testing: 30/30 PASS (Iteration 48)** — Backend 12/12, Frontend 18/18
+- PlanGuard applied to 13 routes with Starter/Professional/Enterprise tiers
+- SFTP Alert/Notification System with email + Slack webhooks
+- **Testing: 30/30 PASS (Iteration 48)**
+
+### Phase 46 — P2 Features: Force Password Change, Plan Upgrade, Scheduled Jobs (Apr 2026)
+- **USER-17: Force Password Change on First Login**:
+  - Admin password reset sets `must_change_password: true` on user
+  - Login response includes `must_change_password` flag
+  - Frontend blocks all routes and shows `ChangePassword.jsx` page
+  - POST `/api/auth/change-password` validates old password, sets new, clears flag
+  - AuthContext tracks `mustChangePassword` state
+- **Plan Upgrade Page**:
+  - GET `/api/tenants/{id}/plan-usage` returns plan type, limits, usage stats
+  - Frontend shows current plan banner, usage metrics, plan comparison cards
+  - INR/USD currency toggle, upgrade request flow (MOCKED - no payment gateway)
+- **Scheduled Analysis Jobs**:
+  - Full CRUD: POST/GET/PUT/DELETE `/api/scheduled-jobs/`
+  - Toggle active, run-now, execution history endpoints
+  - 8 analysis types, 3 frequencies (daily/weekly/monthly)
+  - Frontend: job list cards, create form with conditional fields, action buttons
+- **Testing: 40/40 PASS (Iteration 49)** — Backend 23/23, Frontend 17/17
 
 ## Route Map
 ```
 UNAUTHENTICATED:
   /           -> Marketing Landing Page (12 sections + Product Tour)
   /login      -> Login Page
-  /signup     -> Signup Page (2-step wizard)
+  /signup     -> Signup Page (2-step wizard, uses native fetch)
   /verify-email -> Email Verification
+  /forgot-password -> Forgot Password
+  /reset-password -> Reset Password
+
+FORCE PASSWORD CHANGE (blocks all other routes):
+  /*          -> ChangePassword (when mustChangePassword=true)
 
 AUTHENTICATED (All routes PlanGuard-wrapped):
   /           -> Getting Started (Dashboard Home)
@@ -91,26 +103,30 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
   /chatbot    -> FAQ Chatbot (no PlanGuard)
   /users      -> User Management (RBAC only)
   /tenant-admin -> Tenant Admin (RBAC only)
+  /plan-upgrade -> Plan & Billing (all users)
+  /scheduled-jobs -> Scheduled Jobs (all users)
 ```
 
 ## Key Files
 - `/app/frontend/src/components/landing/*` — 13 landing page components (incl. ProductTour)
-- `/app/frontend/src/components/PlanGuard.jsx` — Plan-based module access guard + NAV_PLAN_MODULE_MAP
-- `/app/frontend/src/components/NotificationBell.jsx` — Dashboard notification bell + panel
-- `/app/frontend/src/App.js` — Routing with PlanGuard wrapping + NotificationBell
+- `/app/frontend/src/components/PlanGuard.jsx` — Plan-based module access guard
+- `/app/frontend/src/components/NotificationBell.jsx` — Dashboard notification bell
+- `/app/frontend/src/pages/ChangePassword.jsx` — Force password change page
+- `/app/frontend/src/pages/PlanUpgrade.jsx` — Plan comparison + upgrade page
+- `/app/frontend/src/pages/ScheduledJobs.jsx` — Scheduled jobs management
+- `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state + mustChangePassword
+- `/app/frontend/src/App.js` — Routing with PlanGuard + force password redirect
+- `/app/backend/multi_tenant/auth.py` — Login + change-password endpoint
+- `/app/backend/multi_tenant/user_routes.py` — Admin password reset (sets flag)
+- `/app/backend/multi_tenant/tenant_routes.py` — Plan usage endpoint
+- `/app/backend/routes/scheduled_jobs.py` — Scheduled jobs CRUD
 - `/app/backend/routes/notification_routes.py` — Notification CRUD + alert triggers
 - `/app/backend/core/plan_access.py` — Plan-based module access definitions
-- `/app/backend/routes/sftp_routes.py` — SFTP routes with notification triggers
 
 ## Prioritized Backlog
 
-### P2
-- USER-17: Force password change on first login
-- Plan upgrade page for trial users
-- Scheduled analysis jobs
-
 ### P3
-- USER-18: MFA
+- USER-18: MFA (Multi-factor authentication)
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
-- Data Quality Rules Engine
+- Data Quality Rules Engine (Tenant-specific custom validation rules)
