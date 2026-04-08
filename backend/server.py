@@ -33,6 +33,7 @@ from routes.buy_plan import router as buy_plan_router, init_buy_plan
 from routes.onboarding import router as onboarding_router, init_onboarding
 from routes.signup import router as signup_router
 from routes.scheduled_jobs import router as scheduled_jobs_router
+from routes.data_quality_rules import router as dq_rules_router
 from services.tenant_data_provider import init_tenant_provider
 
 # Security middleware
@@ -3135,6 +3136,7 @@ api_router.include_router(ai_demand_router)
 api_router.include_router(buy_plan_router)
 api_router.include_router(onboarding_router)
 api_router.include_router(scheduled_jobs_router)
+api_router.include_router(dq_rules_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)

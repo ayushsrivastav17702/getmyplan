@@ -4,10 +4,11 @@ import { API } from "../App";
 import {
   RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock,
   FileText, Calendar, Award, Shield, Activity, Database,
-  ThumbsUp, Store, X, Zap, Download, ChevronRight, TrendingUp
+  ThumbsUp, Store, X, Zap, Download, ChevronRight, TrendingUp, Settings2
 } from "lucide-react";
 import { BarChart, DoughnutChart } from "../components/Charts";
 import { Line } from "react-chartjs-2";
+import DataQualityRules from "../components/DataQualityRules";
 
 // ── Status helpers
 const STATUS_CFG = {
@@ -191,6 +192,7 @@ const DataQuality = () => {
   const TABS = [
     { id: "overview", label: "Overview", icon: Activity },
     { id: "checks", label: "Data Checks", icon: Shield },
+    { id: "rules", label: "Custom Rules", icon: Settings2 },
     { id: "categories", label: "Category Scorecard", icon: Database },
     { id: "trend", label: "Quality Trend", icon: TrendingUp },
     { id: "stores", label: "Store Tracker", icon: Store },
@@ -433,6 +435,9 @@ const DataQuality = () => {
               })}
             </div>
           )}
+
+          {/* ── CUSTOM RULES TAB ── */}
+          {activeTab === "rules" && <DataQualityRules />}
 
           {/* ── CATEGORY SCORECARD TAB ── */}
           {activeTab === "categories" && (
