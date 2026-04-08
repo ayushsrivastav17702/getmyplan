@@ -109,70 +109,83 @@ async def register(body: SignupRequest, request: Request, background_tasks: Back
     db_name = f"tenant_{tenant_id}"
     client = get_mongo_client()
 
-    # Create tenant database with default config
-    tdb = client[db_name]
-    await tdb.config.insert_one({
-        "psa_benchmark": 80,
-        "cover_days": 7,
-        "ros_period": 30,
-        "ideal_doh": 9,
-        "topseller_x_factor": 2.0,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    })
-    await tdb.channels.insert_many([
-        {"channel_code": "offline", "channel_name": "Offline Store", "channel_type": "offline", "commission": 0},
-        {"channel_code": "website", "channel_name": "Own Website", "channel_type": "website", "commission": 2.5},
-        {"channel_code": "amazon", "channel_name": "Amazon India", "channel_type": "marketplace", "commission": 12.5},
-        {"channel_code": "flipkart", "channel_name": "Flipkart", "channel_type": "marketplace", "commission": 15.0},
-        {"channel_code": "myntra", "channel_name": "Myntra", "channel_type": "marketplace", "commission": 18.0},
-    ])
+    try:
+        # Create tenant database with default config
+        tdb = client[db_name]
+        await tdb.config.insert_one({
+            "psa_benchmark": 80,
+            "cover_days": 7,
+            "ros_period": 30,
+            "ideal_doh": 9,
+            "topseller_x_factor": 2.0,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        await tdb.channels.insert_many([
+            {"channel_code": "offline", "channel_name": "Offline Store", "channel_type": "offline", "commission": 0},
+            {"channel_code": "website", "channel_name": "Own Website", "channel_type": "website", "commission": 2.5},
+            {"channel_code": "amazon", "channel_name": "Amazon India", "channel_type": "marketplace", "commission": 12.5},
+            {"channel_code": "flipkart", "channel_name": "Flipkart", "channel_type": "marketplace", "commission": 15.0},
+            {"channel_code": "myntra", "channel_name": "Myntra", "channel_type": "marketplace", "commission": 18.0},
+        ])
 
-    # Create user
-    verification_token = secrets.token_urlsafe(32)
-    verification_expiry = datetime.now(timezone.utc) + timedelta(hours=24)
-    now_iso = datetime.now(timezone.utc).isoformat()
+        # Create user
+        verification_token = secrets.token_urlsafe(32)
+        verification_expiry = datetime.now(timezone.utc) + timedelta(hours=24)
+        now_iso = datetime.now(timezone.utc).isoformat()
 
-    user_result = await shared.users.insert_one({
-        "email": body.email,
-        "username": body.email.split("@")[0],
-        "hashed_password": _hash_password(body.password),
-        "full_name": body.company_name,
-        "email_verified": False,
-        "verification_token": verification_token,
-        "verification_token_expiry": verification_expiry,
-        "is_active": False,
-        "created_at": now_iso,
-    })
-    user_id = str(user_result.inserted_id)
+        user_result = await shared.users.insert_one({
+            "email": body.email,
+            "username": body.email.split("@")[0],
+            "hashed_password": _hash_password(body.password),
+            "full_name": body.company_name,
+            "email_verified": False,
+            "verification_token": verification_token,
+            "verification_token_expiry": verification_expiry,
+            "is_active": False,
+            "created_at": now_iso,
+        })
+        user_id = str(user_result.inserted_id)
 
-    # Create tenant
-    trial_days = _trial_days()
-    trial_start = datetime.now(timezone.utc)
-    trial_end = trial_start + timedelta(days=trial_days)
+        # Create tenant
+        trial_days = _trial_days()
+        trial_start = datetime.now(timezone.utc)
+        trial_end = trial_start + timedelta(days=trial_days)
 
-    await shared.tenants.insert_one({
-        "tenant_id": tenant_id,
-        "company_name": body.company_name,
-        "db_name": db_name,
-        "subdomain": body.subdomain,
-        "plan_type": "trial",
-        "status": "pending_verification",
-        "trial_start": trial_start.isoformat(),
-        "trial_end": trial_end.isoformat(),
-        "admin_user_id": user_id,
-        "created_at": now_iso,
-        "updated_at": now_iso,
-    })
+        await shared.tenants.insert_one({
+            "tenant_id": tenant_id,
+            "company_name": body.company_name,
+            "db_name": db_name,
+            "subdomain": body.subdomain,
+            "plan_type": "trial",
+            "status": "pending_verification",
+            "trial_start": trial_start.isoformat(),
+            "trial_end": trial_end.isoformat(),
+            "admin_user_id": user_id,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        })
 
-    # User-tenant mapping
-    await shared.user_tenants.insert_one({
-        "email": body.email,
-        "user_id": user_id,
-        "tenant_id": tenant_id,
-        "role": "admin",
-        "is_active": False,
-        "assigned_at": now_iso,
-    })
+        # User-tenant mapping
+        await shared.user_tenants.insert_one({
+            "email": body.email,
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "role": "admin",
+            "is_active": False,
+            "assigned_at": now_iso,
+        })
+    except OperationFailure as e:
+        if e.code == 13:
+            logger.error(f"MongoDB permission denied during registration writes: {e.details.get('errmsg', str(e))}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database write permission denied. Please contact support — your MongoDB user may need readWrite access on the target databases."
+            )
+        logger.error(f"MongoDB operation failed during registration: {e}")
+        raise HTTPException(500, detail=f"Database error during registration: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error during registration: {e}", exc_info=True)
+        raise HTTPException(500, detail=f"Registration failed: {str(e)}")
 
     clear_tenant_cache()
 

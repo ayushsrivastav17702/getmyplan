@@ -8,11 +8,21 @@ import {
 
 // Use native fetch for ALL signup calls — completely isolated from axios defaults
 async function signupFetch(url, options = {}) {
-  const resp = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await resp.json();
+  let resp;
+  try {
+    resp = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch (networkErr) {
+    throw { message: "Network error — cannot reach server. Please check your connection." };
+  }
+  let data;
+  try {
+    data = await resp.json();
+  } catch {
+    throw { message: `Server returned non-JSON response (HTTP ${resp.status})` };
+  }
   if (!resp.ok) throw { response: { status: resp.status, data } };
   return data;
 }
@@ -107,9 +117,12 @@ const Signup = () => {
         setError(detail.map(d => d.msg || d).join(", "));
       } else if (detail) {
         setError(detail);
+      } else if (err.message) {
+        setError(`Registration failed: ${err.message}`);
       } else {
-        setError("Registration failed. Please try again.");
+        setError("Registration failed. Please check your connection and try again.");
       }
+      console.error("Registration error:", err);
     } finally {
       setLoading(false);
     }
