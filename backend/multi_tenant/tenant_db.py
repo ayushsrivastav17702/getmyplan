@@ -18,7 +18,7 @@ tenant_context: ContextVar[Optional["TenantContext"]] = ContextVar("tenant_conte
 _mongo_client: Optional[AsyncIOMotorClient] = None
 _tenant_cache: Dict[str, dict] = {}
 
-SHARED_DB_NAME = "merch_shared"
+SHARED_DB_NAME = os.environ.get("SHARED_DB_NAME", os.environ.get("DB_NAME", "merch_shared"))
 
 
 @dataclass
