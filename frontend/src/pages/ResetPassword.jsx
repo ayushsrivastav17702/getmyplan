@@ -26,13 +26,8 @@ export default function ResetPassword() {
     setLoading(true);
     setError("");
     try {
-      await axios.post(`${API}/signup/reset-password`, { token, password }, {
-        transformRequest: [(data, headers) => {
-          delete headers["Authorization"];
-          delete headers["X-Tenant-ID"];
-          return JSON.stringify(data);
-        }],
-      });
+      const cleanAxios = axios.create({ headers: { "Content-Type": "application/json" } });
+      await cleanAxios.post(`${API}/signup/reset-password`, { token, password });
       setSuccess(true);
     } catch (err) {
       setError(err.response?.data?.detail || "Reset failed. The link may have expired.");

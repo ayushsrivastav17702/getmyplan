@@ -15,13 +15,8 @@ export default function ForgotPassword() {
     setLoading(true);
     setError("");
     try {
-      await axios.post(`${API}/signup/forgot-password`, { email }, {
-        transformRequest: [(data, headers) => {
-          delete headers["Authorization"];
-          delete headers["X-Tenant-ID"];
-          return JSON.stringify(data);
-        }],
-      });
+      const cleanAxios = axios.create({ headers: { "Content-Type": "application/json" } });
+      await cleanAxios.post(`${API}/signup/forgot-password`, { email });
       setSent(true);
     } catch (err) {
       setError(err.response?.data?.detail || "Something went wrong. Please try again.");
