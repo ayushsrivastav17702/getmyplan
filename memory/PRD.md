@@ -75,7 +75,9 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **P0.2 Seasonal Decomposition Fix**: Fixed numpy.ndarray attribute error in `ml_forecast_engine.py` — converts input to pd.Series and uses np.asarray() on decomposition results. All 3 ML models now active in ensemble.
 - **P0.3 Database Indexes**: Added V2 collection indexes on startup (daily_sales, store_inventory, sku_master, etc.)
 - **Data Health Dashboard**: New `GET /api/analytics/ai-demand/data-health` endpoint + collapsible DataHealthDashboard component on AI Demand page. Shows progress to 180-day ML minimum, per-data-type status, estimated ML activation date, and "Upload Historical Data" CTA.
-- **Testing: 31/31 PASS (Iteration 55) + 35/35 PASS (Iteration 56)**
+- **25-Month Historical Data Seed**: Generated 757 days (Apr 2024 → Apr 2026) of realistic data: 30,961 daily sales rows, 37,850 store inventory rows, 15,140 warehouse inventory rows. SKUs: TSHIRT-BLK-M/L, HOODIE-GRY-M/L, CAP-BLK-ONE, SOCKS-WHT-3PK, JOGGER-BLK-M, SNEAKER-WHT-9, BACKPACK-BLK, WATER-BOTTLE-500. Stores: MAIN-01, SOUTH-02, WEST-03, ONLINE-01, POPUP-01. Data includes weekly seasonality, 5% monthly growth, festive peaks (Oct-Dec).
+- **ML Forecast Activated**: All 3 models (Holt-Winters, Random Forest, Seasonal Decomposition) now running on real data. Confidence 92.7%, trend "accelerating". Data Health badge shows "REAL ML FORECAST".
+- **Testing: 31/31 PASS (Iteration 55) + 35/35 PASS (Iteration 56) + 39/39 PASS (Iteration 57)**
 
 ## Route Map
 ```
