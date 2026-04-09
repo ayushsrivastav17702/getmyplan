@@ -1,0 +1,143 @@
+{
+  "summary": "Iteration 57: Full ML Pipeline Verification with 25 months seeded data (Apr 2024 - Apr 2026). All 29 backend tests PASSED. Frontend verified: Data Health shows 'REAL ML FORECAST' badge, 757/180 days (100%), all 3 ML models Active (Holt-Winters, Random Forest, Seasonal Decomposition), 92.7% confidence, 'accelerating' trend, data_source='uploaded'.",
+
+  "test_case_matrix": {
+    "DATA_HEALTH_ENDPOINT": {
+      "TEST_01_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/data-health returns 200"},
+      "TEST_02_days_available_757": {"status": "PASS", "notes": "daily_sales.days_available >= 700 (757 days)"},
+      "TEST_03_using_demo_data_false": {"status": "PASS", "notes": "forecast_readiness.using_demo_data = false"},
+      "TEST_04_progress_100": {"status": "PASS", "notes": "forecast_readiness.progress_pct = 100"},
+      "TEST_05_row_counts": {"status": "PASS", "notes": "daily_sales=30961, store_inv=37850, wh_inv=15140, sku=10, store=5"}
+    },
+    "FORECAST_ENDPOINT": {
+      "TEST_06_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/forecast returns 200"},
+      "TEST_07_data_source_uploaded": {"status": "PASS", "notes": "data_source = 'uploaded' (not 'demo')"},
+      "TEST_08_insufficient_data_false": {"status": "PASS", "notes": "insufficient_data = false"},
+      "TEST_09_all_3_models_active": {"status": "PASS", "notes": "models_used = ['Holt-Winters', 'Random Forest', 'Seasonal Decomposition']"},
+      "TEST_10_confidence_high": {"status": "PASS", "notes": "confidence_score > 80 (actual: ~92-93)"},
+      "TEST_11_12_months_predictions": {"status": "PASS", "notes": "forecast array has 12 values"},
+      "TEST_12_confidence_intervals": {"status": "PASS", "notes": "confidence_intervals.lower and .upper have 12 values each"},
+      "TEST_13_seasonality_factors": {"status": "PASS", "notes": "12 seasonality factors with realistic variation"},
+      "TEST_14_growth_trend_accelerating": {"status": "PASS", "notes": "trend = 'accelerating', avg_monthly_growth > 3%"}
+    },
+    "STOCKOUT_RISK_ENDPOINT": {
+      "TEST_15_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/stockout-risk returns 200"},
+      "TEST_16_data_source_uploaded": {"status": "PASS", "notes": "data_source = 'uploaded'"},
+      "TEST_17_new_skus": {"status": "PASS", "notes": "Items contain new SKUs (TSHIRT-BLK-M, etc)"}
+    },
+    "REORDER_OPTIMISATION_ENDPOINT": {
+      "TEST_18_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/reorder-optimisation returns 200"},
+      "TEST_19_data_source_uploaded": {"status": "PASS", "notes": "data_source = 'uploaded'"},
+      "TEST_20_10_skus": {"status": "PASS", "notes": "summary.total_skus = 10"}
+    },
+    "TOPSELLER_PREDICTION_ENDPOINT": {
+      "TEST_21_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/topseller-prediction returns 200"},
+      "TEST_22_data_source_uploaded": {"status": "PASS", "notes": "data_source = 'uploaded'"},
+      "TEST_23_identifies_topsellers": {"status": "PASS", "notes": "predictions array contains topseller items"}
+    },
+    "SUPPLY_FEASIBILITY_ENDPOINT": {
+      "TEST_24_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/supply-feasibility returns 200"},
+      "TEST_25_data_source_uploaded": {"status": "PASS", "notes": "data_source = 'uploaded'"}
+    },
+    "OPTIONS_ENDPOINT": {
+      "TEST_26_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/options returns 200"},
+      "TEST_27_correct_categories": {"status": "PASS", "notes": "categories = ['Tops', 'Accessories', 'Bottoms', 'Footwear']"}
+    },
+    "GENERATE_PLAN_ENDPOINT": {
+      "TEST_28_returns_200": {"status": "PASS", "notes": "POST /api/analytics/ai-demand/generate-plan returns 200"},
+      "TEST_29_from_real_data": {"status": "PASS", "notes": "data_source = 'uploaded'"}
+    },
+    "FRONTEND_DATA_HEALTH": {
+      "FE_01_dashboard_renders": {"status": "PASS", "notes": "data-testid='data-health-dashboard' present"},
+      "FE_02_real_ml_forecast_badge": {"status": "PASS", "notes": "Badge shows 'REAL ML FORECAST' (green)"},
+      "FE_03_757_days_displayed": {"status": "PASS", "notes": "'757 days available — full ML forecasting active'"},
+      "FE_04_100_percent_progress": {"status": "PASS", "notes": "Progress bar shows 100%"},
+      "FE_05_data_health_table": {"status": "PASS", "notes": "All 6 data types shown with Complete/Missing status"}
+    },
+    "FRONTEND_FORECAST": {
+      "FE_06_model_cards_active": {"status": "PASS", "notes": "All 3 model cards show 'Active' status"},
+      "FE_07_forecast_chart": {"status": "PASS", "notes": "Chart renders with AI Forecast, Upper/Lower Bound, Historical"},
+      "FE_08_confidence_93": {"status": "PASS", "notes": "'High 93%' confidence indicator shown"},
+      "FE_09_data_source_uploaded": {"status": "PASS", "notes": "'Data Source: Uploaded Tenant Data' shown"},
+      "FE_10_ai_insight": {"status": "PASS", "notes": "AI Insight shows: 'Holt-Winters, Random Forest, Seasonal Decomposition | 92.7% confidence | Trend: accelerating'"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 29,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 10,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 39,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/analytics/ai-demand/data-health", "issue": "Lead Times shows 'Missing' status - expected since lead_time_days not populated in SKU master", "priority": "LOW"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_ai_demand_iter57.py",
+    "/app/test_reports/pytest/pytest_results_iter57.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Seed script correctly generates 25 months (757 days) of realistic data with weekend multipliers, monthly growth, and seasonal patterns",
+    "ML Forecast Engine correctly activates all 3 models when data >= 24 months (Holt-Winters needs 2*seasonal_periods=24, Random Forest needs 24)",
+    "Data Health endpoint correctly calculates days_available from date range and shows using_demo_data=false when >= 180 days",
+    "Frontend DataHealthDashboard correctly displays 'REAL ML FORECAST' badge when using_demo_data=false",
+    "All AI demand endpoints correctly return data_source='uploaded' when using real data",
+    "Confidence score correctly shows ~92-93% with real data (vs capped at 50% with demo data)",
+    "Growth trend correctly shows 'accelerating' with ~5% monthly growth pattern"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_ai_demand_iter57.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 29/29 tests passed",
+    "frontend": "100% - 10/10 UI tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "seed_data_verification": {
+    "daily_sales": {"rows": 30961, "days": 757, "date_range": "2024-04-01 to 2026-04-27"},
+    "store_inventory": {"rows": 37850, "days": 757},
+    "warehouse_inventory": {"rows": 15140, "days": 757},
+    "sku_ean_master": {"count": 10, "skus": ["TSHIRT-BLK-M", "TSHIRT-BLK-L", "HOODIE-GRY-M", "HOODIE-GRY-L", "CAP-BLK-ONE", "SOCKS-WHT-3PK", "JOGGER-BLK-M", "SNEAKER-WHT-9", "BACKPACK-BLK", "WATER-BOTTLE-500"]},
+    "style_master": {"count": 8, "categories": ["Tops", "Accessories", "Bottoms", "Footwear"]},
+    "store_master": {"count": 5, "stores": ["MAIN-01", "SOUTH-02", "WEST-03", "ONLINE-01", "POPUP-01"]},
+    "warehouse_master": {"count": 2, "warehouses": ["WH-CENTRAL", "WH-SOUTH"]}
+  },
+
+  "ml_models_verification": {
+    "holt_winters": {"status": "Active", "requirement": "24 months minimum", "actual": "25 months"},
+    "random_forest": {"status": "Active", "requirement": "24 months minimum", "actual": "25 months"},
+    "seasonal_decomposition": {"status": "Active", "requirement": "24 months minimum", "actual": "25 months"}
+  },
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Full ML pipeline verified with 25 months of seeded data. All 3 ML models (Holt-Winters, Random Forest, Seasonal Decomposition) are now active. Data Health shows 'REAL ML FORECAST' badge with 757/180 days (100%). All AI demand endpoints return data_source='uploaded'. Confidence score is ~92-93%. Growth trend shows 'accelerating' with ~5% monthly growth. Lead Times status shows 'Missing' which is expected since lead_time_days is not populated in SKU master - this is a minor issue for future enhancement.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
