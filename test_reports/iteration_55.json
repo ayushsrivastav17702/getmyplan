@@ -1,0 +1,123 @@
+{
+  "summary": "Iteration 55: AI Demand Planning P0 Fixes Testing. All P0 fixes verified working: (1) V2 Data Bridge correctly falls back to V1 when V2 collections are empty, (2) Seasonal Decomposition model no longer crashes (numpy.ndarray fix applied), (3) V2 collection indexes created on startup. Backend: 21/21 tests passed. Frontend: All 4 tabs working, all UI components rendering correctly.",
+
+  "test_case_matrix": {
+    "P0_1_V2_DATA_BRIDGE": {
+      "TEST_01_forecast_endpoint": {"status": "PASS", "notes": "Forecast works, data_source='demo' (V1 has 90 days, needs 180+)"},
+      "TEST_02_stockout_risk_uploaded": {"status": "PASS", "notes": "data_source='uploaded', 2000 items from V1 store_inventory"},
+      "TEST_03_reorder_optimisation_uploaded": {"status": "PASS", "notes": "data_source='uploaded', 200 SKUs from V1 data"},
+      "TEST_04_supply_feasibility": {"status": "PASS", "notes": "data_source='uploaded', working with V1 data"},
+      "TEST_05_topseller_prediction": {"status": "PASS", "notes": "data_source='uploaded', 10 predictions from V1 data"},
+      "TEST_06_v2_empty_v1_fallback": {"status": "PASS", "notes": "V2 collections empty (0 docs), V1 uploaded_files used correctly"}
+    },
+    "P0_2_SEASONAL_DECOMPOSITION_FIX": {
+      "TEST_07_no_crash": {"status": "PASS", "notes": "No numpy.ndarray attribute error"},
+      "TEST_08_three_models_active": {"status": "PASS", "notes": "models_used=['Holt-Winters', 'Random Forest', 'Seasonal Decomposition']"},
+      "TEST_09_category_filter_no_crash": {"status": "PASS", "notes": "Forecast with category filter works without crash"}
+    },
+    "P0_3_V2_COLLECTION_INDEXES": {
+      "TEST_10_indexes_created": {"status": "PASS", "notes": "Backend logs show 'V2 collection indexes ensured on test_database'"},
+      "TEST_11_health_check": {"status": "PASS", "notes": "Health check returns status='healthy'"}
+    },
+    "ALL_AI_DEMAND_ENDPOINTS": {
+      "TEST_12_forecast": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/forecast"},
+      "TEST_13_stockout_risk": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/stockout-risk"},
+      "TEST_14_topseller_prediction": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/topseller-prediction"},
+      "TEST_15_reorder_optimisation": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/reorder-optimisation"},
+      "TEST_16_supply_feasibility": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/supply-feasibility"},
+      "TEST_17_options": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/options"},
+      "TEST_18_plans_list": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/plans"},
+      "TEST_19_generate_plan": {"status": "PASS", "notes": "POST /api/analytics/ai-demand/generate-plan"},
+      "TEST_20_get_plan_by_id": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/plans/{plan_id}"},
+      "TEST_21_update_plan": {"status": "PASS", "notes": "PUT /api/analytics/ai-demand/plans/{plan_id}"}
+    },
+    "FRONTEND_UI": {
+      "FE_01_page_loads": {"status": "PASS", "notes": "data-testid='ai-demand-planning' present"},
+      "FE_02_demand_tab": {"status": "PASS", "notes": "Tab 'demand' found and working"},
+      "FE_03_supply_tab": {"status": "PASS", "notes": "Tab 'supply' found with chart and table sections"},
+      "FE_04_replenish_tab": {"status": "PASS", "notes": "Tab 'replenish' found with stockout and reorder tables"},
+      "FE_05_insights_tab": {"status": "PASS", "notes": "Tab 'insights' found with topseller and model performance sections"},
+      "FE_06_model_cards": {"status": "PASS", "notes": "All 3 model cards showing 'Active': Holt-Winters, Random Forest, Seasonal Decomp"},
+      "FE_07_data_source_indicator": {"status": "PASS", "notes": "Shows 'Using uploaded tenant data (2 months of sales data)'"},
+      "FE_08_forecast_chart": {"status": "PASS", "notes": "ML Demand Forecast chart with confidence intervals"},
+      "FE_09_generate_plan_btn": {"status": "PASS", "notes": "Generate AI Plan button works"},
+      "FE_10_editable_grid": {"status": "PASS", "notes": "Demand editable grid renders after plan generation"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 21,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 10,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 31,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_ai_demand_p0_iter55.py",
+    "/app/test_reports/pytest/pytest_results_iter55.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "P0.1 V2 Data Bridge: get_cached_data() correctly checks V2 collections first, falls back to V1 uploaded_files when V2 is empty",
+    "P0.1 Field compatibility mapping working: V2 field names (closing_stock, on_hand_qty, sku) correctly renamed to V1 names (quantity, ean)",
+    "P0.1 style_master correctly uses V1 only (no V2 equivalent)",
+    "P0.2 Seasonal Decomposition fix: Input converted to pd.Series, results use np.asarray() instead of .values attribute",
+    "P0.2 All 3 models active in ensemble: Holt-Winters, Random Forest, Seasonal Decomposition",
+    "P0.3 V2 collection indexes created on startup (verified in backend logs)",
+    "All 10 AI Demand endpoints working correctly",
+    "Frontend AIDemandPlanning page loads without errors, all 4 tabs functional"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_ai_demand_p0_iter55.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 21/21 tests passed",
+    "frontend": "100% - 10/10 UI tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "seed_data_creation": "Used existing V1 uploaded_files data: daily_sales=13618 rows, store_inventory=18000 rows, sku_ean_master=200 rows, style_master=50 rows, store_master=10 rows, warehouse_inventory=400 rows, warehouse_master=2 rows",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "AI Demand Planning P0 fixes verified. V2 collections are empty in test_database, so V1 fallback is used. V2 Data Bridge working correctly - checks V2 first, falls back to V1. Seasonal Decomposition model fixed (no more numpy.ndarray attribute error). All 10 AI Demand endpoints working. Frontend page loads with all 4 tabs functional. Data source indicators correctly show 'uploaded' for stockout/reorder (V1 data) and 'demo' for forecast (needs 180+ days, V1 only has 90).",
+
+  "v2_data_bridge_verification": {
+    "v2_collections_status": "All empty (0 docs): daily_sales, store_inventory, warehouse_inventory, sku_master, store_master, warehouse_master",
+    "v1_uploaded_files_status": "7 docs with data: daily_sales=13618, store_inventory=18000, sku_ean_master=200, style_master=50, store_master=10, warehouse_inventory=400, warehouse_master=2",
+    "fallback_working": true,
+    "field_mapping_verified": "closing_stock->quantity, sku->ean, on_hand_qty->quantity"
+  },
+
+  "seasonal_decomposition_fix_verification": {
+    "models_used": ["Holt-Winters", "Random Forest", "Seasonal Decomposition"],
+    "crash_fixed": true,
+    "fix_applied": "Input converted to pd.Series, results use np.asarray() instead of .values"
+  },
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

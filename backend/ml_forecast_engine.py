@@ -139,11 +139,13 @@ class MLForecastEngine:
         if not STATSMODELS_AVAILABLE or not SKLEARN_AVAILABLE or len(data) < seasonal_periods * 2:
             return None
         try:
-            decomp = seasonal_decompose(data, model='additive', period=seasonal_periods, extrapolate_trend='freq')
-            trend = decomp.trend.values
-            seasonal = decomp.seasonal.values[-seasonal_periods:]
+            series = pd.Series(data)
+            decomp = seasonal_decompose(series, model='additive', period=seasonal_periods, extrapolate_trend='freq')
+            trend = np.asarray(decomp.trend)
+            seasonal = np.asarray(decomp.seasonal)[-seasonal_periods:]
 
-            valid_trend = trend[~np.isnan(trend)]
+            valid_mask = ~np.isnan(trend)
+            valid_trend = trend[valid_mask]
             if len(valid_trend) > 3:
                 lr = LinearRegression()
                 lr.fit(np.arange(len(valid_trend)).reshape(-1, 1), valid_trend)

@@ -377,11 +377,64 @@ def validate_file(df: pd.DataFrame, file_type: str) -> Dict[str, Any]:
 
 
 async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
-    """Retrieve cached data from tenant-aware MongoDB"""
+    """Retrieve data: V2 collections first, V1 uploaded_files fallback.
+
+    V2 collections store one document per row (scalable).
+    V1 uploaded_files stores the entire CSV as a JSON array inside one document.
+    """
     tdb = get_db()
-    doc = await tdb.uploaded_files.find_one({"file_type": file_type}, {"_id": 0, "file_type": 1, "data": 1})
+
+    # Map V1 file_type names to V2 collection names
+    _V2_MAP = {
+        'daily_sales': 'daily_sales',
+        'store_inventory': 'store_inventory',
+        'warehouse_inventory': 'warehouse_inventory',
+        'sku_ean_master': 'sku_master',
+        'sku_master': 'sku_master',
+        'style_master': None,
+        'store_master': 'store_master',
+        'warehouse_master': 'warehouse_master',
+    }
+
+    # When V2 field names differ from V1, rename for backward compatibility.
+    # Only renames if the V1 name is absent — preserves columns uploaded with V1-style names.
+    _V2_COMPAT = {
+        'store_inventory': {'closing_stock': 'quantity', 'sku': 'ean'},
+        'warehouse_inventory': {'on_hand_qty': 'quantity'},
+    }
+    # For sku_ean_master lookups against V2 sku_master
+    _SKU_COMPAT = {'sku': 'ean'}
+
+    v2_coll = _V2_MAP.get(file_type)
+
+    if v2_coll:
+        try:
+            v2_count = await tdb[v2_coll].estimated_document_count()
+            if v2_count > 0:
+                cursor = tdb[v2_coll].find(
+                    {}, {'_id': 0, 'tenant_id': 0, 'uploaded_at': 0, 'uploaded_by': 0}
+                )
+                docs = await cursor.to_list(200_000)
+                if docs:
+                    df = pd.DataFrame(docs)
+                    # Apply field renames for backward compatibility
+                    compat = _V2_COMPAT.get(v2_coll, {})
+                    if file_type == 'sku_ean_master':
+                        compat = _SKU_COMPAT
+                    for v2_name, v1_name in compat.items():
+                        if v2_name in df.columns and v1_name not in df.columns:
+                            df = df.rename(columns={v2_name: v1_name})
+                    logger.info("get_cached_data(%s): V2 '%s' (%d rows)", file_type, v2_coll, len(df))
+                    return df
+        except Exception as e:
+            logger.warning("V2 read failed for %s: %s", v2_coll, e)
+
+    # V1 fallback — entire CSV stored as JSON array in one document
+    doc = await tdb.uploaded_files.find_one({"file_type": file_type}, {"_id": 0, "data": 1})
     if doc and 'data' in doc:
+        logger.info("get_cached_data(%s): V1 uploaded_files (%d rows)", file_type, len(doc['data']))
         return pd.DataFrame(doc['data'])
+
     return None
 
 
@@ -3269,6 +3322,28 @@ async def _ensure_enterprise_indexes():
     logger.info("Enterprise indexes ensured on shared DB")
 
 
+async def _ensure_v2_collection_indexes(tenant_db):
+    """Create performance indexes on V2 upload collections for a tenant DB."""
+    async def _idx(coll, keys, **kw):
+        try:
+            await coll.create_index(keys, **kw)
+        except Exception:
+            pass
+
+    await _idx(tenant_db.daily_sales, [("tenant_id", 1), ("day", 1)])
+    await _idx(tenant_db.daily_sales, [("tenant_id", 1), ("sku", 1)])
+    await _idx(tenant_db.store_inventory, [("tenant_id", 1), ("store_code", 1)])
+    await _idx(tenant_db.store_inventory, [("tenant_id", 1), ("ean", 1)])
+    await _idx(tenant_db.warehouse_inventory, [("tenant_id", 1), ("sku", 1)])
+    await _idx(tenant_db.sku_master, [("tenant_id", 1), ("sku", 1)], unique=True, sparse=True)
+    await _idx(tenant_db.store_master, [("tenant_id", 1), ("store_code", 1)], unique=True, sparse=True)
+    await _idx(tenant_db.warehouse_master, [("tenant_id", 1), ("warehouse", 1)], unique=True, sparse=True)
+    await _idx(tenant_db.demand_plans, [("category", 1), ("status", 1)])
+    await _idx(tenant_db.demand_plans, "created_at")
+    await _idx(tenant_db.uploaded_files, "file_type")
+    logger.info("V2 collection indexes ensured on %s", tenant_db.name)
+
+
 @app.on_event("startup")
 async def startup():
     # === DATABASE CONFIGURATION DEBUG (remove after production verification) ===
@@ -3295,6 +3370,11 @@ async def startup():
         await _ensure_enterprise_indexes()
     except Exception as e:
         logger.warning(f"Enterprise index creation skipped: {e}")
+    # Ensure V2 collection indexes on the default DB
+    try:
+        await _ensure_v2_collection_indexes(db)
+    except Exception as e:
+        logger.warning(f"V2 index creation skipped: {e}")
     try:
         await _ensure_default_tenant()
     except Exception as e:
