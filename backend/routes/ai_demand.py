@@ -193,6 +193,106 @@ async def ml_forecast(
 
 
 # ═══════════════════════════════════════════════════════════════
+# 1b. DATA HEALTH  (RBAC: all authenticated users)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/analytics/ai-demand/data-health")
+async def data_health(request: Request):
+    """Data completeness metrics for AI Demand Planning.
+    Shows how much historical data is available vs the 180-day ML minimum."""
+    _check_rate_limit(request)
+    if _get_current_user:
+        await _get_current_user(request)
+
+    async def _time_series_health(file_type: str, date_field: str, required_days: int):
+        """Check days of time-series data available."""
+        df = await _get_cached_data(file_type)
+        if df is None or len(df) == 0:
+            return {"days_available": 0, "row_count": 0, "min_date": None,
+                    "max_date": None, "status": "missing", "progress_pct": 0}
+        try:
+            dates = pd.to_datetime(df[date_field], errors='coerce').dropna()
+            if len(dates) == 0:
+                return {"days_available": 0, "row_count": len(df), "min_date": None,
+                        "max_date": None, "status": "missing", "progress_pct": 0}
+            min_d, max_d = dates.min(), dates.max()
+            days = (max_d - min_d).days + 1
+            unique_days = int(dates.dt.date.nunique())
+            pct = round(min(days / required_days * 100, 100), 1)
+            return {
+                "days_available": days,
+                "unique_days": unique_days,
+                "row_count": len(df),
+                "min_date": min_d.strftime("%Y-%m-%d"),
+                "max_date": max_d.strftime("%Y-%m-%d"),
+                "status": "complete" if days >= required_days else "partial",
+                "progress_pct": pct,
+            }
+        except Exception:
+            return {"days_available": 0, "row_count": len(df), "min_date": None,
+                    "max_date": None, "status": "error", "progress_pct": 0}
+
+    async def _master_health(file_type: str):
+        """Check if master data exists and return count."""
+        df = await _get_cached_data(file_type)
+        count = len(df) if df is not None else 0
+        return {"count": count, "status": "complete" if count > 0 else "missing"}
+
+    async def _lead_time_health():
+        """Check how many SKUs have lead_time_days populated."""
+        df = await _get_cached_data('sku_ean_master')
+        if df is None or len(df) == 0:
+            return {"total_skus": 0, "with_lead_time": 0, "percent_complete": 0, "status": "missing"}
+        total = len(df)
+        with_lt = 0
+        if 'lead_time_days' in df.columns:
+            with_lt = int((pd.to_numeric(df['lead_time_days'], errors='coerce') > 0).sum())
+        pct = round(with_lt / total * 100, 1) if total > 0 else 0
+        status = "complete" if with_lt == total and total > 0 else ("partial" if with_lt > 0 else "missing")
+        return {"total_skus": total, "with_lead_time": with_lt, "percent_complete": pct, "status": status}
+
+    required_days = 180
+    daily_sales = await _time_series_health('daily_sales', 'day', required_days)
+    store_inv = await _time_series_health('store_inventory', 'day', required_days)
+    wh_inv = await _time_series_health('warehouse_inventory', 'day', required_days)
+    sku_master = await _master_health('sku_ean_master')
+    store_master = await _master_health('store_master')
+    lead_times = await _lead_time_health()
+
+    # Forecast readiness — minimum of daily_sales days
+    min_days = daily_sales["days_available"]
+    progress = round(min(min_days / required_days * 100, 100), 1)
+    using_demo = min_days < required_days
+    days_remaining = max(0, required_days - min_days)
+    est_date = None
+    if days_remaining > 0:
+        est_date = (datetime.now(timezone.utc) + timedelta(days=days_remaining)).strftime("%Y-%m-%d")
+
+    # Determine data source (V2 or V1)
+    tdb = _get_db()
+    v2_count = await tdb.daily_sales.estimated_document_count()
+    data_source = "V2" if v2_count > 0 else "V1"
+
+    return {
+        "daily_sales": daily_sales,
+        "store_inventory": store_inv,
+        "warehouse_inventory": wh_inv,
+        "sku_master": sku_master,
+        "store_master": store_master,
+        "lead_times": lead_times,
+        "data_source": data_source,
+        "forecast_readiness": {
+            "days_available": min_days,
+            "days_required": required_days,
+            "days_remaining": days_remaining,
+            "progress_pct": progress,
+            "using_demo_data": using_demo,
+            "estimated_ready_date": est_date,
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
 # 2. STOCKOUT RISK PREDICTION  (RBAC: admin, merchandiser, allocator)
 # ═══════════════════════════════════════════════════════════════
 

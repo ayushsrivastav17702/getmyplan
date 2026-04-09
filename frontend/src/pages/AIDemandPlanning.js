@@ -5,7 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import {
   RefreshCw, AlertTriangle, TrendingUp, TrendingDown,
   Package, Zap, Target, BarChart3, AlertCircle, CheckCircle, Clock,
-  Loader2, Save, FileText, ChevronDown, ChevronUp, Edit3, Lock
+  Loader2, Save, FileText, ChevronDown, ChevronUp, Edit3, Lock,
+  Database, Upload, Activity, Calendar
 } from "lucide-react";
 import { LineChart, BarChart } from "../components/Charts";
 
@@ -123,6 +124,175 @@ const EditableCell = ({ value, onChange, readOnly, className = "" }) => {
   );
 };
 
+/* ── Data Health Dashboard ───────────────────────────────────── */
+const HealthBar = ({ pct, color }) => (
+  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+    <div className={`h-2 rounded-full transition-all duration-700 ${color}`}
+         style={{ width: `${Math.min(pct, 100)}%` }} />
+  </div>
+);
+
+const StatusDot = ({ status }) => {
+  const m = { complete: "bg-emerald-500", partial: "bg-amber-500", missing: "bg-red-500", error: "bg-gray-400" };
+  return <span className={`inline-block w-2 h-2 rounded-full ${m[status] || m.error}`} />;
+};
+
+const DataHealthDashboard = ({ health, onNavigateUpload }) => {
+  const [expanded, setExpanded] = useState(false);
+  if (!health) return null;
+
+  const fr = health.forecast_readiness || {};
+  const isReady = !fr.using_demo_data;
+  const items = [
+    { key: "daily_sales", label: "Daily Sales", icon: Activity, data: health.daily_sales, isSeries: true },
+    { key: "store_inventory", label: "Store Inventory", icon: Package, data: health.store_inventory, isSeries: true },
+    { key: "warehouse_inventory", label: "Warehouse Inv", icon: Database, data: health.warehouse_inventory, isSeries: true },
+    { key: "sku_master", label: "SKU Master", icon: FileText, data: health.sku_master, isSeries: false },
+    { key: "store_master", label: "Store Master", icon: Target, data: health.store_master, isSeries: false },
+    { key: "lead_times", label: "Lead Times", icon: Clock, data: health.lead_times, isSeries: false, isLead: true },
+  ];
+
+  return (
+    <div data-testid="data-health-dashboard"
+         className={`rounded-xl border overflow-hidden transition-all ${
+           isReady ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"
+         }`}>
+      {/* Header bar — always visible */}
+      <button data-testid="data-health-toggle" onClick={() => setExpanded(!expanded)}
+              className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/50 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className={`p-1.5 rounded-lg ${isReady ? "bg-emerald-100" : "bg-amber-100"}`}>
+            <Database className={`h-4 w-4 ${isReady ? "text-emerald-600" : "text-amber-600"}`} />
+          </div>
+          <div className="text-left">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-800">Data Health</span>
+              <span data-testid="forecast-quality-badge"
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      isReady ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                    }`}>
+                {isReady ? "Real ML Forecast" : "Demo Data"}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isReady
+                ? `${fr.days_available} days available — full ML forecasting active`
+                : `${fr.days_available}/${fr.days_required} days — need ${fr.days_remaining} more for ML forecast`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Mini progress */}
+          <div className="hidden sm:flex items-center gap-2 min-w-[140px]">
+            <HealthBar pct={fr.progress_pct} color={isReady ? "bg-emerald-500" : "bg-amber-500"} />
+            <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{fr.progress_pct}%</span>
+          </div>
+          {expanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+        </div>
+      </button>
+
+      {/* Expanded detail panel */}
+      {expanded && (
+        <div className="px-5 pb-4 space-y-4 border-t border-gray-200/60">
+          {/* Progress bar to 180 days */}
+          <div className="pt-4">
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-xs font-medium text-gray-600">Forecast Readiness</span>
+              <span className="text-xs text-gray-500">{fr.days_available} / {fr.days_required} days</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div className={`h-3 rounded-full transition-all duration-1000 ${
+                fr.progress_pct >= 100 ? "bg-emerald-500" : fr.progress_pct >= 50 ? "bg-amber-500" : "bg-red-400"
+              }`} style={{ width: `${Math.min(fr.progress_pct, 100)}%` }}>
+                <div className="h-full w-full bg-[length:20px_20px] animate-pulse opacity-30"
+                     style={{ backgroundImage: "linear-gradient(45deg, rgba(255,255,255,.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.3) 50%, rgba(255,255,255,.3) 75%, transparent 75%)" }} />
+              </div>
+            </div>
+            {fr.estimated_ready_date && (
+              <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                <Calendar className="h-3 w-3" />
+                <span>Estimated ML activation: <strong className="text-gray-700">{fr.estimated_ready_date}</strong> ({fr.days_remaining} more days of data)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Data grid */}
+          <div className="overflow-x-auto">
+            <table data-testid="data-health-table" className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-500 uppercase tracking-wider">
+                  <th className="text-left py-2 pr-3 font-medium">Data Type</th>
+                  <th className="text-left py-2 pr-3 font-medium">Available</th>
+                  <th className="text-left py-2 pr-3 font-medium min-w-[120px]">Progress</th>
+                  <th className="text-left py-2 pr-3 font-medium">Status</th>
+                  <th className="text-left py-2 font-medium">Minimum Required</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item => {
+                  const d = item.data || {};
+                  let avail, pct, required;
+                  if (item.isSeries) {
+                    avail = d.days_available ? `${d.days_available} days` : "0 days";
+                    pct = d.progress_pct || 0;
+                    required = "180 days";
+                  } else if (item.isLead) {
+                    avail = d.status === "missing" ? "Not set" : `${d.with_lead_time}/${d.total_skus} SKUs`;
+                    pct = d.percent_complete || 0;
+                    required = "Required for EOQ";
+                  } else {
+                    avail = d.count > 0 ? `${d.count} records` : "None";
+                    pct = d.status === "complete" ? 100 : 0;
+                    required = "At least 1 upload";
+                  }
+                  const Icon = item.icon;
+                  return (
+                    <tr key={item.key} data-testid={`health-row-${item.key}`}
+                        className="border-t border-gray-100 hover:bg-white/60 transition-colors">
+                      <td className="py-2.5 pr-3">
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="font-medium text-gray-700">{item.label}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-3 text-gray-600">{avail}</td>
+                      <td className="py-2.5 pr-3">
+                        <HealthBar pct={pct}
+                                   color={pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-400"} />
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <div className="flex items-center gap-1.5">
+                          <StatusDot status={d.status} />
+                          <span className="text-xs capitalize text-gray-500">{d.status || "unknown"}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-gray-500 text-xs">{required}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Data source + action */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Database className="h-3 w-3" />
+              <span>Source: <strong>{health.data_source || "V1"}</strong> pipeline</span>
+            </div>
+            {!isReady && onNavigateUpload && (
+              <button data-testid="upload-historical-btn" onClick={onNavigateUpload}
+                      className="px-3 py-1.5 bg-[#0B2545] text-white rounded-lg text-xs font-medium hover:bg-[#13315C] transition-colors flex items-center gap-1.5">
+                <Upload className="h-3 w-3" /> Upload Historical Data
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ================================================================
    MAIN COMPONENT
    ================================================================ */
@@ -150,6 +320,7 @@ const AIDemandPlanning = () => {
   const [saving, setSaving] = useState(false);
   const [conflictMsg, setConflictMsg] = useState("");
   const [dataStatus, setDataStatus] = useState(null);
+  const [dataHealth, setDataHealth] = useState(null);
 
   /* fetch filter options from TenantDataProvider-powered endpoint */
   useEffect(() => {
@@ -162,6 +333,9 @@ const AIDemandPlanning = () => {
       setSubcategories(s);
       if (s.length && !subcategory) setSubcategory(s[0]);
       setDataStatus(d.data_status || null);
+    }).catch(() => {});
+    axios.get(`${API}/analytics/ai-demand/data-health`).then(r => {
+      setDataHealth(r.data);
     }).catch(() => {});
   }, []);
 
@@ -314,28 +488,8 @@ const AIDemandPlanning = () => {
         </div>
       )}
 
-      {/* Data Source Indicator */}
-      {dataStatus && (
-        <div data-testid="data-source-indicator"
-             className={`rounded-lg px-4 py-2.5 flex items-center gap-2 text-sm ${
-               dataStatus.is_ready
-                 ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                 : "bg-amber-50 border border-amber-200 text-amber-800"
-             }`}>
-          {dataStatus.is_ready
-            ? <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-            : <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />}
-          <span className="font-medium">
-            {dataStatus.is_ready ? "Using uploaded tenant data" : "Some data missing — using demo fallbacks"}
-          </span>
-          {dataStatus.missing?.length > 0 && (
-            <span className="text-xs opacity-75 ml-1">Missing: {dataStatus.missing.join(", ")}</span>
-          )}
-          {dataStatus.is_ready && dataStatus.sales_months_available > 0 && (
-            <span className="text-xs opacity-75 ml-1">({dataStatus.sales_months_available} months of sales data)</span>
-          )}
-        </div>
-      )}
+      {/* Data Health Dashboard */}
+      <DataHealthDashboard health={dataHealth} onNavigateUpload={() => window.location.href = "/upload"} />
 
       {/* ── Controls + Tabs ─────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

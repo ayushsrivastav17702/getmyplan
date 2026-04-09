@@ -1,0 +1,123 @@
+{
+  "summary": "Iteration 56: Data Health Dashboard Testing. New feature fully verified - GET /api/analytics/ai-demand/data-health endpoint returns correct structure with all required fields. Frontend DataHealthDashboard component renders correctly with collapsible panel, progress bars, status dots, estimated ML activation date, and Upload Historical Data button. All existing AI Demand endpoints working (regression passed).",
+
+  "test_case_matrix": {
+    "DATA_HEALTH_ENDPOINT": {
+      "TEST_01_returns_200": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/data-health returns 200"},
+      "TEST_02_required_fields": {"status": "PASS", "notes": "All required fields present: daily_sales, store_inventory, warehouse_inventory, sku_master, store_master, lead_times, data_source, forecast_readiness"},
+      "TEST_03_daily_sales": {"status": "PASS", "notes": "days_available=90, status='partial', progress_pct=50.0"},
+      "TEST_04_store_inventory": {"status": "PASS", "notes": "days_available=90, status='partial'"},
+      "TEST_05_warehouse_inventory": {"status": "PASS", "notes": "days_available=1, status='partial'"},
+      "TEST_06_sku_master": {"status": "PASS", "notes": "count=200, status='complete'"},
+      "TEST_07_store_master": {"status": "PASS", "notes": "count=10, status='complete'"},
+      "TEST_08_lead_times": {"status": "PASS", "notes": "status='missing', total_skus=200, with_lead_time=0"},
+      "TEST_09_forecast_readiness": {"status": "PASS", "notes": "days_available=90, days_required=180, using_demo_data=true, estimated_ready_date='2026-07-08'"},
+      "TEST_10_data_source": {"status": "PASS", "notes": "data_source='V1'"}
+    },
+    "REGRESSION_AI_DEMAND_ENDPOINTS": {
+      "TEST_11_forecast": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/forecast works"},
+      "TEST_12_stockout_risk": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/stockout-risk works"},
+      "TEST_13_reorder_optimisation": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/reorder-optimisation works"},
+      "TEST_14_supply_feasibility": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/supply-feasibility works"},
+      "TEST_15_topseller_prediction": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/topseller-prediction works"},
+      "TEST_16_options": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/options works"},
+      "TEST_17_plans_list": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/plans works"}
+    },
+    "FRONTEND_DATA_HEALTH_DASHBOARD": {
+      "FE_01_dashboard_renders": {"status": "PASS", "notes": "data-testid='data-health-dashboard' present"},
+      "FE_02_forecast_quality_badge": {"status": "PASS", "notes": "forecast-quality-badge shows 'Demo Data' text"},
+      "FE_03_toggle_button": {"status": "PASS", "notes": "data-health-toggle button expands/collapses panel"},
+      "FE_04_data_health_table": {"status": "PASS", "notes": "data-health-table shows 6 rows"},
+      "FE_05_health_row_daily_sales": {"status": "PASS", "notes": "health-row-daily_sales present"},
+      "FE_06_health_row_store_inventory": {"status": "PASS", "notes": "health-row-store_inventory present"},
+      "FE_07_health_row_warehouse_inventory": {"status": "PASS", "notes": "health-row-warehouse_inventory present"},
+      "FE_08_health_row_sku_master": {"status": "PASS", "notes": "health-row-sku_master present"},
+      "FE_09_health_row_store_master": {"status": "PASS", "notes": "health-row-store_master present"},
+      "FE_10_health_row_lead_times": {"status": "PASS", "notes": "health-row-lead_times present"},
+      "FE_11_upload_historical_btn": {"status": "PASS", "notes": "upload-historical-btn shows when using demo data"},
+      "FE_12_forecast_readiness_progress": {"status": "PASS", "notes": "Forecast Readiness progress bar shows 50%"},
+      "FE_13_estimated_ml_date": {"status": "PASS", "notes": "Estimated ML activation: 2026-07-08 displayed"},
+      "FE_14_collapse_expand": {"status": "PASS", "notes": "Collapse/expand functionality works correctly"}
+    },
+    "FRONTEND_REGRESSION_TABS": {
+      "FE_15_demand_tab": {"status": "PASS", "notes": "Tab 'demand' works"},
+      "FE_16_supply_tab": {"status": "PASS", "notes": "Tab 'supply' works"},
+      "FE_17_replenish_tab": {"status": "PASS", "notes": "Tab 'replenish' works"},
+      "FE_18_insights_tab": {"status": "PASS", "notes": "Tab 'insights' works"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 17,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 18,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 35,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_data_health_iter56.py",
+    "/app/test_reports/pytest/pytest_results_iter56.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Data Health endpoint correctly uses get_cached_data() bridge for V1/V2 compatibility",
+    "Time series health check correctly calculates days_available from date range",
+    "Master data health check correctly returns count and status",
+    "Lead time health check correctly identifies missing lead_time_days in SKU master",
+    "Forecast readiness correctly calculates progress percentage and estimated ready date",
+    "Frontend DataHealthDashboard component properly implements collapsible panel pattern",
+    "All data-testid attributes correctly added for testing",
+    "Progress bars and status dots render correctly based on API data"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_data_health_iter56.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 17/17 tests passed",
+    "frontend": "100% - 18/18 UI tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "seed_data_creation": "Used existing V1 uploaded_files data: daily_sales=13618 rows/90 days, store_inventory=18000/90 days, warehouse_inventory=400/1 day, sku_ean_master=200, store_master=10",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Data Health Dashboard feature fully implemented and tested. Backend endpoint /api/analytics/ai-demand/data-health returns correct structure with all data types (daily_sales, store_inventory, warehouse_inventory, sku_master, store_master, lead_times) plus forecast_readiness and data_source. Frontend DataHealthDashboard component renders at top of AI Demand Planning page with collapsible panel showing progress bars, status dots, and Upload Historical Data button. V1 data has 90 days of sales/inventory data (50% of 180-day ML requirement), so using_demo_data=true and estimated_ready_date is set.",
+
+  "data_health_verification": {
+    "daily_sales": {"days_available": 90, "status": "partial", "progress_pct": 50.0},
+    "store_inventory": {"days_available": 90, "status": "partial"},
+    "warehouse_inventory": {"days_available": 1, "status": "partial"},
+    "sku_master": {"count": 200, "status": "complete"},
+    "store_master": {"count": 10, "status": "complete"},
+    "lead_times": {"status": "missing", "total_skus": 200, "with_lead_time": 0},
+    "forecast_readiness": {"days_available": 90, "days_required": 180, "using_demo_data": true, "estimated_ready_date": "2026-07-08"},
+    "data_source": "V1"
+  },
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
