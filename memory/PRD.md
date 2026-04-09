@@ -33,104 +33,98 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 
 ### Phase 41 — Website Product Report + CORS Fix (Apr 2026)
 - WEBSITE_PRODUCT_REPORT.md: 11-section report with real API data
-- CORS lockdown + query projection fix
 
 ### Phase 42 — Marketing Landing Page v1 (Apr 2026)
 - Initial landing page — 27/27 PASS (Iteration 45)
 
 ### Phase 43 — Enterprise SaaS Landing Page Redesign (Apr 2026)
-- 12 landing components, Plan-Based Access Control architecture
-- **Testing: 23/24 PASS (Iteration 46)**
+- 12 landing components, Plan-Based Access Control architecture — 23/24 PASS (Iteration 46)
 
 ### Phase 44 — Interactive Product Tour (Apr 2026)
-- 5-step interactive product tour (Upload, Dashboard, Forecast, Stock-Out, Buy Plan)
-- Auto-play, keyboard nav, sessionStorage resume
-- **Testing: 44/44 PASS (Iteration 47)**
+- 5-step interactive product tour — 44/44 PASS (Iteration 47)
 
 ### Phase 45 — PlanGuard Module Access + SFTP Notification System (Apr 2026)
-- PlanGuard applied to 13 routes with Starter/Professional/Enterprise tiers
-- SFTP Alert/Notification System with email + Slack webhooks
-- **Testing: 30/30 PASS (Iteration 48)**
+- PlanGuard + SFTP Alerts — 30/30 PASS (Iteration 48)
 
-### Phase 46 — P2 Features: Force Password Change, Plan Upgrade, Scheduled Jobs (Apr 2026)
-- USER-17: Force Password Change on First Login
-- Plan Upgrade Page with usage stats + plan comparison
-- Scheduled Analysis Jobs — full CRUD with daily/weekly/monthly frequencies
-- **Testing: 40/40 PASS (Iteration 49)** — Backend 23/23, Frontend 17/17
+### Phase 46 — Force Password Change, Plan Upgrade, Scheduled Jobs (Apr 2026)
+- USER-17: Force Password Change, Plan Upgrade Page, Scheduled Jobs CRUD — 40/40 PASS (Iteration 49)
 
 ### Phase 47 — Data Quality Rules Engine (Apr 2026)
-- **6 Rule Types**: threshold, null_check, pattern, uniqueness, cross_reference, range
-- **Backend**: Full CRUD at `/api/quality/rules/` with evaluate, toggle, file-columns endpoints
-- **Frontend**: "Custom Rules" tab in Data Quality page
-- **Testing: 35/35 PASS (Iteration 50)** — Backend 20/20, Frontend 15/15
+- 6 Rule Types, Full CRUD — 35/35 PASS (Iteration 50)
 
 ### Phase 48 — Production MongoDB Authorization Fix (Apr 2026)
-- Critical Fix: DB_NAME priority over SHARED_DB_NAME
-- OperationFailure handling, lazy ML imports, dynamic email Origin tracking
+- DB_NAME priority, lazy ML imports, dynamic email Origin tracking
 
 ### Phase 49 — Complete Data Upload Module with 75-Error Validation (Apr 2026)
-- **New Upload System** at `/api/upload/v2/*` with 6 upload types
-- **75-Error Validation Engine**: E001-E075 across 10 categories
-- **Upload History**, **Daily Status Widget**, **Template Download**
-- **Testing: 39/39 PASS (Iteration 51)**
+- New Upload System `/api/upload/v2/*` with 6 upload types — 39/39 PASS (Iteration 51)
 
 ### Phase 50 — Data Upload Page UI Redesign (Apr 2026)
-- Redesigned DataUploadPage.jsx to explicitly separate "Master Data" (Setup Once) from "Daily Transactional Data"
-- New `/api/upload/v2/master-status` endpoint returning counts and last_updated for sku_master, store_master, warehouse_master
-- Master Data section: 3 cards with count, last_updated, download/upload buttons
-- Today's Status section: 3 daily cards with Uploaded/Not Uploaded badges
-- Upload New Data section: 6-option dropdown + react-dropzone
-- Previous Days section: Grouped upload history
-- **Testing: 49/49 PASS (Iteration 52)** — Backend 30/30, Frontend 19/19
+- Master/Daily split, master-status endpoint — 49/49 PASS (Iteration 52)
+
+### Phase 51 — 65-Rule Validation Engine Enhancement (Apr 2026)
+- Implemented comprehensive validation rules: E003, E004, E006, E007, E008, E010, E011, E020, E027, E030, E039, E041, E043, E045, E049, E054, E066, E067, E068, E069, MIXED_CURRENCY, AUTO_CALC
+- Currency detection (USD/INR/EUR/GBP) with mixed currency warnings
+- File size check (E049), duplicate file hash detection (E054)
+- Warehouse inventory validation: available>on_hand (E067), allocated_qty auto-calc
+- Warehouse master flag validation (E069)
+- Master data cross-validation against v2 collections
+- **Testing: 56/56 PASS (Iteration 53)** — Backend 40/40, Frontend 16/16
+
+### Phase 52 — Component Refactoring + Validate-then-Save Flow (Apr 2026)
+- Split DataUploadPage into separate components: MasterCard, DailyStatusCard, PreviousDaysList, FileDropzone
+- New `/api/upload/v2/{upload_type}/validate` endpoint for validate-only mode
+- New `/api/upload/v2/history/days` endpoint for per-day upload status
+- Two-step upload flow: Validate File -> Proceed to Save -> Save confirmation
+- **Testing: 48/48 PASS (Iteration 54)** — Backend 28/28, Frontend 20/20
 
 ## Route Map
 ```
 UNAUTHENTICATED:
-  /           -> Marketing Landing Page (12 sections + Product Tour)
-  /login      -> Login Page
-  /signup     -> Signup Page (2-step wizard, uses native fetch)
-  /verify-email -> Email Verification
-  /forgot-password -> Forgot Password
-  /reset-password -> Reset Password
+  /           -> Marketing Landing Page
+  /login, /signup, /verify-email, /forgot-password, /reset-password
 
-FORCE PASSWORD CHANGE (blocks all other routes):
-  /*          -> ChangePassword (when mustChangePassword=true)
-
-AUTHENTICATED (All routes PlanGuard-wrapped):
-  /           -> Getting Started (Dashboard Home)
-  /dashboard  -> Executive Dashboard [PlanGuard: dashboard]
-  /upload     -> Data Upload [PlanGuard: data_upload]
-  /config     -> Configuration [PlanGuard: config]
-  /core-logics -> Core Logics [PlanGuard: topseller]
-  /gap-analysis -> Gap Analysis [PlanGuard: gap_analysis]
-  /stock-out  -> Stock-Out Analysis [PlanGuard: stock_out]
-  /replenishment -> Replenishment [PlanGuard: replenishment]
-  /doh        -> DOH Analysis [PlanGuard: doh_analysis]
-  /planogram  -> Planogram Fill Rate [PlanGuard: planogram]
-  /bi-dashboards -> BI Dashboards [PlanGuard: multi_channel]
-  /warehouse  -> Warehouse [PlanGuard: warehouse]
-  /ai-demand  -> AI Demand Planning [PlanGuard: ai_forecasting]
-  /buy-plan   -> Buy Plan Generator [PlanGuard: buy_plan]
-  /sftp-monitor -> SFTP Monitor (no PlanGuard)
-  /data-quality -> Data Quality & SLA (with Custom Rules tab)
-  /chatbot    -> FAQ Chatbot (no PlanGuard)
-  /users      -> User Management (RBAC only)
-  /tenant-admin -> Tenant Admin (RBAC only)
-  /plan-upgrade -> Plan & Billing (all users)
-  /scheduled-jobs -> Scheduled Jobs (all users)
+AUTHENTICATED (PlanGuard-wrapped):
+  /           -> Getting Started
+  /dashboard  -> Executive Dashboard
+  /upload     -> Data Upload (refactored components)
+  /config     -> Configuration
+  /core-logics -> Core Logics
+  /gap-analysis, /stock-out, /replenishment, /doh, /planogram
+  /bi-dashboards, /warehouse, /ai-demand, /buy-plan
+  /sftp-monitor, /data-quality, /chatbot
+  /users, /tenant-admin, /plan-upgrade, /scheduled-jobs
 ```
 
 ## Key Files
-- `/app/backend/multi_tenant/tenant_db.py` — DB resolution (DB_NAME-first priority)
-- `/app/backend/routes/upload.py` — V2 upload endpoints + master-status + daily-status
+### Upload Module (Refactored)
+- `/app/backend/routes/upload.py` — V2 endpoints + validate + history/days
 - `/app/backend/services/upload_service.py` — 75-rule validation engine
-- `/app/frontend/src/pages/DataUploadPage.jsx` — Redesigned upload page (Master/Daily split)
-- `/app/backend/routes/data_quality_rules.py` — Rules Engine CRUD + evaluate
-- `/app/frontend/src/components/DataQualityRules.jsx` — Rules Engine UI component
-- `/app/backend/routes/scheduled_jobs.py` — Scheduled jobs CRUD
-- `/app/frontend/src/pages/ScheduledJobs.jsx` — Scheduled jobs management
-- `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state + mustChangePassword
-- `/app/frontend/src/App.js` — Routing with PlanGuard + force password redirect
+- `/app/frontend/src/pages/DataUploadPage.jsx` — Main page (imports components)
+- `/app/frontend/src/components/upload/MasterCard.jsx` — Master data card
+- `/app/frontend/src/components/upload/DailyStatusCard.jsx` — Daily status card
+- `/app/frontend/src/components/upload/PreviousDaysList.jsx` — Previous days list
+- `/app/frontend/src/components/upload/FileDropzone.jsx` — File dropzone + validation results + save confirm
+
+### Core
+- `/app/backend/server.py` — Route registration, MONGODB_URI sync
+- `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state
+- `/app/frontend/src/App.js` — Routing with PlanGuard
+
+## API Endpoints (Upload V2)
+```
+POST /api/upload/v2/daily-sales          — Upload daily sales
+POST /api/upload/v2/store-inventory      — Upload store inventory
+POST /api/upload/v2/warehouse-inventory  — Upload warehouse inventory
+POST /api/upload/v2/sku-master           — Upload SKU master
+POST /api/upload/v2/store-master         — Upload store master
+POST /api/upload/v2/warehouse-master     — Upload warehouse master
+POST /api/upload/v2/{type}/validate      — Validate without saving
+GET  /api/upload/v2/daily-status         — Today's upload status
+GET  /api/upload/v2/master-status        — Master data counts
+GET  /api/upload/v2/history              — Grouped upload history
+GET  /api/upload/v2/history/days         — Per-day upload status
+GET  /api/upload/v2/template/{type}      — Download Excel template
+```
 
 ## Prioritized Backlog
 
