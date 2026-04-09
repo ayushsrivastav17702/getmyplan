@@ -12,121 +12,69 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Auth**: JWT with bcrypt, RBAC with 8 built-in roles + custom roles + permission overrides
 - **Email**: SMTP via Hostinger (smtp.hostinger.com:465, SSL, info@getmyplan.in)
 - **Security**: Enterprise middleware stack (rate limiting, security headers, input sanitization, structured logging)
-- **Animations**: framer-motion v12.38.0
-- **Branding**: GetMyPlan (getmyplan.in)
 
-## Completed Phases
+## Upload Types — Complete (10/10)
 
-### Phase 1-52 (Previous sessions)
-- Full MVP: 16+ analytics modules, Multi-Tenancy, RBAC, JWT Auth
-- AI Demand Planning, Buy Plan Generator, Executive Dashboard
-- Self-Service Signup, GetMyPlan Rebranding, Enterprise Security
-- Marketing Landing Page, Interactive Product Tour, PlanGuard
-- Data Quality Rules Engine, V2 Upload System with 75-Rule Validation
-- Component Refactoring, Validate-then-Save Flow
+| # | Upload Type | Endpoint | Collection | Category |
+|---|-------------|----------|------------|----------|
+| 1 | Store Master | `POST /api/upload/v2/store-master` | `store_master` | Master |
+| 2 | SKU Master | `POST /api/upload/v2/sku-master` | `sku_master` | Master |
+| 3 | Warehouse Master | `POST /api/upload/v2/warehouse-master` | `warehouse_master` | Master |
+| 4 | Style Master | `POST /api/upload/v2/style-master` | `style_master` | Master |
+| 5 | Planogram | `POST /api/upload/v2/planogram` | `planogram` | Master |
+| 6 | Daily Sales | `POST /api/upload/v2/daily-sales` | `daily_sales` | Daily |
+| 7 | Store Inventory | `POST /api/upload/v2/store-inventory` | `store_inventory` | Daily |
+| 8 | Warehouse Inventory | `POST /api/upload/v2/warehouse-inventory` | `warehouse_inventory` | Daily |
+| 9 | COGS | `POST /api/upload/v2/cogs` | `cogs` | Daily |
+| 10 | Open Orders | `POST /api/upload/v2/open-orders` | `open_orders` | Daily |
 
-### Phase 53 — Demand Planning P0 Fixes (Apr 2026)
-- V2 Data Bridge, Seasonal Decomposition Fix, Data Health Dashboard, 25-month seed data
-- **Testing: 43/43 PASS (Iteration 58)**
+## V2 Data Bridge — Complete (9/9 modules)
 
-### Phase 54 — P1 Enterprise Features (Apr 2026)
-- EOQ, Per-SKU Lead Times, SKU-level Forecasting
-- **Testing: 43/43 PASS (Iteration 58)**
+All analytics modules use `get_cached_data()` V2→V1 bridge:
+- `ai_demand.py`, `gap_analysis.py`, `stock_out.py`, `server.py` (exec) — Phase 53
+- `core_logic.py`, `doh_analysis.py`, `bi_dashboard.py`, `planogram.py`, `replenishment.py` — Phase 56
+- `warehouse.py` — Direct V2
 
-### Phase 55 — Technical Audit Documents (Apr 2026)
-- `CORE_ALGORITHMS_AUDIT.md` — Parts 4-9: Core Algorithms, Backend Architecture, Frontend, Scalability, Gaps
-- `DATA_INFRASTRUCTURE_AUDIT.md` — Parts 1-3: Data Upload Infrastructure, Master Data Management, Transactional Data
-- `E2E_DATA_FLOW_AUDIT.md` — Complete end-to-end data flow verification
+## Completed Phases (Recent)
 
-### Phase 56 — V2 Bridge Migration for 5 Modules (Apr 2026)
-- Updated `core_logic.py`, `doh_analysis.py`, `bi_dashboard.py`, `planogram.py`, `replenishment.py` to use server.py's `get_cached_data()` V2→V1 bridge
-- All 11 data flows now working (previously only 4/9 modules were V2-compatible)
-- **Testing: 22/22 PASS (Iteration 59)** — 17 backend + 5 frontend
+### Phase 56 — V2 Bridge Migration (Apr 2026)
+- Fixed 5 modules to use V2→V1 data bridge
+- **Testing: 22/22 PASS (Iteration 59)**
 
-## Audit Documents
-- `/app/memory/CORE_ALGORITHMS_AUDIT.md` — Parts 4-9 (204 lines)
-- `/app/memory/DATA_INFRASTRUCTURE_AUDIT.md` — Parts 1-3 (168 lines)
-- `/app/memory/E2E_DATA_FLOW_AUDIT.md` — End-to-end data flow verification with gap report
-
-## Route Map
-```
-UNAUTHENTICATED:
-  /           -> Marketing Landing Page
-  /login, /signup, /verify-email, /forgot-password, /reset-password
-
-AUTHENTICATED (PlanGuard-wrapped):
-  /           -> Getting Started
-  /dashboard  -> Executive Dashboard
-  /upload     -> Data Upload (refactored components)
-  /config     -> Configuration
-  /core-logics -> Core Logics
-  /gap-analysis, /stock-out, /replenishment, /doh, /planogram
-  /bi-dashboards, /warehouse, /ai-demand, /buy-plan
-  /sftp-monitor, /data-quality, /chatbot
-  /users, /tenant-admin, /plan-upgrade, /scheduled-jobs
-```
-
-## V2 Data Bridge Architecture (Post Phase 56)
-All 9 analytics modules now use `get_cached_data()` from server.py:
-1. Checks V2 collections first (`daily_sales`, `store_inventory`, etc.)
-2. Falls back to V1 `uploaded_files` collection if V2 is empty
-3. Applies field renames for backward compatibility (`closing_stock` → `quantity`, etc.)
-
-| Module | V2 Bridge Status |
-|--------|-----------------|
-| ai_demand.py | ✅ (Phase 53) |
-| gap_analysis.py | ✅ (Phase 53) |
-| stock_out.py | ✅ (Phase 53) |
-| server.py (executive) | ✅ (Phase 53) |
-| warehouse.py | ✅ Direct V2 |
-| core_logic.py | ✅ (Phase 56) |
-| doh_analysis.py | ✅ (Phase 56) |
-| bi_dashboard.py | ✅ (Phase 56) |
-| planogram.py | ✅ (Phase 56) |
-| replenishment.py | ✅ (Phase 56) |
+### Phase 57 — New Upload Types (Apr 2026)
+- Added COGS, Planogram, Open Orders, Style Master V2 upload endpoints
+- 75-rule validation, template downloads, MongoDB indexes for all new collections
+- Frontend: 10-type dropdown, 5 master cards, 5 daily status cards
+- **Testing: 26/26 PASS (Iteration 60)**
 
 ## Key Files
-### Upload Module
-- `/app/backend/routes/upload.py` — V2 endpoints + validate + history/days
-- `/app/backend/services/upload_service.py` — 75-rule validation engine
-- `/app/frontend/src/pages/DataUploadPage.jsx` — Main page
-
-### Analytics Modules (all V2 bridge compatible)
-- `/app/backend/routes/ai_demand.py` — AI Demand (Forecast, Stockout, Reorder, Data Health)
-- `/app/backend/routes/core_logic.py` — ROS, TrueROS, Size Set, Attribute Grouping
-- `/app/backend/routes/doh_analysis.py` — DOH Classification, Heatmaps, Correlation
-- `/app/backend/routes/bi_dashboard.py` — KPI Overview, Trends, Category/Channel/Store
-- `/app/backend/routes/planogram.py` — Fill Rate, Compliance, Lost Sales
-- `/app/backend/routes/replenishment.py` — Order Qty, IST, Reorder Points, Priority
-- `/app/backend/routes/gap_analysis.py` — ROS Gap, Size Gap, NOOS
-- `/app/backend/routes/stock_out.py` — Stockout Detection, Risk, Duration
-- `/app/backend/routes/warehouse.py` — Stock Flow, Transfers, Reconciliation
+- `/app/backend/routes/upload.py` — All 10 V2 upload endpoints
+- `/app/backend/services/upload_service.py` — 75-rule validation for 11 schemas
+- `/app/backend/server.py` — V2 map, indexes, data bridge
+- `/app/frontend/src/pages/DataUploadPage.jsx` — 10 upload types UI
+- `/app/frontend/src/components/upload/DailyStatusCard.jsx` — 5 daily type cards
+- `/app/frontend/src/components/upload/PreviousDaysList.jsx` — 5 status dots
 
 ## Prioritized Backlog
 
-### P0 — Gaps from E2E Audit (Next Priority)
-- **Style Master V2**: Migrate to V2 upload (currently V1 only, `_V2_MAP` maps to `None`)
-- **COGS Upload**: New collection + endpoint (unlocks real margin calculation)
-- **Planogram Upload**: New collection + endpoint (unlocks manual norm allocation)
-- **Open Orders Upload**: New collection + endpoint (unlocks supply pipeline deduction)
-- **Frontend Upload Types**: Add style_master, planogram, cogs, open_orders to DataUploadPage.jsx
+### P0 — Next
+- Wire COGS into executive dashboard for true margin calculation (Revenue - COGS) / Revenue
+- Wire planogram upload into planogram fill rate module (replace auto-derived norm)
+- Wire open_orders into replenishment module (deduct in-pipeline stock from order qty)
 
 ### P1
-- Forecast accuracy tracking over time (MAPE trend)
+- Forecast accuracy tracking (MAPE trend)
 - Holiday/promotional calendar integration
-- Wire COGS into executive KPIs for true margin
+- Custom validation rules per tenant (wire Data Quality Rules into upload pipeline)
 
 ### P2
-- USER-18: MFA (Multi-factor authentication)
+- USER-18: MFA
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
 - User Funnel Analytics Dashboard
-- Buy Plan integration with demand forecast
-- Custom validation rules per tenant
 
 ### P3
-- Auto-scheduled SFTP uploads for Data Upload V2
-- Prophet integration for holiday-aware forecasting
+- Auto-scheduled SFTP uploads
 - Chunked file uploads for >50MB files
 - Async upload processing with job queues
-- Pre-computed aggregation tables for analytics performance
+- Pre-computed aggregation tables
