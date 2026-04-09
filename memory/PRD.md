@@ -74,7 +74,8 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **P0.1 V2 Data Bridge**: Updated `get_cached_data()` in server.py to check V2 collections first, fall back to V1 `uploaded_files`. Includes field compatibility mapping (V2 `closing_stock`→`quantity`, `sku`→`ean`).
 - **P0.2 Seasonal Decomposition Fix**: Fixed numpy.ndarray attribute error in `ml_forecast_engine.py` — converts input to pd.Series and uses np.asarray() on decomposition results. All 3 ML models now active in ensemble.
 - **P0.3 Database Indexes**: Added V2 collection indexes on startup (daily_sales, store_inventory, sku_master, etc.)
-- **Testing: 31/31 PASS (Iteration 55)** — Backend 21/21, Frontend 10/10
+- **Data Health Dashboard**: New `GET /api/analytics/ai-demand/data-health` endpoint + collapsible DataHealthDashboard component on AI Demand page. Shows progress to 180-day ML minimum, per-data-type status, estimated ML activation date, and "Upload Historical Data" CTA.
+- **Testing: 31/31 PASS (Iteration 55) + 35/35 PASS (Iteration 56)**
 
 ## Route Map
 ```
