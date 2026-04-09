@@ -118,6 +118,15 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
 - **Critical Fix**: Made sklearn/statsmodels imports lazy (try/except) to prevent 502 crashes in resource-constrained K8s
 - Added startup database configuration logging
 
+### Phase 49 — Complete Data Upload Module with 75-Error Validation (Apr 2026)
+- **New Upload System** at `/api/upload/v2/*` with 6 upload types: daily_sales, store_inventory, warehouse_inventory, sku_master, store_master, warehouse_master
+- **75-Error Validation Engine**: SKU (E001-E010), Store (E011-E018), Date (E019-E026), Quantity (E027-E034), Revenue (E035-E042), File Structure (E043-E050), Duplicates (E051-E057), Consistency (E058-E063), Business Rules (E064-E070), Timezone (E071-E074), Performance (E075)
+- **Upload History** endpoint with date grouping and filters
+- **Daily Status Widget** for tracking today's upload progress
+- **Template Download** generates Excel files with tenant-specific dropdown validation
+- **Frontend**: DataUploadPage with tabs (Upload/History/Templates), drag-drop DataUploadV2 component, UploadHistory, UploadStatus
+- Old v1 upload endpoints preserved at original paths
+
 ## Key Files
 - `/app/backend/multi_tenant/tenant_db.py` — DB resolution (DB_NAME-first priority)
 - `/app/backend/routes/debug.py` — Temporary diagnostic endpoints (remove after prod verification)
