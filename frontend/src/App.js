@@ -21,6 +21,7 @@ import NotificationBell from "./components/NotificationBell";
 import GettingStarted from "./pages/GettingStarted";
 import ExecutiveDashboard from "./pages/ExecutiveDashboard";
 import DataUpload from "./pages/DataUpload";
+import DataUploadPage from "./pages/DataUploadPage";
 import Configuration from "./pages/Configuration";
 import CoreLogics from "./pages/CoreLogics";
 import GapAnalysis from "./pages/GapAnalysis";
@@ -359,7 +360,7 @@ const AuthenticatedApp = () => {
 
             {/* Permission + Plan guarded routes */}
             <Route path="/dashboard"     element={<ProtectedRoute permission="dashboard.executive.view"><PlanGuard module="dashboard"><ExecutiveDashboard /></PlanGuard></ProtectedRoute>} />
-            <Route path="/upload"        element={<ProtectedRoute permission="data.upload.manage"><PlanGuard module="data_upload"><DataUpload onUploadComplete={fetchUploadStatus} /></PlanGuard></ProtectedRoute>} />
+            <Route path="/upload"        element={<ProtectedRoute permission="data.upload.manage"><PlanGuard module="data_upload"><DataUploadPage /></PlanGuard></ProtectedRoute>} />
             <Route path="/config"        element={<ProtectedRoute permission="data.config.manage"><PlanGuard module="config"><Configuration /></PlanGuard></ProtectedRoute>} />
             <Route path="/core-logics"   element={<ProtectedRoute permission="analytics.core_logics.view"><PlanGuard module="topseller"><CoreLogics /></PlanGuard></ProtectedRoute>} />
             <Route path="/gap-analysis"  element={<ProtectedRoute permission="analytics.gap.view"><PlanGuard module="gap_analysis"><GapAnalysis /></PlanGuard></ProtectedRoute>} />
