@@ -1,0 +1,169 @@
+{
+  "summary": "Iteration 52: Data Upload V2 UI Redesign Testing - ALL TESTS PASSED. Backend: 30/30 pytest tests passed. Frontend: 19/19 Playwright tests passed. New master-status endpoint and redesigned UI with Master Data / Daily Status sections working correctly.",
+
+  "test_case_matrix": {
+    "MASTER_STATUS_BACKEND": {
+      "MasterStatus-01_returns_200": {"status": "PASS", "notes": "GET /api/upload/v2/master-status returns 200"},
+      "MasterStatus-02_structure": {"status": "PASS", "notes": "Response contains sku_master, store_master, warehouse_master"},
+      "MasterStatus-03_fields": {"status": "PASS", "notes": "Each master type has count and last_updated fields"}
+    },
+    "DAILY_STATUS_BACKEND": {
+      "DailyStatus-01_returns_200": {"status": "PASS", "notes": "GET /api/upload/v2/daily-status returns 200"},
+      "DailyStatus-02_structure": {"status": "PASS", "notes": "Response contains daily_sales, store_inventory, warehouse_inventory"},
+      "DailyStatus-03_fields": {"status": "PASS", "notes": "Each daily type has uploaded, time, rows fields"}
+    },
+    "UPLOAD_HISTORY_BACKEND": {
+      "History-01_returns_200": {"status": "PASS", "notes": "GET /api/upload/v2/history?days=7 returns 200"},
+      "History-02_structure": {"status": "PASS", "notes": "Response contains history array"},
+      "History-03_grouped": {"status": "PASS", "notes": "History items have date, label, uploads fields"},
+      "History-04_filter": {"status": "PASS", "notes": "Filter by upload_type works"}
+    },
+    "TEMPLATE_DOWNLOAD_BACKEND": {
+      "Template-01_daily_sales": {"status": "PASS", "notes": "Returns Excel file with correct headers"},
+      "Template-02_store_inventory": {"status": "PASS", "notes": "Returns Excel file"},
+      "Template-03_warehouse_inventory": {"status": "PASS", "notes": "Returns Excel file"},
+      "Template-04_sku_master": {"status": "PASS", "notes": "Returns Excel file"},
+      "Template-05_store_master": {"status": "PASS", "notes": "Returns Excel file"},
+      "Template-06_warehouse_master": {"status": "PASS", "notes": "Returns Excel file"},
+      "Template-07_invalid_type": {"status": "PASS", "notes": "Invalid type returns 400"}
+    },
+    "FILE_UPLOAD_BACKEND": {
+      "DailySales-01_valid_csv": {"status": "PASS", "notes": "Upload returns validation results with success/total_rows/valid_rows"},
+      "DailySales-02_missing_columns": {"status": "PASS", "notes": "Missing columns returns E043 error"},
+      "DailySales-03_empty_file": {"status": "PASS", "notes": "Empty file returns E045 error"},
+      "StoreInventory-01_valid_csv": {"status": "PASS", "notes": "Upload works with store_code,sku,closing_stock"},
+      "WarehouseInventory-01_valid_csv": {"status": "PASS", "notes": "Upload works with warehouse,sku,on_hand_qty,available_qty"},
+      "SKUMaster-01_valid_csv": {"status": "PASS", "notes": "Upload works with sku,product_name,category"},
+      "StoreMaster-01_valid_csv": {"status": "PASS", "notes": "Upload works with store_code,store_name"},
+      "WarehouseMaster-01_valid_csv": {"status": "PASS", "notes": "Upload works with warehouse,warehouse_name,online_fulfillment_flag"}
+    },
+    "VALIDATION_ERRORS_BACKEND": {
+      "Validation-01_negative_qty": {"status": "PASS", "notes": "E027 warning for negative quantities"},
+      "Validation-02_zero_revenue": {"status": "PASS", "notes": "E041 warning for zero revenue with positive quantity"},
+      "Validation-03_duplicates": {"status": "PASS", "notes": "E050 warning for duplicate rows"},
+      "Validation-04_test_data": {"status": "PASS", "notes": "E070 warning for test/demo/sample data"}
+    },
+    "FRONTEND_UI": {
+      "FE-01_data_upload_page": {"status": "PASS", "notes": "data-testid='data-upload-page' present"},
+      "FE-02_master_data_section": {"status": "PASS", "notes": "data-testid='master-data-section' present"},
+      "FE-03_master_cards": {"status": "PASS", "notes": "3 master cards (SKU/Store/Warehouse) present"},
+      "FE-04_daily_status_section": {"status": "PASS", "notes": "data-testid='daily-status-section' present"},
+      "FE-05_daily_cards": {"status": "PASS", "notes": "3 daily cards (Sales/StoreInv/WHInv) present"},
+      "FE-06_upload_section": {"status": "PASS", "notes": "data-testid='upload-section' present"},
+      "FE-07_previous_days_section": {"status": "PASS", "notes": "data-testid='previous-days-section' present"},
+      "FE-08_file_dropzone": {"status": "PASS", "notes": "data-testid='file-dropzone' present"},
+      "FE-09_upload_type_select": {"status": "PASS", "notes": "data-testid='upload-type-select' present"},
+      "FE-10_refresh_button": {"status": "PASS", "notes": "data-testid='refresh-daily-btn' present and clickable"},
+      "FE-11_sales_template_btn": {"status": "PASS", "notes": "data-testid='dl-sales-tpl' present"},
+      "FE-12_inventory_template_btn": {"status": "PASS", "notes": "data-testid='dl-inv-tpl' present"},
+      "FE-13_all_complete_banner": {"status": "PASS", "notes": "data-testid='all-complete-banner' visible when all uploaded"},
+      "FE-14_dropdown_6_options": {"status": "PASS", "notes": "Dropdown shows all 6 options: Daily Sales, Store Inventory, Warehouse Inventory, SKU Master, Store Master, Warehouse Master"},
+      "FE-15_refresh_click": {"status": "PASS", "notes": "Refresh button click works"},
+      "FE-16_sales_tpl_visible": {"status": "PASS", "notes": "Sales Template button visible"},
+      "FE-17_inv_tpl_visible": {"status": "PASS", "notes": "Inventory Template button visible"},
+      "FE-18_daily_badges": {"status": "PASS", "notes": "3 'Uploaded' badges shown in daily cards"},
+      "FE-19_all_complete_text": {"status": "PASS", "notes": "Banner shows 'All daily data uploaded for today'"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 30,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 19,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 49,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_upload_v2_iter52.py",
+    "/app/test_reports/pytest/pytest_results_iter52.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "NEW master-status endpoint at /api/upload/v2/master-status returns count and last_updated for sku_master, store_master, warehouse_master",
+    "UI redesign separates 'Master Data' (Setup Once) from 'Daily Transactional Data' (Upload Every Day)",
+    "Master Data section shows 3 cards with count, last_updated, download and upload icon buttons",
+    "Today's Status section shows 3 daily cards with Uploaded/Not Uploaded badges, time, and row count",
+    "'All daily data uploaded for today' banner appears when all 3 daily types are uploaded",
+    "Upload New Data section has Data Type dropdown with 6 options and react-dropzone file upload",
+    "Previous Days section shows grouped upload history",
+    "All data-testid attributes present for testing as specified in requirements"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_upload_v2_iter52.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 30/30 tests passed",
+    "frontend": "100% - 19/19 tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo (Professional plan)"
+  },
+
+  "seed_data_creation": "Test uploads created during testing are recorded in upload_history collection. Master data counts shown: SKU Master=0, Store Master=10, Warehouse Master=2",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Data Upload V2 UI redesign fully tested and working. NEW endpoint /api/upload/v2/master-status returns master data counts. Frontend DataUploadPage.jsx at /upload shows: (1) Master Data section with 3 cards (SKU/Store/Warehouse Master), (2) Today's Status section with 3 daily cards showing Uploaded badges, (3) Upload New Data section with 6-option dropdown and dropzone, (4) Previous Days section. All data-testid attributes present. Demo tenant has existing data: Store Master=10, Warehouse Master=2, all 3 daily types uploaded for today.",
+
+  "features_verified": {
+    "new_endpoints": {
+      "GET /api/upload/v2/master-status": "Returns count and last_updated for sku_master, store_master, warehouse_master"
+    },
+    "existing_endpoints": {
+      "GET /api/upload/v2/daily-status": "Returns today's upload status for 3 daily types",
+      "GET /api/upload/v2/history": "Returns grouped upload history with days filter",
+      "GET /api/upload/v2/template/{type}": "Downloads Excel template for 6 upload types",
+      "POST /api/upload/v2/{type}": "Uploads and validates CSV/Excel files for 6 types"
+    },
+    "ui_sections": {
+      "Master Data": "3 cards showing count, last_updated, download/upload buttons",
+      "Today's Status": "3 cards with Uploaded/Not Uploaded badges, time, rows",
+      "Upload New Data": "Data Type dropdown (6 options) + react-dropzone",
+      "Previous Days": "Grouped upload history"
+    },
+    "data_testids_verified": [
+      "data-upload-page",
+      "master-data-section",
+      "daily-status-section",
+      "upload-section",
+      "previous-days-section",
+      "file-dropzone",
+      "upload-type-select",
+      "validate-upload-btn (appears after file selected)",
+      "refresh-daily-btn",
+      "dl-sales-tpl",
+      "dl-inv-tpl",
+      "all-complete-banner",
+      "master-sku-master",
+      "master-store-master",
+      "master-warehouse-master",
+      "daily-card-daily-sales",
+      "daily-card-store-inventory",
+      "daily-card-warehouse-inventory"
+    ]
+  },
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
