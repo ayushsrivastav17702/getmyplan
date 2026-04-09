@@ -56,12 +56,28 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Email sent to `info@getmyplan.in` with company name, email, subdomain, tenant ID, plan type, timestamp
 - **Testing: Verified via curl — both verification email and admin notification confirmed in logs**
 
+### Phase 61 — Forecast Accuracy Tracking (Apr 2026)
+- Auto-saves forecast snapshots to `forecast_snapshots` collection on every forecast generation
+- New endpoint: `GET /api/analytics/ai-demand/forecast-accuracy` — compares snapshots vs actual monthly revenue, calculates MAPE
+- Returns: per-snapshot MAPE, trend direction, grade (Excellent/Good/Fair/Needs Improvement), month-by-month errors
+- New "Forecast Accuracy" tab in AI Demand Planning with KPIs, MAPE trend chart, forecast vs actual table, snapshot history
+- **Testing: 27/27 PASS (Iteration 63)**
+
+### Phase 62 — Gap Analysis UX Audit (Apr 2026)
+- New endpoint: `GET /api/analytics/data-status` — returns per-file upload status for all 7 required file types
+- Added Data Completeness progress bar (X/7 files with color-coded fill)
+- Added Data Summary bar (Styles, Stores, Sales Records, Days History)
+- Added actionable Missing Files checklist with green/red badges per file + "Upload Missing Files" CTA
+- Added module readiness badges on tabs (Ready checkmark vs Locked lock icon based on file availability)
+- Added clean header with "Back to Dashboard" breadcrumb + "Data Upload" button
+- Preserved all existing analytics (ROS Gap, Size Gap, NOOS) untouched
+- **Testing: 27/27 PASS (Iteration 63)**
+
 ## Prioritized Backlog
 
 ### P1 — Next
 - UI: Update Executive Dashboard KPI card to show "True Margin" vs "MRP Realisation" label
-- UI: Update Replenishment formula display to include "- In Transit" 
-- Forecast accuracy tracking (MAPE trend)
+- UI: Update Replenishment formula display to include "- In Transit"
 - Holiday/promotional calendar integration
 - Custom validation rules per tenant
 
