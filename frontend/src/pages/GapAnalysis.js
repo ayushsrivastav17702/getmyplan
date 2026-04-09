@@ -1,15 +1,32 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { API } from "../App";
 import {
   RefreshCw, Download, Users, Briefcase, BarChart3, TrendingDown,
   ShieldCheck, AlertTriangle, Activity, ChevronDown, ChevronUp,
-  FileDown
+  FileDown, ArrowLeft, Upload, CheckCircle, Lock, ArrowRight,
+  Database, Clock
 } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
 import { BarChart, DoughnutChart, StackedBarChart, LineChart } from "../components/Charts";
 
+/* ─── Module readiness config ─── */
+const MODULE_REQUIREMENTS = {
+  "ros-gap":  { required: ["daily_sales", "store_master"], label: "ROS Gap Analysis" },
+  "size-gap": { required: ["daily_sales", "sku_master"],   label: "Size Set Gap" },
+  "noos":     { required: ["daily_sales", "store_inventory"], label: "NOOS Analysis" },
+};
+
+const isModuleReady = (key, files) =>
+  MODULE_REQUIREMENTS[key]?.required.every(f => files[f]?.uploaded) ?? false;
+
+const getMissingFiles = (key, files) =>
+  MODULE_REQUIREMENTS[key]?.required.filter(f => !files[f]?.uploaded).map(f => files[f]?.display_name || f) ?? [];
+
+
 const GapAnalysis = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("ros-gap");
   const [persona, setPersona] = useState("cxo");
   const [noosData, setNoosData] = useState(null);
@@ -19,12 +36,21 @@ const GapAnalysis = () => {
   const [error, setError] = useState(null);
   const [moduleConfig, setModuleConfig] = useState({});
   const [filterOptions, setFilterOptions] = useState({});
+  const [dataStatus, setDataStatus] = useState(null);
   const [filters, setFilters] = useState({
     startDate: "", endDate: "", categories: [], channels: [], regions: [],
     understockThreshold: -5, overstockThreshold: 5,
   });
   const [sortBy, setSortBy] = useState("sales_loss");
   const [drillDown, setDrillDown] = useState(null);
+
+  /* ─── Data status fetch ─── */
+  const fetchDataStatus = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/analytics/data-status`);
+      setDataStatus(r.data);
+    } catch { /* ignore */ }
+  }, []);
 
   const fetchFilterOptions = useCallback(async () => {
     try {
@@ -37,10 +63,10 @@ const GapAnalysis = () => {
           endDate: r.data.dateRange.max.split("T")[0],
         }));
       }
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchFilterOptions(); }, [fetchFilterOptions]);
+  useEffect(() => { fetchFilterOptions(); fetchDataStatus(); }, [fetchFilterOptions, fetchDataStatus]);
 
   const buildQueryParams = () => {
     const p = new URLSearchParams();
@@ -68,13 +94,13 @@ const GapAnalysis = () => {
         const r = await axios.get(`${API}/analytics/noos?${qp}`);
         r.data.error ? setError(r.data.error) : setNoosData(r.data);
       }
-    } catch (e) {
+    } catch {
       setError("Failed to fetch data. Ensure required files are uploaded.");
     } finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, filters, sortBy]);
 
-  useEffect(() => { fetchData(); }, [activeTab]);
+  useEffect(() => { fetchData(); }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     axios.get(`${API}/config`).then(r => {
@@ -149,27 +175,119 @@ const GapAnalysis = () => {
     { key: "consultant", label: "Consultant", icon: BarChart3 },
   ];
 
+  const files = dataStatus?.files || {};
+  const summary = dataStatus?.summary || {};
+  const uploadedCount = summary.uploaded_count || 0;
+  const totalCount = summary.total_count || 7;
+  const missingCount = totalCount - uploadedCount;
+  const completePct = Math.round((uploadedCount / totalCount) * 100);
+
   return (
     <div className="animate-fade-in-up" data-testid="gap-analysis-page">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Gap Analysis</h1>
-          <p className="text-slate-500">Identify sales gaps and optimization opportunities</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button data-testid="refresh-gap-btn" onClick={fetchData} disabled={loading}
-            className="btn-secondary flex items-center gap-2">
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Refresh
-          </button>
-          <button data-testid="export-gap-btn" onClick={handleExport} className="btn-secondary flex items-center gap-2">
-            <Download size={16} /> Export Tab
-          </button>
-          <button data-testid="export-combined-btn" onClick={handleCombinedExport}
-            className="btn-primary flex items-center gap-2">
-            <FileDown size={16} /> Export All
-          </button>
+      {/* ─── Clean Header ─── */}
+      <div className="mb-5">
+        <button data-testid="back-to-dashboard" onClick={() => navigate("/dashboard")}
+          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#0176D3] transition-colors mb-3">
+          <ArrowLeft size={14} /> Back to Dashboard
+        </button>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gap Analysis</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Identify inventory gaps and optimize stock distribution</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button data-testid="goto-upload-btn" onClick={() => navigate("/upload")}
+              className="btn-secondary flex items-center gap-2 text-sm">
+              <Upload size={14} /> Data Upload
+            </button>
+            <button data-testid="refresh-gap-btn" onClick={fetchData} disabled={loading}
+              className="btn-secondary flex items-center gap-2 text-sm">
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
+            </button>
+            <button data-testid="export-gap-btn" onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
+              <Download size={14} /> Export Tab
+            </button>
+            <button data-testid="export-combined-btn" onClick={handleCombinedExport}
+              className="btn-primary flex items-center gap-2 text-sm">
+              <FileDown size={14} /> Export All
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ─── Progress Bar ─── */}
+      {dataStatus && (
+        <div data-testid="data-completeness-section" className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Data Completeness</span>
+            <span className="text-xs font-bold text-slate-700">{uploadedCount}/{totalCount} files</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-2">
+            <div className="h-2 rounded-full transition-all duration-500"
+              data-testid="progress-bar-fill"
+              style={{
+                width: `${completePct}%`,
+                background: completePct === 100 ? "#10B981" : completePct >= 57 ? "#0176D3" : "#F59E0B",
+              }} />
+          </div>
+          <p className="text-xs text-slate-500 mt-1.5">
+            {missingCount === 0
+              ? <span className="text-emerald-600 font-medium">All data ready. Run any analysis below.</span>
+              : `Upload ${missingCount} more file${missingCount > 1 ? "s" : ""} to unlock all features.`}
+          </p>
+        </div>
+      )}
+
+      {/* ─── Data Summary Bar ─── */}
+      {dataStatus && uploadedCount > 0 && (
+        <div data-testid="data-summary-bar"
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          {[
+            { label: "Styles", value: fmtN(summary.styles), icon: Database, color: "#6366F1" },
+            { label: "Stores", value: fmtN(summary.stores), icon: BarChart3, color: "#0176D3" },
+            { label: "Sales Records", value: fmtN(summary.sales_records), icon: Activity, color: "#10B981" },
+            { label: "Days History", value: summary.days_history || 0, icon: Clock, color: "#F59E0B" },
+          ].map(m => (
+            <div key={m.label} className="bg-white border border-slate-200 rounded-lg p-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${m.color}12` }}>
+                <m.icon size={16} style={{ color: m.color }} />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-slate-900 leading-tight">{m.value}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">{m.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ─── Missing Files Checklist ─── */}
+      {dataStatus && missingCount > 0 && (
+        <div data-testid="missing-files-banner"
+          className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={16} className="text-amber-600" />
+            <span className="text-sm font-semibold text-amber-800">{missingCount} of {totalCount} required files missing</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 mb-3">
+            {Object.entries(files).map(([key, f]) => (
+              <div key={key} data-testid={`file-status-${key}`}
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded ${
+                  f.uploaded
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : "bg-red-50 text-red-700 border border-red-200"}`}>
+                {f.uploaded ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+                <span className="font-medium">{f.display_name}</span>
+                {f.uploaded && f.count > 0 && <span className="ml-auto text-[10px] opacity-70">{fmtN(f.count)}</span>}
+              </div>
+            ))}
+          </div>
+          <button data-testid="upload-missing-btn" onClick={() => navigate("/upload")}
+            className="btn-primary text-xs flex items-center gap-1.5">
+            <Upload size={13} /> Upload Missing Files <ArrowRight size={13} />
+          </button>
+        </div>
+      )}
 
       <FilterPanel filters={filters} filterOptions={filterOptions}
         onFilterChange={(f, v) => setFilters(p => ({ ...p, [f]: v }))}
@@ -180,8 +298,8 @@ const GapAnalysis = () => {
         })} pageType="gap-analysis" />
 
       {/* Persona */}
-      <div className="mb-6">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-3">View As</span>
+      <div className="mb-5">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-2">View As</span>
         <div className="flex flex-wrap gap-2">
           {personas.map(p => (
             <button key={p.key} data-testid={`persona-${p.key}`} onClick={() => setPersona(p.key)}
@@ -193,21 +311,53 @@ const GapAnalysis = () => {
         </div>
       </div>
 
-      {/* Tabs — GAP-29 */}
+      {/* ─── Tabs with readiness badges ─── */}
       <div className="tabs" data-testid="gap-tabs">
-        {tabs.map(t => (
-          <button key={t.key} data-testid={`gap-tab-${t.key}`}
-            className={`tab ${activeTab === t.key ? "active" : ""}`}
-            onClick={() => setActiveTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
+        {tabs.map(t => {
+          const ready = dataStatus ? isModuleReady(t.key, files) : true;
+          const missing = dataStatus ? getMissingFiles(t.key, files) : [];
+          return (
+            <button key={t.key} data-testid={`gap-tab-${t.key}`}
+              className={`tab ${activeTab === t.key ? "active" : ""} ${!ready ? "opacity-60" : ""}`}
+              onClick={() => { if (ready) setActiveTab(t.key); }}
+              title={!ready ? `Requires: ${missing.join(", ")}` : ""}>
+              <span className="flex items-center gap-1.5">
+                {dataStatus && (ready
+                  ? <CheckCircle size={13} className="text-emerald-500" />
+                  : <Lock size={13} className="text-slate-400" />)}
+                {t.label}
+              </span>
+              {!ready && missing.length > 0 && (
+                <span className="ml-1.5 text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full hidden sm:inline">
+                  needs {missing.join(", ")}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
+      {/* ─── Locked tab message ─── */}
+      {dataStatus && !isModuleReady(activeTab, files) && (
+        <div data-testid="locked-module-msg"
+          className="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center mb-6">
+          <Lock size={28} className="text-slate-300 mx-auto mb-3" />
+          <p className="text-sm font-medium text-slate-600 mb-1">
+            {MODULE_REQUIREMENTS[activeTab]?.label || activeTab} is locked
+          </p>
+          <p className="text-xs text-slate-400 mb-3">
+            Upload <strong>{getMissingFiles(activeTab, files).join(", ")}</strong> to unlock this analysis.
+          </p>
+          <button onClick={() => navigate("/upload")} className="btn-primary text-xs inline-flex items-center gap-1.5">
+            <Upload size={13} /> Upload to Unlock
+          </button>
+        </div>
+      )}
+
       {error && (
-        <div className="bg-amber-50 border border-amber-200 p-6 mb-6 rounded">
-          <p className="text-amber-800">{error}</p>
-          <p className="text-sm text-amber-600 mt-1">Upload required data files from Data Upload page.</p>
+        <div className="bg-amber-50 border border-amber-200 p-5 mb-5 rounded-lg">
+          <p className="text-amber-800 text-sm">{error}</p>
+          <p className="text-xs text-amber-600 mt-1">Upload required data files from Data Upload page.</p>
         </div>
       )}
       {loading && <div className="flex items-center justify-center py-20"><div className="spinner" /></div>}
@@ -225,14 +375,15 @@ const GapAnalysis = () => {
         <NOOSTab data={noosData} persona={persona} fmtC={fmtC} fmtN={fmtN} />
       )}
 
-      {!loading && !error && (
+      {!loading && !error && isModuleReady(activeTab, dataStatus?.files || {}) && (
         (activeTab === "ros-gap" && !rosGapData?.style_ros_gap?.length) ||
         (activeTab === "size-gap" && !sizeGapData?.data?.length) ||
         (activeTab === "noos" && !noosData?.data?.length)
       ) && (
-        <div className="bg-slate-50 border border-slate-200 p-12 text-center rounded">
-          <p className="text-slate-500 mb-2">No data available</p>
-          <p className="text-sm text-slate-400">Upload the required files to see gap analysis</p>
+        <div className="bg-slate-50 border border-slate-200 p-10 text-center rounded-lg">
+          <Database size={28} className="text-slate-300 mx-auto mb-3" />
+          <p className="text-sm text-slate-500 mb-1">No analysis results</p>
+          <p className="text-xs text-slate-400">The required files are uploaded but no matching data was found for the current filters.</p>
         </div>
       )}
     </div>

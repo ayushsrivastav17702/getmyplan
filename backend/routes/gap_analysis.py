@@ -611,3 +611,59 @@ async def get_noos_analysis(
         import traceback
         traceback.print_exc()
         return {"error": str(e), "data": [], "data_source": "error"}
+
+
+
+# ─────────── Data Status for Gap Analysis UX ───────────
+
+@router.get("/analytics/data-status")
+async def get_data_status():
+    """Return upload status for all required file types used by Gap Analysis."""
+    db = _get_db()
+
+    REQUIRED_FILES = [
+        ("style_master", "Style Master"),
+        ("sku_master", "SKU Master"),
+        ("store_master", "Store Master"),
+        ("daily_sales", "Daily Sales"),
+        ("store_inventory", "Store Inventory"),
+        ("planogram", "Planogram"),
+        ("warehouse_inventory", "Warehouse Inventory"),
+    ]
+
+    files = {}
+    total_uploaded = 0
+
+    for coll_name, display_name in REQUIRED_FILES:
+        count = await db[coll_name].estimated_document_count()
+        # V1 fallback
+        if count == 0:
+            v1 = await db.uploaded_files.find_one({"file_type": coll_name}, {"_id": 0, "data": 0})
+            if v1:
+                count = v1.get("row_count", 1)
+        uploaded = count > 0
+        if uploaded:
+            total_uploaded += 1
+        files[coll_name] = {"display_name": display_name, "uploaded": uploaded, "count": count}
+
+    # Compute summary stats
+    days_history = 0
+    if files["daily_sales"]["uploaded"]:
+        sales_df = await _get_cached_data("daily_sales")
+        if sales_df is not None and len(sales_df) > 0:
+            sales_df["day"] = pd.to_datetime(sales_df["day"], errors="coerce")
+            valid = sales_df.dropna(subset=["day"])
+            if len(valid):
+                days_history = (valid["day"].max() - valid["day"].min()).days + 1
+
+    return {
+        "files": files,
+        "summary": {
+            "uploaded_count": total_uploaded,
+            "total_count": len(REQUIRED_FILES),
+            "styles": files["style_master"]["count"],
+            "stores": files["store_master"]["count"],
+            "sales_records": files["daily_sales"]["count"],
+            "days_history": days_history,
+        },
+    }
