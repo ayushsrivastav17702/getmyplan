@@ -18,11 +18,13 @@ router = APIRouter(prefix="/analytics/core", tags=["core-logic"])
 
 # --------------- Shared DB helpers ---------------
 _client: Optional[AsyncIOMotorClient] = None
+_get_cached_data_func = None
 
 
-def init_core_logic(mongo_client: AsyncIOMotorClient):
-    global _client
+def init_core_logic(mongo_client: AsyncIOMotorClient, get_cached_data_func=None):
+    global _client, _get_cached_data_func
     _client = mongo_client
+    _get_cached_data_func = get_cached_data_func
 
 
 def _get_db():
@@ -34,6 +36,8 @@ def _get_db():
 
 
 async def _cached(file_type: str) -> Optional[pd.DataFrame]:
+    if _get_cached_data_func:
+        return await _get_cached_data_func(file_type)
     doc = await _get_db().uploaded_files.find_one({"file_type": file_type})
     if doc and "data" in doc:
         return pd.DataFrame(doc["data"])

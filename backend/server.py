@@ -3384,11 +3384,11 @@ async def startup():
     except Exception as e:
         logger.warning(f"RBAC seeding skipped: {e}")
     logger.info("Multi-tenant startup complete — enterprise security enabled")
-    init_core_logic(client)
-    init_replenishment(client)
-    init_doh(client)
-    init_planogram(client)
-    init_bi(client)
+    init_core_logic(client, get_cached_data)
+    init_replenishment(client, get_cached_data)
+    init_doh(client, get_cached_data)
+    init_planogram(client, get_cached_data)
+    init_bi(client, get_cached_data)
     init_sftp_routes(get_db, sftp_service)
     try:
         from services.smtp_email_service import email_service

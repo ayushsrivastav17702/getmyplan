@@ -12,11 +12,13 @@ from datetime import datetime, timezone
 
 router = APIRouter(prefix="/analytics/planogram", tags=["planogram"])
 _client: Optional[AsyncIOMotorClient] = None
+_get_cached_data_func = None
 
 
-def init_planogram(mongo_client: AsyncIOMotorClient):
-    global _client
+def init_planogram(mongo_client: AsyncIOMotorClient, get_cached_data_func=None):
+    global _client, _get_cached_data_func
     _client = mongo_client
+    _get_cached_data_func = get_cached_data_func
 
 
 def _db():
@@ -26,6 +28,8 @@ def _db():
 
 
 async def _cached(ft):
+    if _get_cached_data_func:
+        return await _get_cached_data_func(ft)
     doc = await _db().uploaded_files.find_one({"file_type": ft})
     return pd.DataFrame(doc["data"]) if doc and "data" in doc else None
 
