@@ -408,6 +408,7 @@ async def get_order_quantities(
     sku_df = await _cached("sku_ean_master")
     style_df = await _cached("style_master")
     store_df = await _cached("store_master")
+    open_orders_df = await _cached("open_orders")
 
     if sales_df is None or inv_df is None or sku_df is None:
         return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)"}
@@ -468,9 +469,27 @@ async def get_order_quantities(
         ros_calc = ros_calc.merge(soh, on=["store_code", "sku"], how="left")
         ros_calc["current_soh"] = ros_calc["current_soh"].fillna(0).clip(lower=0)
 
-        # REP-09: Order Qty = (Cover Days x Avg Sales) - Current Stock
+        # Deduct in-transit / open orders from requirement
+        ros_calc["in_transit_qty"] = 0
+        if open_orders_df is not None and len(open_orders_df) > 0:
+            oo = open_orders_df.copy()
+            oo["order_quantity"] = pd.to_numeric(oo.get("order_quantity", pd.Series(dtype=float)), errors="coerce").fillna(0)
+            # Only count non-delivered orders (open, confirmed, in_transit)
+            if "status" in oo.columns:
+                active_statuses = ["open", "confirmed", "in_transit", "shipped", "in-transit"]
+                oo = oo[oo["status"].str.lower().isin(active_statuses)]
+            in_transit = oo.groupby(["store_code", "sku_code"])["order_quantity"].sum().reset_index()
+            in_transit.columns = ["store_code", "sku", "in_transit_qty"]
+            ros_calc = ros_calc.merge(in_transit, on=["store_code", "sku"], how="left", suffixes=("", "_oo"))
+            if "in_transit_qty_oo" in ros_calc.columns:
+                ros_calc["in_transit_qty"] = ros_calc["in_transit_qty_oo"].fillna(0)
+                ros_calc.drop(columns=["in_transit_qty_oo"], inplace=True)
+            else:
+                ros_calc["in_transit_qty"] = ros_calc["in_transit_qty"].fillna(0)
+
+        # REP-09: Order Qty = (Cover Days x Avg Sales) - Current Stock - In Transit
         ros_calc["requirement"] = (ros_calc["avg_daily_sales"] * cover_days).round(0)
-        ros_calc["raw_order_qty"] = (ros_calc["requirement"] - ros_calc["current_soh"]).clip(lower=0).round(0)
+        ros_calc["raw_order_qty"] = (ros_calc["requirement"] - ros_calc["current_soh"] - ros_calc["in_transit_qty"]).clip(lower=0).round(0)
 
         # REP-10: Current stock > requirement -> 0
         # Already handled by clip(lower=0)
@@ -584,7 +603,7 @@ async def get_order_quantities(
 
         detail_cols = [
             "sku", "style", "size", "store_code", "store_class",
-            "avg_daily_sales", "current_soh", "requirement",
+            "avg_daily_sales", "current_soh", "in_transit_qty", "requirement",
             "raw_order_qty", "order_qty", "asp", "po_value",
             "allocation_score", "days_to_stockout", "priority",
         ]
@@ -599,6 +618,8 @@ async def get_order_quantities(
                 "cover_days": cover_days,
                 "moq": moq,
                 "pack_size": pack_size,
+                "total_in_transit": int(ros_calc["in_transit_qty"].sum()),
+                "open_orders_source": "uploaded" if (open_orders_df is not None and len(open_orders_df) > 0) else "none",
             },
             "warehouse_alerts": warehouse_alert[:50],
             "by_priority": by_priority.round(2).fillna(0).to_dict("records"),

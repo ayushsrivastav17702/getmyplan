@@ -1135,11 +1135,12 @@ async def get_executive_kpis(
     """Revenue, Margin, WoW, and YoY KPIs for the executive dashboard."""
     sales_df = await get_cached_data('daily_sales')
     sku_df = await get_cached_data('sku_ean_master')
+    cogs_df = await get_cached_data('cogs')
 
     if sales_df is None or len(sales_df) == 0:
         return {
             "revenue": 0, "units_sold": 0, "margin_pct": None,
-            "mrp_realisation_pct": None,
+            "mrp_realisation_pct": None, "total_cogs": 0,
             "wow": {"revenue_change": 0, "units_change": 0,
                     "current_revenue": 0, "previous_revenue": 0,
                     "current_units": 0, "previous_units": 0},
@@ -1179,7 +1180,23 @@ async def get_executive_kpis(
     total_revenue = float(sales_df['revenue'].sum())
     total_units = int(sales_df['quantity'].sum())
 
-    # MRP Realisation % (proxy for margin)
+    # True margin from COGS data (if available)
+    true_margin_pct = None
+    total_cogs = 0
+    if cogs_df is not None and len(cogs_df) > 0:
+        cogs = cogs_df.copy()
+        cogs['cogs'] = pd.to_numeric(cogs.get('cogs', pd.Series(dtype=float)), errors='coerce').fillna(0)
+        if 'transaction_date' in cogs.columns:
+            cogs['transaction_date'] = pd.to_datetime(cogs['transaction_date'], errors='coerce')
+            if start_date:
+                cogs = cogs[cogs['transaction_date'] >= pd.to_datetime(start_date)]
+            if end_date:
+                cogs = cogs[cogs['transaction_date'] <= pd.to_datetime(end_date)]
+        total_cogs = float(cogs['cogs'].sum())
+        if total_revenue > 0 and total_cogs > 0:
+            true_margin_pct = round((total_revenue - total_cogs) / total_revenue * 100, 1)
+
+    # MRP Realisation % (fallback proxy when no COGS)
     mrp_realisation = None
     if sku_df is not None and 'mrp' in sku_df.columns and 'ean' in sku_df.columns:
         sku_df['mrp'] = pd.to_numeric(sku_df['mrp'], errors='coerce').fillna(0)
@@ -1189,6 +1206,9 @@ async def get_executive_kpis(
         total_mrp = merged['mrp_value'].sum()
         if total_mrp > 0:
             mrp_realisation = round(float(total_revenue / total_mrp * 100), 1)
+
+    # Use true margin if COGS available, otherwise fall back to MRP realisation
+    margin_pct = true_margin_pct if true_margin_pct is not None else mrp_realisation
 
     # WoW: split by midpoint of date range
     max_date = sales_df['day'].max()
@@ -1238,8 +1258,10 @@ async def get_executive_kpis(
     return {
         "revenue": total_revenue,
         "units_sold": total_units,
-        "margin_pct": mrp_realisation,
+        "margin_pct": margin_pct,
         "mrp_realisation_pct": mrp_realisation,
+        "total_cogs": total_cogs,
+        "margin_source": "cogs" if true_margin_pct is not None else "mrp_realisation",
         "wow": wow,
         "yoy": yoy,
         "has_data": True,

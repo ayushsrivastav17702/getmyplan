@@ -1,0 +1,153 @@
+{
+  "summary": "Phase 3 Integration Testing - All 22 backend tests PASSED. All 3 integrations (COGS→Executive Dashboard, Planogram→Fill Rate, Open Orders→Replenishment) are working correctly. Frontend verified with all pages loading and data displaying properly.",
+
+  "test_case_matrix": {
+    "BACKEND_AUTH": {
+      "TEST_01_login_success": {"status": "PASS", "notes": "Login with admin@demo.com/demo1234 returns access_token"}
+    },
+    "INTEGRATION_1_COGS_EXECUTIVE_DASHBOARD": {
+      "TEST_02_margin_source_field": {"status": "PASS", "notes": "GET /api/analytics/executive-kpis returns margin_source='cogs'"},
+      "TEST_03_total_cogs_field": {"status": "PASS", "notes": "GET /api/analytics/executive-kpis returns total_cogs=1700"},
+      "TEST_04_mrp_realisation_pct": {"status": "PASS", "notes": "GET /api/analytics/executive-kpis returns mrp_realisation_pct=90"},
+      "TEST_05_cogs_margin_calculation": {"status": "PASS", "notes": "When COGS exists, margin_source='cogs', margin_pct=(revenue-cogs)/revenue*100"},
+      "TEST_06_mrp_realisation_fallback": {"status": "PASS", "notes": "Fallback logic verified - uses mrp_realisation when no COGS"}
+    },
+    "INTEGRATION_2_PLANOGRAM_FILL_RATE": {
+      "TEST_07_norm_source_field": {"status": "PASS", "notes": "GET /api/analytics/planogram/analysis returns norm_source='uploaded_planogram'"},
+      "TEST_08_uploaded_planogram_source": {"status": "PASS", "notes": "Demo tenant has planogram data, norm_source='uploaded_planogram'"},
+      "TEST_09_fill_rate_calculation": {"status": "PASS", "notes": "Fill rate = current_stock/norm_allocated*100 = 564.2%"}
+    },
+    "INTEGRATION_3_OPEN_ORDERS_REPLENISHMENT": {
+      "TEST_10_total_in_transit": {"status": "PASS", "notes": "GET /api/analytics/replenishment/order-quantity returns total_in_transit=180"},
+      "TEST_11_open_orders_source": {"status": "PASS", "notes": "GET /api/analytics/replenishment/order-quantity returns open_orders_source='uploaded'"},
+      "TEST_12_uploaded_source_verification": {"status": "PASS", "notes": "Open orders uploaded, source='uploaded', total_in_transit=180"},
+      "TEST_13_detail_in_transit_qty": {"status": "PASS", "notes": "Detail rows include in_transit_qty field"},
+      "TEST_14_order_qty_formula": {"status": "PASS", "notes": "Order qty = (cover_days * avg_daily_sales) - current_soh - in_transit_qty"}
+    },
+    "REGRESSION_ANALYTICS": {
+      "TEST_15_ros_endpoint": {"status": "PASS", "notes": "GET /api/analytics/core/ros returns data"},
+      "TEST_16_doh_analysis": {"status": "PASS", "notes": "GET /api/analytics/doh/analysis returns summary with overall_doh"},
+      "TEST_17_ai_demand_forecast": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/forecast returns forecast"},
+      "TEST_18_stock_out": {"status": "PASS", "notes": "GET /api/analytics/stock-out returns summary"},
+      "TEST_19_bi_overview": {"status": "PASS", "notes": "GET /api/analytics/bi/overview returns kpis"}
+    },
+    "REGRESSION_UPLOADS": {
+      "TEST_20_cogs_upload": {"status": "PASS", "notes": "POST /api/upload/v2/cogs endpoint accessible"},
+      "TEST_21_planogram_upload": {"status": "PASS", "notes": "POST /api/upload/v2/planogram endpoint accessible"},
+      "TEST_22_open_orders_upload": {"status": "PASS", "notes": "POST /api/upload/v2/open-orders endpoint accessible"}
+    },
+    "FRONTEND_TESTS": {
+      "FE_01_executive_dashboard": {"status": "PASS", "notes": "Executive Dashboard loads with Revenue, Units, MRP Realisation, Health Score KPIs"},
+      "FE_02_data_upload_page": {"status": "PASS", "notes": "Data Upload page shows all 10 upload types including COGS, Planogram, Open Orders"},
+      "FE_03_planogram_fill_rate": {"status": "PASS", "notes": "Planogram Fill Rate page shows fill rate data, store/category breakdowns"},
+      "FE_04_replenishment_planner": {"status": "PASS", "notes": "Replenishment Planner shows Order Quantity tab with formula, PO value, priority breakdown"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 22,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 4,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 26,
+    "TOTAL_FAIL": 0
+  },
+
+  "integration_verification": {
+    "COGS_to_Executive_Dashboard": {
+      "status": "WORKING",
+      "api_response": {
+        "revenue": 361306155.12,
+        "margin_pct": 100,
+        "margin_source": "cogs",
+        "total_cogs": 1700,
+        "mrp_realisation_pct": 90
+      },
+      "notes": "COGS data (1700) is very small compared to revenue (361M), resulting in ~100% margin. This is expected behavior - the integration is working correctly."
+    },
+    "Planogram_to_Fill_Rate": {
+      "status": "WORKING",
+      "api_response": {
+        "overall_fill_rate": 564.2,
+        "norm_source": "uploaded_planogram",
+        "total_current_stock": 598,
+        "total_norm_allocated": 106
+      },
+      "notes": "Planogram data uploaded, norm_source correctly shows 'uploaded_planogram'. Fill rate >100% because current stock exceeds norm (overstocked)."
+    },
+    "Open_Orders_to_Replenishment": {
+      "status": "WORKING",
+      "api_response": {
+        "total_in_transit": 180,
+        "open_orders_source": "uploaded",
+        "total_po_value": 6868484,
+        "total_order_units": 5516
+      },
+      "notes": "Open orders data uploaded, in-transit quantity (180 units) correctly deducted from order requirements."
+    }
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Replenishment Planner - Order Quantity",
+        "issues": ["Formula display shows 'Order Qty = (Cover Days x Avg Sales) - Current Stock' but doesn't mention in-transit deduction. Backend correctly implements the full formula including in-transit."]
+      },
+      {
+        "screen": "Executive Dashboard",
+        "issues": ["Shows 'MRP Realisation' KPI but not a dedicated 'Margin' KPI card. The margin_source and margin_pct are returned by API but may not be prominently displayed."]
+      }
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_phase3_integrations.py",
+    "/app/test_reports/pytest/pytest_results_iter61.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "All 3 Phase 3 integrations are correctly implemented in backend",
+    "COGS integration: margin_source field correctly indicates data source, true margin calculated when COGS available",
+    "Planogram integration: norm_source field correctly indicates 'uploaded_planogram' vs 'auto_derived'",
+    "Open Orders integration: in_transit_qty correctly deducted from order requirements, open_orders_source field added",
+    "Minor UI enhancement opportunity: Update Order Quantity formula display to include '- In Transit' for clarity"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_phase3_integrations.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 22/22 tests passed",
+    "frontend": "100% - 4/4 UI tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "seed_data_verification": {
+    "cogs_data": "3 rows uploaded, total_cogs=1700",
+    "planogram_data": "3 rows uploaded, norm_source='uploaded_planogram'",
+    "open_orders_data": "3 rows uploaded, total_in_transit=180"
+  },
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Phase 3 Integration Testing complete. All 3 integrations verified: (1) COGS→Executive Dashboard returns margin_source, total_cogs, mrp_realisation_pct fields, (2) Planogram→Fill Rate returns norm_source field indicating 'uploaded_planogram' or 'auto_derived', (3) Open Orders→Replenishment returns total_in_transit and open_orders_source fields, detail rows include in_transit_qty. Demo tenant has test data for all 3 new collections. All regression tests for existing analytics endpoints passed.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

@@ -79,7 +79,7 @@ def _classify(rate):
     return "CRITICAL"
 
 
-def _build_fill_df(inv_filtered, sales_filtered, sku_df, style_df, categories_list):
+def _build_fill_df(inv_filtered, sales_filtered, sku_df, style_df, categories_list, planogram_df=None):
     """Build the core fill rate dataframe used across multiple endpoints."""
     sku_cols = ["ean"]
     if "style" in sku_df.columns:
@@ -98,9 +98,26 @@ def _build_fill_df(inv_filtered, sales_filtered, sku_df, style_df, categories_li
             if "style" in sales_sku.columns:
                 sales_sku = sales_sku[sales_sku["style"].isin(valid_styles)]
 
-    # Norm Allocated = max observed inventory per store-EAN
-    norm = inv_sku.groupby(["store_code", "ean"]).agg(max_qty=("quantity", "max")).reset_index()
-    norm["norm_allocated"] = norm["max_qty"].clip(lower=1)
+    # Norm Allocated: prefer uploaded planogram, fall back to max observed inventory
+    if planogram_df is not None and len(planogram_df) > 0:
+        plano = planogram_df.copy()
+        plano["norm_allocated"] = pd.to_numeric(plano.get("norm_allocated", pd.Series(dtype=float)), errors="coerce").fillna(0).clip(lower=1)
+        # Map planogram style_code → sku via sku_df
+        if "style" in sku_df.columns:
+            sku_style = sku_df[["ean", "style"]].drop_duplicates("ean")
+            plano_sku = plano.merge(sku_style, left_on="style_code", right_on="style", how="inner")
+            if len(plano_sku) > 0:
+                norm = plano_sku.groupby(["store_code", "ean"]).agg(norm_allocated=("norm_allocated", "first")).reset_index()
+            else:
+                norm = inv_sku.groupby(["store_code", "ean"]).agg(max_qty=("quantity", "max")).reset_index()
+                norm["norm_allocated"] = norm["max_qty"].clip(lower=1)
+        else:
+            norm = inv_sku.groupby(["store_code", "ean"]).agg(max_qty=("quantity", "max")).reset_index()
+            norm["norm_allocated"] = norm["max_qty"].clip(lower=1)
+    else:
+        # Fallback: auto-derive from max observed inventory per store-EAN
+        norm = inv_sku.groupby(["store_code", "ean"]).agg(max_qty=("quantity", "max")).reset_index()
+        norm["norm_allocated"] = norm["max_qty"].clip(lower=1)
 
     # Current Stock = latest day SOH
     latest_date = inv_filtered["day"].max()
@@ -168,6 +185,7 @@ async def get_fill_rate_analysis(
     sku_df = await _cached("sku_ean_master")
     style_df = await _cached("style_master")
     store_df = await _cached("store_master")
+    planogram_df = await _cached("planogram")
 
     if sales_df is None or inv_df is None or sku_df is None:
         return {"error": "Required data not uploaded"}
@@ -183,7 +201,7 @@ async def get_fill_rate_analysis(
         sales["day"] = pd.to_datetime(sales["day"])
         inv["day"] = pd.to_datetime(inv["day"])
 
-        fill, latest_date = _build_fill_df(inv, sales, sku_df, style_df, cl)
+        fill, latest_date = _build_fill_df(inv, sales, sku_df, style_df, cl, planogram_df)
         if len(fill) == 0:
             return {"error": "No data matches filters"}
 
@@ -257,6 +275,7 @@ async def get_fill_rate_analysis(
                 "critical_count": int(sc.get("CRITICAL", 0)),
                 "total_stores": int(store_agg["store_code"].nunique()),
                 "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
+                "norm_source": "uploaded_planogram" if (planogram_df is not None and len(planogram_df) > 0) else "auto_derived",
             },
             "store_data": store_agg.fillna(0).round(2).to_dict("records"),
             "category_data": cat_agg.fillna(0).round(2).to_dict("records"),
