@@ -177,6 +177,34 @@ async def get_daily_status():
     return status
 
 
+@router.get("/master-status")
+async def get_master_status():
+    """Get master data counts and last-updated timestamps."""
+    db = _get_db()
+    tenant_id = _get_tenant_id()
+    result = {}
+
+    for master_type in ["sku_master", "store_master", "warehouse_master"]:
+        last = await db.upload_history.find_one(
+            {"tenant_id": tenant_id, "upload_type": master_type, "status": "completed"},
+            {"_id": 0},
+            sort=[("uploaded_at", -1)],
+        )
+        # Try dedicated collection first, fall back to uploaded_files
+        count = await db[master_type].count_documents({"tenant_id": tenant_id})
+        if count == 0:
+            doc = await db.uploaded_files.find_one({"file_type": master_type})
+            if doc and "data" in doc:
+                count = len(doc["data"])
+
+        result[master_type] = {
+            "count": count,
+            "last_updated": last["uploaded_at"].strftime("%b %d") if last and hasattr(last.get("uploaded_at"), "strftime") else None,
+        }
+
+    return result
+
+
 @router.get("/template/{upload_type}")
 async def download_template(upload_type: str):
     """Download template pre-filled with tenant's actual SKUs and stores."""
