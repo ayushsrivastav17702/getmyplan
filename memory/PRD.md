@@ -62,20 +62,19 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Master/Daily split, master-status endpoint — 49/49 PASS (Iteration 52)
 
 ### Phase 51 — 65-Rule Validation Engine Enhancement (Apr 2026)
-- Implemented comprehensive validation rules: E003, E004, E006, E007, E008, E010, E011, E020, E027, E030, E039, E041, E043, E045, E049, E054, E066, E067, E068, E069, MIXED_CURRENCY, AUTO_CALC
-- Currency detection (USD/INR/EUR/GBP) with mixed currency warnings
-- File size check (E049), duplicate file hash detection (E054)
-- Warehouse inventory validation: available>on_hand (E067), allocated_qty auto-calc
-- Warehouse master flag validation (E069)
-- Master data cross-validation against v2 collections
-- **Testing: 56/56 PASS (Iteration 53)** — Backend 40/40, Frontend 16/16
+- Currency detection, file hash dedup, warehouse validation
+- **Testing: 56/56 PASS (Iteration 53)**
 
 ### Phase 52 — Component Refactoring + Validate-then-Save Flow (Apr 2026)
-- Split DataUploadPage into separate components: MasterCard, DailyStatusCard, PreviousDaysList, FileDropzone
-- New `/api/upload/v2/{upload_type}/validate` endpoint for validate-only mode
-- New `/api/upload/v2/history/days` endpoint for per-day upload status
-- Two-step upload flow: Validate File -> Proceed to Save -> Save confirmation
-- **Testing: 48/48 PASS (Iteration 54)** — Backend 28/28, Frontend 20/20
+- Split DataUploadPage into components, validate-only endpoint
+- **Testing: 48/48 PASS (Iteration 54)**
+
+### Phase 53 — Demand Planning Audit + P0 Fixes (Apr 2026)
+- Generated comprehensive audit report: `/app/memory/DEMAND_PLANNING_AUDIT_V2.md`
+- **P0.1 V2 Data Bridge**: Updated `get_cached_data()` in server.py to check V2 collections first, fall back to V1 `uploaded_files`. Includes field compatibility mapping (V2 `closing_stock`→`quantity`, `sku`→`ean`).
+- **P0.2 Seasonal Decomposition Fix**: Fixed numpy.ndarray attribute error in `ml_forecast_engine.py` — converts input to pd.Series and uses np.asarray() on decomposition results. All 3 ML models now active in ensemble.
+- **P0.3 Database Indexes**: Added V2 collection indexes on startup (daily_sales, store_inventory, sku_master, etc.)
+- **Testing: 31/31 PASS (Iteration 55)** — Backend 21/21, Frontend 10/10
 
 ## Route Map
 ```
@@ -103,10 +102,16 @@ AUTHENTICATED (PlanGuard-wrapped):
 - `/app/frontend/src/components/upload/MasterCard.jsx` — Master data card
 - `/app/frontend/src/components/upload/DailyStatusCard.jsx` — Daily status card
 - `/app/frontend/src/components/upload/PreviousDaysList.jsx` — Previous days list
-- `/app/frontend/src/components/upload/FileDropzone.jsx` — File dropzone + validation results + save confirm
+- `/app/frontend/src/components/upload/FileDropzone.jsx` — File dropzone + validation results
+
+### AI Demand Planning
+- `/app/backend/routes/ai_demand.py` — 10 endpoints (forecast, stockout, topseller, reorder, supply, plan CRUD)
+- `/app/backend/ml_forecast_engine.py` — 3 ML models + ensemble (Holt-Winters, Random Forest, Seasonal Decomposition)
+- `/app/backend/services/tenant_data_provider.py` — Data abstraction layer (V2→V1 bridge)
+- `/app/frontend/src/pages/AIDemandPlanning.js` — 4-tab UI with Chart.js visualizations
 
 ### Core
-- `/app/backend/server.py` — Route registration, MONGODB_URI sync
+- `/app/backend/server.py` — Route registration, get_cached_data() with V2 bridge
 - `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state
 - `/app/frontend/src/App.js` — Routing with PlanGuard
 
@@ -126,13 +131,39 @@ GET  /api/upload/v2/history/days         — Per-day upload status
 GET  /api/upload/v2/template/{type}      — Download Excel template
 ```
 
+## API Endpoints (AI Demand)
+```
+GET  /api/analytics/ai-demand/options           — Filter values + data status
+GET  /api/analytics/ai-demand/forecast          — ML ensemble forecast
+GET  /api/analytics/ai-demand/stockout-risk     — SKU×Store stockout prediction
+GET  /api/analytics/ai-demand/topseller-prediction — X-Factor classification
+GET  /api/analytics/ai-demand/reorder-optimisation — Safety stock + ROP
+GET  /api/analytics/ai-demand/supply-feasibility   — 12-month DOH coverage
+POST /api/analytics/ai-demand/generate-plan     — Generate blended demand plan
+GET  /api/analytics/ai-demand/plans             — List saved plans
+GET  /api/analytics/ai-demand/plans/{id}        — Get specific plan
+PUT  /api/analytics/ai-demand/plans/{id}        — Update plan (optimistic locking)
+```
+
 ## Prioritized Backlog
+
+### P1 — Next
+- EOQ (Economic Order Quantity) implementation
+- Lead times from SKU master (currently hardcoded default 14 days)
+- SKU-level forecasting
+- Forecast accuracy tracking over time
 
 ### P2
 - USER-18: MFA (Multi-factor authentication)
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
 - User Funnel Analytics Dashboard
+- Buy Plan integration with demand forecast
+- Holiday/promotional calendar
 
 ### P3
 - Auto-scheduled SFTP uploads for Data Upload V2
+- Prophet integration for holiday-aware forecasting
+- Automated daily/weekly forecast regeneration
+- Purchase order creation from reorder recommendations
+- Warehouse-level demand allocation
