@@ -391,9 +391,12 @@ async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
         'warehouse_inventory': 'warehouse_inventory',
         'sku_ean_master': 'sku_master',
         'sku_master': 'sku_master',
-        'style_master': None,
+        'style_master': 'style_master',
         'store_master': 'store_master',
         'warehouse_master': 'warehouse_master',
+        'cogs': 'cogs',
+        'planogram': 'planogram',
+        'open_orders': 'open_orders',
     }
 
     # When V2 field names differ from V1, rename for backward compatibility.
@@ -3338,6 +3341,13 @@ async def _ensure_v2_collection_indexes(tenant_db):
     await _idx(tenant_db.sku_master, [("tenant_id", 1), ("sku", 1)], unique=True, sparse=True)
     await _idx(tenant_db.store_master, [("tenant_id", 1), ("store_code", 1)], unique=True, sparse=True)
     await _idx(tenant_db.warehouse_master, [("tenant_id", 1), ("warehouse", 1)], unique=True, sparse=True)
+    await _idx(tenant_db.style_master, [("tenant_id", 1), ("style_code", 1)], unique=True, sparse=True)
+    await _idx(tenant_db.cogs, [("tenant_id", 1), ("transaction_date", 1)])
+    await _idx(tenant_db.cogs, [("tenant_id", 1), ("sku_code", 1)])
+    await _idx(tenant_db.planogram, [("tenant_id", 1), ("store_code", 1)])
+    await _idx(tenant_db.planogram, [("tenant_id", 1), ("style_code", 1)])
+    await _idx(tenant_db.open_orders, [("tenant_id", 1), ("sku_code", 1)])
+    await _idx(tenant_db.open_orders, [("tenant_id", 1), ("status", 1)])
     await _idx(tenant_db.demand_plans, [("category", 1), ("status", 1)])
     await _idx(tenant_db.demand_plans, "created_at")
     await _idx(tenant_db.uploaded_files, "file_type")

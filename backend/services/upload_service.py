@@ -24,9 +24,11 @@ class UniversalUploadService:
         "sku_master": ["sku", "product_name", "category"],
         "store_master": ["store_code", "store_name"],
         "warehouse_master": ["warehouse", "warehouse_name", "online_fulfillment_flag"],
-        # Existing file types from v1
         "style_master": ["style_code", "season", "category", "subcategory", "gender", "brand"],
         "sku_ean_master": ["ean", "style", "size", "mrp"],
+        "cogs": ["transaction_date", "store_code", "sku_code", "cogs"],
+        "planogram": ["store_code", "category", "style_code", "norm_allocated"],
+        "open_orders": ["order_date", "expected_delivery_date", "store_code", "sku_code", "order_quantity", "status", "source_type"],
     }
 
     DEDUP_KEYS = {
@@ -38,6 +40,9 @@ class UniversalUploadService:
         "warehouse_master": ["warehouse"],
         "style_master": ["style_code"],
         "sku_ean_master": ["ean"],
+        "cogs": ["transaction_date", "store_code", "sku_code"],
+        "planogram": ["store_code", "style_code"],
+        "open_orders": ["order_date", "store_code", "sku_code"],
     }
 
     def __init__(self, upload_type, master_skus=None, master_stores=None, master_warehouses=None, file_hash=None):

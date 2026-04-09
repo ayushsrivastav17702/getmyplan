@@ -36,6 +36,8 @@ export const PreviousDaysList = ({ days, onViewDay }) => {
               <StatusDot uploaded={day.uploads?.daily_sales} label="Sales" />
               <StatusDot uploaded={day.uploads?.store_inventory} label="Store" />
               <StatusDot uploaded={day.uploads?.warehouse_inventory} label="WH" />
+              <StatusDot uploaded={day.uploads?.cogs} label="COGS" />
+              <StatusDot uploaded={day.uploads?.open_orders} label="Orders" />
             </div>
           </div>
         ))}

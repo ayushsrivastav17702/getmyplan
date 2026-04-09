@@ -1,0 +1,145 @@
+{
+  "summary": "Phase 2 Upload Types Testing - All 21 backend tests PASSED, all frontend UI elements verified. The 4 new upload types (COGS, Planogram, Open Orders, Style Master V2) are fully functional with V2 endpoints, 75-rule validation, template downloads, and proper status tracking.",
+
+  "test_case_matrix": {
+    "BACKEND_AUTH": {
+      "TEST_01_login_success": {"status": "PASS", "notes": "Login with admin@demo.com/demo1234 returns access_token"}
+    },
+    "COGS_UPLOAD": {
+      "TEST_02_cogs_upload_endpoint": {"status": "PASS", "notes": "POST /api/upload/v2/cogs processes file, validates store codes against master"},
+      "TEST_03_cogs_validate_only": {"status": "PASS", "notes": "POST /api/upload/v2/cogs/validate returns validate_only=true"},
+      "TEST_04_cogs_missing_column": {"status": "PASS", "notes": "Missing sku_code column returns E043 error"},
+      "TEST_05_cogs_template": {"status": "PASS", "notes": "GET /api/upload/v2/template/cogs returns XLSX file"}
+    },
+    "PLANOGRAM_UPLOAD": {
+      "TEST_06_planogram_upload_endpoint": {"status": "PASS", "notes": "POST /api/upload/v2/planogram processes file, validates store codes"},
+      "TEST_07_planogram_validate_only": {"status": "PASS", "notes": "POST /api/upload/v2/planogram/validate returns validate_only=true"},
+      "TEST_08_planogram_empty_file": {"status": "PASS", "notes": "Empty CSV returns E045 error"},
+      "TEST_09_planogram_template": {"status": "PASS", "notes": "GET /api/upload/v2/template/planogram returns XLSX file"}
+    },
+    "OPEN_ORDERS_UPLOAD": {
+      "TEST_10_open_orders_upload_endpoint": {"status": "PASS", "notes": "POST /api/upload/v2/open-orders processes file, validates store codes"},
+      "TEST_11_open_orders_validate_only": {"status": "PASS", "notes": "POST /api/upload/v2/open_orders/validate returns validate_only=true"},
+      "TEST_12_open_orders_template": {"status": "PASS", "notes": "GET /api/upload/v2/template/open_orders returns XLSX file"}
+    },
+    "STYLE_MASTER_UPLOAD": {
+      "TEST_13_style_master_upload_success": {"status": "PASS", "notes": "POST /api/upload/v2/style-master uploads 2 rows successfully"},
+      "TEST_14_style_master_validate_only": {"status": "PASS", "notes": "POST /api/upload/v2/style_master/validate returns validate_only=true"},
+      "TEST_15_style_master_template": {"status": "PASS", "notes": "GET /api/upload/v2/template/style_master returns XLSX file"}
+    },
+    "STATUS_ENDPOINTS": {
+      "TEST_16_master_status_new_types": {"status": "PASS", "notes": "GET /api/upload/v2/master-status includes style_master (count=2) and planogram (count=3)"},
+      "TEST_17_daily_status_new_types": {"status": "PASS", "notes": "GET /api/upload/v2/daily-status includes cogs and open_orders entries"},
+      "TEST_18_upload_history": {"status": "PASS", "notes": "GET /api/upload/v2/history returns upload records"}
+    },
+    "REGRESSION_ANALYTICS": {
+      "TEST_19_ros_endpoint": {"status": "PASS", "notes": "GET /api/analytics/core/ros returns total_styles=8, avg_ros=20.69"},
+      "TEST_20_doh_analysis": {"status": "PASS", "notes": "GET /api/analytics/doh/analysis returns summary"},
+      "TEST_21_ai_demand_forecast": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/forecast returns forecast data"}
+    },
+    "FRONTEND_TESTS": {
+      "FE_01_data_upload_page": {"status": "PASS", "notes": "Data Upload page renders with data-testid='data-upload-page'"},
+      "FE_02_master_data_section": {"status": "PASS", "notes": "5 master cards: SKU, Store, Warehouse, Style Master, Planogram"},
+      "FE_03_daily_status_section": {"status": "PASS", "notes": "5 daily cards: Sales, Store Inv, WH Inv, COGS, Open Orders"},
+      "FE_04_upload_dropdown": {"status": "PASS", "notes": "10 upload types in dropdown including 4 new types"},
+      "FE_05_previous_days_section": {"status": "PASS", "notes": "5 status dots: Sales, Store, WH, COGS, Orders"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 21,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 5,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 26,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_upload_v2_phase2_iter60.py",
+    "/app/test_reports/pytest/pytest_results_iter60.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Phase 2 Upload Types: All 4 new types (COGS, Planogram, Open Orders, Style Master) correctly implemented",
+    "V2 Endpoints: /api/upload/v2/{type} and /api/upload/v2/{type}/validate working for all new types",
+    "75-Rule Validation: E043 (missing columns), E045 (empty file), E011 (unknown store codes) all working",
+    "Template Downloads: All 4 new templates return valid XLSX files",
+    "Status Endpoints: master-status includes style_master/planogram, daily-status includes cogs/open_orders",
+    "Frontend: DataUploadPage shows 10 upload types, 5 master cards, 5 daily cards, 5 status dots"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_upload_v2_phase2_iter60.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 21/21 tests passed",
+    "frontend": "100% - 5/5 UI tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "phase2_verification": {
+    "cogs_upload": {
+      "endpoint": "/api/upload/v2/cogs",
+      "validate_endpoint": "/api/upload/v2/cogs/validate",
+      "template_endpoint": "/api/upload/v2/template/cogs",
+      "required_columns": ["transaction_date", "store_code", "sku_code", "cogs"],
+      "status": "WORKING"
+    },
+    "planogram_upload": {
+      "endpoint": "/api/upload/v2/planogram",
+      "validate_endpoint": "/api/upload/v2/planogram/validate",
+      "template_endpoint": "/api/upload/v2/template/planogram",
+      "required_columns": ["store_code", "category", "style_code", "norm_allocated"],
+      "status": "WORKING"
+    },
+    "open_orders_upload": {
+      "endpoint": "/api/upload/v2/open-orders",
+      "validate_endpoint": "/api/upload/v2/open_orders/validate",
+      "template_endpoint": "/api/upload/v2/template/open_orders",
+      "required_columns": ["order_date", "expected_delivery_date", "store_code", "sku_code", "order_quantity", "status", "source_type"],
+      "status": "WORKING"
+    },
+    "style_master_upload": {
+      "endpoint": "/api/upload/v2/style-master",
+      "validate_endpoint": "/api/upload/v2/style_master/validate",
+      "template_endpoint": "/api/upload/v2/template/style_master",
+      "required_columns": ["style_code", "season", "category", "subcategory", "gender", "brand"],
+      "status": "WORKING"
+    }
+  },
+
+  "frontend_verification": {
+    "master_data_cards": ["SKU Master", "Store Master", "Warehouse Master", "Style Master", "Planogram"],
+    "daily_status_cards": ["Daily Sales", "Store Inventory", "Warehouse Inventory", "COGS", "Open Orders"],
+    "upload_dropdown_options": ["Daily Sales", "Store Inventory", "Warehouse Inventory", "COGS (Cost of Goods Sold)", "Open Orders & In-Transit", "SKU Master", "Store Master", "Warehouse Master", "Style Master", "Planogram"],
+    "previous_days_status_dots": ["Sales", "Store", "WH", "COGS", "Orders"]
+  },
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Phase 2 Upload Types verified. All 4 new upload types (COGS, Planogram, Open Orders, Style Master V2) are fully functional. The V2 upload endpoints use 75-rule validation which validates store codes against master data - test uploads with unknown store codes will fail with E011 error (this is expected behavior). Demo tenant has existing data: style_master=2, planogram=3, cogs and open_orders uploaded today.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

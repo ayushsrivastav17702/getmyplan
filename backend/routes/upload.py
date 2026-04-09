@@ -102,6 +102,44 @@ async def upload_warehouse_master(
     return await _handle_upload(file, "warehouse_master", replace_existing=True)
 
 
+@router.post("/style-master")
+async def upload_style_master(
+    request: Request,
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
+):
+    return await _handle_upload(file, "style_master", replace_existing=True)
+
+
+@router.post("/cogs")
+async def upload_cogs(
+    request: Request,
+    file: UploadFile = File(...),
+    replace_existing: bool = False,
+    background_tasks: BackgroundTasks = None,
+):
+    return await _handle_upload(file, "cogs", replace_existing)
+
+
+@router.post("/planogram")
+async def upload_planogram(
+    request: Request,
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
+):
+    return await _handle_upload(file, "planogram", replace_existing=True)
+
+
+@router.post("/open-orders")
+async def upload_open_orders(
+    request: Request,
+    file: UploadFile = File(...),
+    replace_existing: bool = False,
+    background_tasks: BackgroundTasks = None,
+):
+    return await _handle_upload(file, "open_orders", replace_existing)
+
+
 # ============================================================
 # VALIDATE-ONLY ENDPOINT
 # ============================================================
@@ -132,7 +170,7 @@ async def get_previous_days_history(days: int = 7):
         date_str = date.strftime("%Y-%m-%d")
 
         uploads = {}
-        for upload_type in ["daily_sales", "store_inventory", "warehouse_inventory"]:
+        for upload_type in ["daily_sales", "store_inventory", "warehouse_inventory", "cogs", "open_orders"]:
             doc = await db.upload_history.find_one(
                 {"tenant_id": tenant_id, "upload_type": upload_type, "upload_date": date_str, "status": "completed"},
                 {"_id": 0},
@@ -213,7 +251,7 @@ async def get_daily_status():
     db = _get_db()
     tenant_id = _get_tenant_id()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    upload_types = ["daily_sales", "store_inventory", "warehouse_inventory"]
+    upload_types = ["daily_sales", "store_inventory", "warehouse_inventory", "cogs", "open_orders"]
 
     status = {}
     for ut in upload_types:
@@ -238,7 +276,7 @@ async def get_master_status():
     tenant_id = _get_tenant_id()
     result = {}
 
-    for master_type in ["sku_master", "store_master", "warehouse_master"]:
+    for master_type in ["sku_master", "store_master", "warehouse_master", "style_master", "planogram"]:
         last = await db.upload_history.find_one(
             {"tenant_id": tenant_id, "upload_type": master_type, "status": "completed"},
             {"_id": 0},
@@ -294,6 +332,22 @@ async def download_template(upload_type: str):
         "warehouse_master": {
             "title": "Warehouse Master",
             "headers": ["warehouse", "warehouse_name", "online_fulfillment_flag"],
+        },
+        "style_master": {
+            "title": "Style Master",
+            "headers": ["style_code", "season", "category", "subcategory", "gender", "brand"],
+        },
+        "cogs": {
+            "title": "COGS",
+            "headers": ["transaction_date", "store_code", "sku_code", "cogs"],
+        },
+        "planogram": {
+            "title": "Planogram",
+            "headers": ["store_code", "category", "style_code", "norm_allocated", "repl_cycle_days", "cover_days", "top_seller_multiplier", "is_active"],
+        },
+        "open_orders": {
+            "title": "Open Orders",
+            "headers": ["order_date", "expected_delivery_date", "store_code", "sku_code", "order_quantity", "status", "source_type"],
         },
     }
 
@@ -510,6 +564,10 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
         "sku_master": "sku_master",
         "store_master": "store_master",
         "warehouse_master": "warehouse_master",
+        "style_master": "style_master",
+        "cogs": "cogs",
+        "planogram": "planogram",
+        "open_orders": "open_orders",
     }
 
     collection_name = collection_map.get(upload_type)
@@ -533,9 +591,19 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
                     days.add(d)
             for day in days:
                 await collection.delete_many({"tenant_id": tenant_id, "day": day})
+        elif upload_type == "cogs":
+            dates = set()
+            for r in records:
+                d = r.get("transaction_date")
+                if d:
+                    dates.add(d)
+            for dt in dates:
+                await collection.delete_many({"tenant_id": tenant_id, "transaction_date": dt})
+        elif upload_type == "open_orders":
+            await collection.delete_many({"tenant_id": tenant_id})
         elif upload_type in ["store_inventory", "warehouse_inventory"]:
             await collection.delete_many({"tenant_id": tenant_id})
-        elif upload_type in ["sku_master", "store_master", "warehouse_master"]:
+        elif upload_type in ["sku_master", "store_master", "warehouse_master", "style_master", "planogram"]:
             await collection.delete_many({"tenant_id": tenant_id})
 
     if records:

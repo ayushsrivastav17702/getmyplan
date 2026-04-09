@@ -132,7 +132,9 @@ const DataUploadPage = () => {
   const allDone = dailyStatus &&
     dailyStatus.daily_sales?.uploaded &&
     dailyStatus.store_inventory?.uploaded &&
-    dailyStatus.warehouse_inventory?.uploaded;
+    dailyStatus.warehouse_inventory?.uploaded &&
+    dailyStatus.cogs?.uploaded &&
+    dailyStatus.open_orders?.uploaded;
 
   const downloadTemplate = (t) => window.open(`${API}/api/upload/v2/template/${t}`, "_blank");
 
@@ -161,7 +163,7 @@ const DataUploadPage = () => {
           <h2 className="text-lg font-semibold text-slate-900">Master Data</h2>
           <span className="text-xs text-slate-400 ml-1">Setup once &mdash; rarely changes</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <MasterCard type="sku" title="SKU Master" description="Products & pricing"
             count={masterStatus?.sku_master?.count} lastUpdated={masterStatus?.sku_master?.last_updated}
             onUpload={() => { setSelectedType("sku_master"); setFile(null); setResult(null); }}
@@ -174,6 +176,14 @@ const DataUploadPage = () => {
             count={masterStatus?.warehouse_master?.count} lastUpdated={masterStatus?.warehouse_master?.last_updated}
             onUpload={() => { setSelectedType("warehouse_master"); setFile(null); setResult(null); }}
             onDownload={() => downloadTemplate("warehouse_master")} />
+          <MasterCard type="style" title="Style Master" description="Styles & categories"
+            count={masterStatus?.style_master?.count} lastUpdated={masterStatus?.style_master?.last_updated}
+            onUpload={() => { setSelectedType("style_master"); setFile(null); setResult(null); }}
+            onDownload={() => downloadTemplate("style_master")} />
+          <MasterCard type="planogram" title="Planogram" description="Store shelf norms"
+            count={masterStatus?.planogram?.count} lastUpdated={masterStatus?.planogram?.last_updated}
+            onUpload={() => { setSelectedType("planogram"); setFile(null); setResult(null); }}
+            onDownload={() => downloadTemplate("planogram")} />
         </div>
       </section>
 
@@ -190,8 +200,8 @@ const DataUploadPage = () => {
             <RefreshCw className="w-4 h-4 mr-1" /> Refresh
           </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {["daily_sales", "store_inventory", "warehouse_inventory"].map((key) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {["daily_sales", "store_inventory", "warehouse_inventory", "cogs", "open_orders"].map((key) => (
             <DailyStatusCard
               key={key}
               type={key}
@@ -226,9 +236,13 @@ const DataUploadPage = () => {
                   <SelectItem value="daily_sales">Daily Sales</SelectItem>
                   <SelectItem value="store_inventory">Store Inventory</SelectItem>
                   <SelectItem value="warehouse_inventory">Warehouse Inventory</SelectItem>
+                  <SelectItem value="cogs">COGS (Cost of Goods Sold)</SelectItem>
+                  <SelectItem value="open_orders">Open Orders & In-Transit</SelectItem>
                   <SelectItem value="sku_master">SKU Master</SelectItem>
                   <SelectItem value="store_master">Store Master</SelectItem>
                   <SelectItem value="warehouse_master">Warehouse Master</SelectItem>
+                  <SelectItem value="style_master">Style Master</SelectItem>
+                  <SelectItem value="planogram">Planogram</SelectItem>
                 </SelectContent>
               </Select>
             </div>

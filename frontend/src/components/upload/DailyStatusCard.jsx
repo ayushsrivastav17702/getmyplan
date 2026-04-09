@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle, AlertTriangle, ChevronRight, FileText, Store, Warehouse } from "lucide-react";
+import { CheckCircle, AlertTriangle, ChevronRight, FileText, Store, Warehouse, DollarSign, ShoppingCart } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -8,12 +8,16 @@ const iconMap = {
   daily_sales: FileText,
   store_inventory: Store,
   warehouse_inventory: Warehouse,
+  cogs: DollarSign,
+  open_orders: ShoppingCart,
 };
 
 const labelMap = {
   daily_sales: "Daily Sales",
   store_inventory: "Store Inventory",
   warehouse_inventory: "Warehouse Inventory",
+  cogs: "COGS",
+  open_orders: "Open Orders",
 };
 
 export const DailyStatusCard = ({ type, status, onUploadNow }) => {
