@@ -150,7 +150,8 @@ async def validate_file(
     file: UploadFile = File(...),
 ):
     """Validate a file without saving to database."""
-    return await _handle_upload(file, upload_type, replace_existing=False, validate_only=True)
+    normalized = upload_type.replace("-", "_")
+    return await _handle_upload(file, normalized, replace_existing=False, validate_only=True)
 
 
 # ============================================================
