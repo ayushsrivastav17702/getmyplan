@@ -61,14 +61,27 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 ### Phase 47 — Data Quality Rules Engine (Apr 2026)
 - **6 Rule Types**: threshold, null_check, pattern, uniqueness, cross_reference, range
 - **Backend**: Full CRUD at `/api/quality/rules/` with evaluate, toggle, file-columns endpoints
-- **Rule Evaluation**: Runs active rules against uploaded tenant data, returns per-rule pass/fail with affected record counts
-- **Frontend**: "Custom Rules" tab in Data Quality page with:
-  - Rule list with toggle/edit/delete actions
-  - Dynamic create/edit form (fields change based on rule type)
-  - "Run Rules" button with results panel showing pass counts and progress bars
-  - Severity levels (error/warning/info) with color-coded badges
-  - Auto-loads available columns from uploaded files for easy rule building
+- **Frontend**: "Custom Rules" tab in Data Quality page
 - **Testing: 35/35 PASS (Iteration 50)** — Backend 20/20, Frontend 15/15
+
+### Phase 48 — Production MongoDB Authorization Fix (Apr 2026)
+- Critical Fix: DB_NAME priority over SHARED_DB_NAME
+- OperationFailure handling, lazy ML imports, dynamic email Origin tracking
+
+### Phase 49 — Complete Data Upload Module with 75-Error Validation (Apr 2026)
+- **New Upload System** at `/api/upload/v2/*` with 6 upload types
+- **75-Error Validation Engine**: E001-E075 across 10 categories
+- **Upload History**, **Daily Status Widget**, **Template Download**
+- **Testing: 39/39 PASS (Iteration 51)**
+
+### Phase 50 — Data Upload Page UI Redesign (Apr 2026)
+- Redesigned DataUploadPage.jsx to explicitly separate "Master Data" (Setup Once) from "Daily Transactional Data"
+- New `/api/upload/v2/master-status` endpoint returning counts and last_updated for sku_master, store_master, warehouse_master
+- Master Data section: 3 cards with count, last_updated, download/upload buttons
+- Today's Status section: 3 daily cards with Uploaded/Not Uploaded badges
+- Upload New Data section: 6-option dropdown + react-dropzone
+- Previous Days section: Grouped upload history
+- **Testing: 49/49 PASS (Iteration 52)** — Backend 30/30, Frontend 19/19
 
 ## Route Map
 ```
@@ -107,44 +120,25 @@ AUTHENTICATED (All routes PlanGuard-wrapped):
   /scheduled-jobs -> Scheduled Jobs (all users)
 ```
 
-### Phase 48 — Production MongoDB Authorization Fix (Apr 2026)
-- **Critical Fix**: Changed `get_shared_db_name()` resolution order from `SHARED_DB_NAME > DB_NAME > URL > merch_shared` to `DB_NAME > SHARED_DB_NAME > URL > RuntimeError`
-- `DB_NAME` (Emergent-authorized database) now takes priority over `SHARED_DB_NAME`
-- Removed hardcoded `"merch_shared"` fallback — app fails fast if no DB name configured
-- Added `OperationFailure` handling to registration write operations in `signup.py`
-- Improved frontend `Signup.jsx` error handling (shows actual server errors, handles network failures)
-- Added temporary `/api/debug/config`, `/api/debug/database`, `/api/debug/db-permission-test` diagnostic endpoints
-- Added `/api/debug/email-config` and `/api/debug/email-test` SMTP diagnostic endpoints
-- **Critical Fix**: Made sklearn/statsmodels imports lazy (try/except) to prevent 502 crashes in resource-constrained K8s
-- Added startup database configuration logging
-
-### Phase 49 — Complete Data Upload Module with 75-Error Validation (Apr 2026)
-- **New Upload System** at `/api/upload/v2/*` with 6 upload types: daily_sales, store_inventory, warehouse_inventory, sku_master, store_master, warehouse_master
-- **75-Error Validation Engine**: SKU (E001-E010), Store (E011-E018), Date (E019-E026), Quantity (E027-E034), Revenue (E035-E042), File Structure (E043-E050), Duplicates (E051-E057), Consistency (E058-E063), Business Rules (E064-E070), Timezone (E071-E074), Performance (E075)
-- **Upload History** endpoint with date grouping and filters
-- **Daily Status Widget** for tracking today's upload progress
-- **Template Download** generates Excel files with tenant-specific dropdown validation
-- **Frontend**: DataUploadPage with tabs (Upload/History/Templates), drag-drop DataUploadV2 component, UploadHistory, UploadStatus
-- Old v1 upload endpoints preserved at original paths
-
 ## Key Files
 - `/app/backend/multi_tenant/tenant_db.py` — DB resolution (DB_NAME-first priority)
-- `/app/backend/routes/debug.py` — Temporary diagnostic endpoints (remove after prod verification)
+- `/app/backend/routes/upload.py` — V2 upload endpoints + master-status + daily-status
+- `/app/backend/services/upload_service.py` — 75-rule validation engine
+- `/app/frontend/src/pages/DataUploadPage.jsx` — Redesigned upload page (Master/Daily split)
 - `/app/backend/routes/data_quality_rules.py` — Rules Engine CRUD + evaluate
 - `/app/frontend/src/components/DataQualityRules.jsx` — Rules Engine UI component
-- `/app/frontend/src/pages/DataQuality.js` — Data Quality page (incl. Custom Rules tab)
 - `/app/backend/routes/scheduled_jobs.py` — Scheduled jobs CRUD
 - `/app/frontend/src/pages/ScheduledJobs.jsx` — Scheduled jobs management
-- `/app/frontend/src/pages/ChangePassword.jsx` — Force password change page
-- `/app/frontend/src/pages/PlanUpgrade.jsx` — Plan comparison + upgrade page
 - `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state + mustChangePassword
 - `/app/frontend/src/App.js` — Routing with PlanGuard + force password redirect
-- `/app/backend/multi_tenant/auth.py` — Login + change-password endpoint
-- `/app/backend/core/plan_access.py` — Plan-based module access definitions
 
 ## Prioritized Backlog
 
-### P3
+### P2
 - USER-18: MFA (Multi-factor authentication)
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
+- User Funnel Analytics Dashboard
+
+### P3
+- Auto-scheduled SFTP uploads for Data Upload V2
