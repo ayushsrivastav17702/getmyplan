@@ -179,6 +179,30 @@ async def ml_forecast(
     confidence = result.get('ensemble_accuracy', {}).get('confidence_score', 70)
     if insufficient:
         confidence = min(confidence, 50)
+
+    # Save forecast snapshot for accuracy tracking
+    if _get_db:
+        try:
+            db = _get_db()
+            snapshot = {
+                "category": category or "All",
+                "subcategory": subcategory or "All",
+                "forecast_horizon": forecast_horizon,
+                "created_at": now.isoformat(),
+                "forecast_data": [
+                    {"month": months[i]['month'], "year": months[i]['year'],
+                     "month_key": f"{months[i]['year']}-{months[i]['month']:02d}",
+                     "predicted_revenue": round(result['forecast'][i], 2)}
+                    for i in range(len(result['forecast']))
+                ],
+                "models_used": result.get('models_used', []),
+                "confidence_score": confidence,
+                "data_source": "demo" if insufficient else "uploaded",
+            }
+            await db.forecast_snapshots.insert_one(snapshot)
+        except Exception as e:
+            logger.warning("Failed to save forecast snapshot: %s", e)
+
     return {
         'category': category or 'All', 'subcategory': subcategory or 'All',
         'forecast_horizon': forecast_horizon, 'months': months,
@@ -440,6 +464,150 @@ async def data_health(request: Request):
             "progress_pct": progress,
             "using_demo_data": using_demo,
             "estimated_ready_date": est_date,
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 1c. FORECAST ACCURACY TRACKING (MAPE Trend)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/analytics/ai-demand/forecast-accuracy")
+async def forecast_accuracy(
+    request: Request,
+    category: str = Query(None),
+    limit: int = Query(20, ge=1, le=50),
+):
+    """Compare saved forecast snapshots against actual monthly revenue to compute MAPE trend."""
+    _check_rate_limit(request)
+    if _get_current_user:
+        await _get_current_user(request)
+
+    db = _get_db()
+    cat_filter = category or "All"
+
+    # 1. Load forecast snapshots
+    snapshots = await db.forecast_snapshots.find(
+        {"category": cat_filter},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+
+    if not snapshots:
+        return {
+            "snapshots": [],
+            "summary": {
+                "current_mape": None, "best_mape": None, "worst_mape": None,
+                "avg_mape": None, "snapshots_evaluated": 0, "trend": "no_data",
+                "total_months_compared": 0,
+            },
+            "message": "No forecast snapshots yet. Generate a forecast to start tracking accuracy.",
+        }
+
+    # 2. Build actual monthly revenue lookup from daily_sales
+    sales_df = await _get_cached_data('daily_sales')
+    sku_df = await _get_cached_data('sku_ean_master')
+    style_df = await _get_cached_data('style_master')
+    actual_by_month = {}
+
+    if sales_df is not None and len(sales_df) > 0:
+        df = sales_df.copy()
+        df['day'] = pd.to_datetime(df['day'], errors='coerce')
+        df = df.dropna(subset=['day'])
+
+        # Filter by category if needed
+        if category and sku_df is not None and style_df is not None:
+            if 'ean' in sku_df.columns and 'style' in sku_df.columns:
+                df = df.merge(sku_df[['ean', 'style']], left_on='sku', right_on='ean', how='left')
+            if 'style' in df.columns and 'style_code' in style_df.columns and 'category' in style_df.columns:
+                df = df.merge(style_df[['style_code', 'category']], left_on='style', right_on='style_code', how='left')
+                df = df[df['category'] == category]
+
+        if len(df) > 0:
+            df['month_key'] = df['day'].dt.strftime('%Y-%m')
+            monthly = df.groupby('month_key')['revenue'].sum()
+            actual_by_month = monthly.to_dict()
+
+    # 3. Evaluate each snapshot
+    now = datetime.now(timezone.utc)
+    current_month_key = now.strftime('%Y-%m')
+    accuracy_results = []
+
+    for snap in snapshots:
+        month_errors = []
+        for fd in snap.get('forecast_data', []):
+            mk = fd.get('month_key', '')
+            predicted = fd.get('predicted_revenue', 0)
+            # Only compare months that have fully elapsed
+            if mk >= current_month_key:
+                continue  # future month, skip
+            actual = actual_by_month.get(mk)
+            if actual is not None and actual > 0:
+                ape = abs(actual - predicted) / actual * 100
+                month_errors.append({
+                    'month_key': mk,
+                    'predicted': round(predicted, 2),
+                    'actual': round(actual, 2),
+                    'error_pct': round(ape, 1),
+                    'direction': 'over' if predicted > actual else 'under',
+                })
+
+        mape = round(sum(e['error_pct'] for e in month_errors) / len(month_errors), 1) if month_errors else None
+        accuracy_results.append({
+            'created_at': snap.get('created_at', ''),
+            'category': snap.get('category', 'All'),
+            'subcategory': snap.get('subcategory', 'All'),
+            'forecast_horizon': snap.get('forecast_horizon', 12),
+            'models_used': snap.get('models_used', []),
+            'confidence_score': snap.get('confidence_score', 0),
+            'mape': mape,
+            'months_evaluated': len(month_errors),
+            'month_errors': month_errors,
+        })
+
+    # 4. Compute summary
+    evaluated = [r for r in accuracy_results if r['mape'] is not None]
+    mape_values = [r['mape'] for r in evaluated]
+    total_months = sum(r['months_evaluated'] for r in evaluated)
+
+    trend = 'no_data'
+    if len(mape_values) >= 2:
+        # Compare recent vs older (lower index = more recent)
+        recent_avg = np.mean(mape_values[:max(1, len(mape_values) // 2)])
+        older_avg = np.mean(mape_values[max(1, len(mape_values) // 2):])
+        if recent_avg < older_avg - 1:
+            trend = 'improving'
+        elif recent_avg > older_avg + 1:
+            trend = 'declining'
+        else:
+            trend = 'stable'
+    elif len(mape_values) == 1:
+        trend = 'baseline'
+
+    # Accuracy grade
+    current_mape = mape_values[0] if mape_values else None
+    grade = 'N/A'
+    if current_mape is not None:
+        if current_mape <= 10:
+            grade = 'Excellent'
+        elif current_mape <= 20:
+            grade = 'Good'
+        elif current_mape <= 30:
+            grade = 'Fair'
+        else:
+            grade = 'Needs Improvement'
+
+    return {
+        'snapshots': accuracy_results,
+        'summary': {
+            'current_mape': current_mape,
+            'best_mape': round(min(mape_values), 1) if mape_values else None,
+            'worst_mape': round(max(mape_values), 1) if mape_values else None,
+            'avg_mape': round(float(np.mean(mape_values)), 1) if mape_values else None,
+            'snapshots_evaluated': len(evaluated),
+            'total_snapshots': len(accuracy_results),
+            'total_months_compared': total_months,
+            'trend': trend,
+            'grade': grade,
         },
     }
 

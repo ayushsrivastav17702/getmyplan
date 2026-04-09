@@ -473,6 +473,7 @@ const AIDemandPlanning = () => {
   const [conflictMsg, setConflictMsg] = useState("");
   const [dataStatus, setDataStatus] = useState(null);
   const [dataHealth, setDataHealth] = useState(null);
+  const [accuracy, setAccuracy] = useState(null);
 
   /* fetch filter options from TenantDataProvider-powered endpoint */
   useEffect(() => {
@@ -510,6 +511,13 @@ const AIDemandPlanning = () => {
       if (ts) setTopseller(ts.data);
       if (ro) setReorder(ro.data);
       if (sf) setSupply(sf.data);
+    } catch {}
+    // Load accuracy data
+    try {
+      const ac = await axios.get(`${API}/analytics/ai-demand/forecast-accuracy`, {
+        params: category ? { category } : {},
+      });
+      if (ac) setAccuracy(ac.data);
     } catch {}
     // Load latest plan
     try {
@@ -590,6 +598,7 @@ const AIDemandPlanning = () => {
     { id: "demand",      label: "Demand Planning",     icon: BarChart3 },
     { id: "supply",      label: "Supply Feasibility",  icon: Package },
     { id: "replenish",   label: "Replenishment",       icon: Target },
+    { id: "accuracy",    label: "Forecast Accuracy",   icon: Activity },
     { id: "insights",    label: "AI Insights",         icon: Zap },
   ];
 
@@ -1045,7 +1054,243 @@ const AIDemandPlanning = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════
-         TAB 4: AI INSIGHTS (Topsellers + Summary)
+         TAB 4: FORECAST ACCURACY (MAPE Trend)
+         ═══════════════════════════════════════════════════════ */}
+      {tab === "accuracy" && !loading && (
+        <div className="space-y-5">
+          {/* Summary KPIs */}
+          {accuracy?.summary && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KPI
+                title="Current MAPE"
+                value={accuracy.summary.current_mape != null ? `${accuracy.summary.current_mape}%` : "—"}
+                sub={accuracy.summary.grade && accuracy.summary.grade !== "N/A" ? accuracy.summary.grade : "No data yet"}
+                icon={Target}
+                color={accuracy.summary.current_mape != null ? (accuracy.summary.current_mape <= 10 ? "green" : accuracy.summary.current_mape <= 20 ? "blue" : accuracy.summary.current_mape <= 30 ? "amber" : "red") : "blue"}
+              />
+              <KPI
+                title="Best MAPE"
+                value={accuracy.summary.best_mape != null ? `${accuracy.summary.best_mape}%` : "—"}
+                sub="Lowest error recorded"
+                icon={CheckCircle}
+                color="green"
+              />
+              <KPI
+                title="Snapshots"
+                value={accuracy.summary.snapshots_evaluated || 0}
+                sub={`${accuracy.summary.total_months_compared || 0} months compared`}
+                icon={BarChart3}
+                color="purple"
+              />
+              <KPI
+                title="Trend"
+                value={accuracy.summary.trend === "improving" ? "Improving" : accuracy.summary.trend === "declining" ? "Declining" : accuracy.summary.trend === "stable" ? "Stable" : accuracy.summary.trend === "baseline" ? "Baseline" : "No Data"}
+                sub={accuracy.summary.trend === "improving" ? "MAPE decreasing over time" : accuracy.summary.trend === "declining" ? "MAPE increasing — review models" : "Collecting data..."}
+                icon={accuracy.summary.trend === "improving" ? TrendingDown : accuracy.summary.trend === "declining" ? TrendingUp : Activity}
+                color={accuracy.summary.trend === "improving" ? "green" : accuracy.summary.trend === "declining" ? "red" : "blue"}
+              />
+            </div>
+          )}
+
+          {/* MAPE Trend Chart */}
+          {accuracy?.snapshots?.filter(s => s.mape != null).length > 0 && (
+            <Collapsible title="MAPE Trend Over Time" defaultOpen={true} testId="mape-trend-chart">
+              <div className="p-5">
+                <p className="text-xs text-gray-500 mb-3">Lower MAPE = more accurate forecasts. Target: below 15%.</p>
+                {(() => {
+                  const evaluated = accuracy.snapshots.filter(s => s.mape != null).reverse();
+                  return (
+                    <LineChart
+                      labels={evaluated.map(s => {
+                        const d = new Date(s.created_at);
+                        return `${d.getDate()} ${MN[d.getMonth()]}`;
+                      })}
+                      datasets={[
+                        { label: "MAPE %", data: evaluated.map(s => s.mape), color: "#0176D3", fill: true },
+                        { label: "Target (15%)", data: evaluated.map(() => 15), color: "#10B981", fill: false },
+                      ]}
+                      height={300}
+                      formatValue={v => `${v}%`}
+                    />
+                  );
+                })()}
+                {/* Grade explanation */}
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  {[
+                    { range: "0-10%", grade: "Excellent", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                    { range: "10-20%", grade: "Good", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                    { range: "20-30%", grade: "Fair", color: "bg-amber-100 text-amber-700 border-amber-200" },
+                    { range: ">30%", grade: "Needs Work", color: "bg-red-100 text-red-700 border-red-200" },
+                  ].map(g => (
+                    <div key={g.grade} className={`text-center px-2 py-1.5 rounded-lg border text-[10px] font-medium ${g.color}`}>
+                      <div className="font-bold">{g.grade}</div>
+                      <div>MAPE {g.range}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Collapsible>
+          )}
+
+          {/* Latest Snapshot: Forecast vs Actual Table */}
+          {accuracy?.snapshots?.length > 0 && (
+            <Collapsible title="Forecast vs Actual Comparison" defaultOpen={true} testId="forecast-vs-actual-table">
+              <div className="p-4">
+                {/* Snapshot selector */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xs text-gray-500">Snapshot:</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {accuracy.snapshots.slice(0, 8).map((snap, idx) => {
+                      const d = new Date(snap.created_at);
+                      const label = `${d.getDate()} ${MN[d.getMonth()]} ${d.getFullYear()}`;
+                      const isActive = idx === 0;
+                      return (
+                        <span key={idx} data-testid={`snapshot-badge-${idx}`}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                                isActive ? "bg-[#0176D3] text-white border-[#0176D3]" : "bg-gray-50 text-gray-500 border-gray-200"
+                              }`}>
+                          {label} {snap.mape != null ? `(${snap.mape}%)` : "(pending)"}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* The detail table for the latest snapshot */}
+                {(() => {
+                  const snap = accuracy.snapshots[0];
+                  if (!snap.month_errors || snap.month_errors.length === 0) {
+                    return (
+                      <div className="text-center py-8">
+                        <Clock className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No months have elapsed yet for this snapshot.</p>
+                        <p className="text-xs text-gray-400 mt-1">Accuracy will be calculated as actual sales data arrives for forecasted months.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="overflow-x-auto">
+                      <table data-testid="accuracy-detail-table" className="min-w-full divide-y divide-gray-100 text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Predicted</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actual</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Error %</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Direction</th>
+                            <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Rating</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {snap.month_errors.map((err, i) => {
+                            const rating = err.error_pct <= 5 ? "Spot On" : err.error_pct <= 10 ? "Accurate" : err.error_pct <= 20 ? "Acceptable" : err.error_pct <= 30 ? "Fair" : "Off";
+                            const ratingColor = err.error_pct <= 5 ? "bg-emerald-100 text-emerald-700" : err.error_pct <= 10 ? "bg-blue-100 text-blue-700" : err.error_pct <= 20 ? "bg-sky-100 text-sky-700" : err.error_pct <= 30 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700";
+                            return (
+                              <tr key={i} className={err.error_pct > 30 ? "bg-red-50/40" : ""}>
+                                <td className="px-4 py-2 font-medium">{err.month_key}</td>
+                                <td className="px-4 py-2 text-right">{fmt(err.predicted)}</td>
+                                <td className="px-4 py-2 text-right font-medium">{fmt(err.actual)}</td>
+                                <td className="px-4 py-2 text-right">
+                                  <span className={`font-bold ${err.error_pct <= 10 ? "text-emerald-600" : err.error_pct <= 20 ? "text-blue-600" : err.error_pct <= 30 ? "text-amber-600" : "text-red-600"}`}>
+                                    {err.error_pct}%
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <span className={`text-[10px] font-medium ${err.direction === "over" ? "text-amber-600" : "text-blue-600"}`}>
+                                    {err.direction === "over" ? "Over-forecast" : "Under-forecast"}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${ratingColor}`}>{rating}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-gray-50 font-bold">
+                            <td className="px-4 py-2">MAPE</td>
+                            <td colSpan={2}></td>
+                            <td className="px-4 py-2 text-right text-[#0176D3]">{snap.mape != null ? `${snap.mape}%` : "—"}</td>
+                            <td colSpan={2} className="px-4 py-2 text-center text-xs text-gray-500">
+                              {snap.months_evaluated} month{snap.months_evaluated !== 1 ? "s" : ""} evaluated
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  );
+                })()}
+
+                {/* Snapshot metadata */}
+                <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                  <div className="px-3 py-1.5 bg-blue-50 rounded-lg">Models: <strong>{accuracy.snapshots[0]?.models_used?.join(", ") || "—"}</strong></div>
+                  <div className="px-3 py-1.5 bg-purple-50 rounded-lg">Confidence: <strong>{accuracy.snapshots[0]?.confidence_score || 0}%</strong></div>
+                  <div className="px-3 py-1.5 bg-gray-50 rounded-lg">Horizon: <strong>{accuracy.snapshots[0]?.forecast_horizon || 12} months</strong></div>
+                </div>
+              </div>
+            </Collapsible>
+          )}
+
+          {/* All Snapshots History */}
+          {accuracy?.snapshots?.length > 1 && (
+            <Collapsible title="Snapshot History" defaultOpen={false} testId="snapshot-history-section">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-100 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">MAPE</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Months</th>
+                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Models</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {accuracy.snapshots.map((snap, i) => {
+                      const d = new Date(snap.created_at);
+                      return (
+                        <tr key={i} className={i === 0 ? "bg-blue-50/30" : ""}>
+                          <td className="px-4 py-2 text-xs">{d.toLocaleDateString()} {d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
+                          <td className="px-4 py-2 text-xs">{snap.category}</td>
+                          <td className="px-4 py-2 text-right">
+                            {snap.mape != null
+                              ? <span className={`font-bold ${snap.mape <= 10 ? "text-emerald-600" : snap.mape <= 20 ? "text-blue-600" : snap.mape <= 30 ? "text-amber-600" : "text-red-600"}`}>{snap.mape}%</span>
+                              : <span className="text-gray-400">Pending</span>}
+                          </td>
+                          <td className="px-4 py-2 text-right text-xs">{snap.months_evaluated}</td>
+                          <td className="px-4 py-2 text-center"><ConfidenceMeter score={snap.confidence_score} size="sm" /></td>
+                          <td className="px-4 py-2 text-xs text-gray-500">{snap.models_used?.join(", ")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Collapsible>
+          )}
+
+          {/* No data state */}
+          {(!accuracy || !accuracy.snapshots || accuracy.snapshots.length === 0) && (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <Activity className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-600">No Forecast Accuracy Data Yet</p>
+              <p className="text-xs text-gray-400 mt-1.5 max-w-md mx-auto">
+                Generate a forecast from the "Demand Planning" tab. Once actual sales data arrives for forecasted months,
+                MAPE accuracy will be automatically calculated here.
+              </p>
+              <button data-testid="go-to-demand-tab" onClick={() => setTab("demand")}
+                      className="mt-4 px-4 py-2 bg-[#0B2545] text-white rounded-lg text-xs font-medium hover:bg-[#13315C] transition-colors inline-flex items-center gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5" /> Go to Demand Planning
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+         TAB 5: AI INSIGHTS (Topsellers + Summary)
          ═══════════════════════════════════════════════════════ */}
       {tab === "insights" && !loading && (
         <div className="space-y-5">
