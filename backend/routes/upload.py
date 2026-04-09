@@ -2,7 +2,7 @@
 Data Upload API routes — drop-in replacement with 75-error validation.
 Uses get_db() for tenant-aware MongoDB access.
 """
-from fastapi import APIRouter, UploadFile, File, Request, BackgroundTasks, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Request, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Optional
 import uuid
@@ -11,7 +11,7 @@ import io
 import logging
 from datetime import datetime, timedelta, timezone
 
-from services.upload_service import UniversalUploadService
+from services.upload_service import UniversalUploadService, compute_file_hash
 from multi_tenant.tenant_db import tenant_context
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,9 @@ router = APIRouter(tags=["upload"])
 
 UPLOAD_DIR = "/tmp/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+MAX_FILE_SIZE_MB = 50
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 
 def _get_db():
@@ -100,7 +103,7 @@ async def upload_warehouse_master(
 
 
 # ============================================================
-# NEW ENDPOINTS
+# STATUS & HISTORY ENDPOINTS
 # ============================================================
 
 @router.get("/history")
@@ -212,7 +215,7 @@ async def download_template(upload_type: str):
     from openpyxl.worksheet.datavalidation import DataValidation
 
     db = _get_db()
-    tenant_id = _get_tenant_id()
+    _get_tenant_id()  # ensure tenant context
     wb = openpyxl.Workbook()
     ws = wb.active
 
@@ -291,33 +294,78 @@ async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: b
 
     try:
         content = await file.read()
+
+        # E049: File size check
+        file_size_mb = len(content) / (1024 * 1024)
+        if len(content) > MAX_FILE_SIZE_BYTES:
+            return JSONResponse(content={
+                "success": False,
+                "errors": [{
+                    "code": "E049",
+                    "category": "file_structure",
+                    "message": "File too large",
+                    "user_message": f"Your file is {file_size_mb:.1f}MB. Maximum is {MAX_FILE_SIZE_MB}MB.",
+                    "severity": "blocking",
+                }],
+                "total_rows": 0, "valid_rows": 0,
+                "corrections": [], "warnings": [], "preview": [],
+            })
+
         with open(file_path, "wb") as f:
             f.write(content)
 
+        # E054: Duplicate file detection via hash
+        file_hash = compute_file_hash(file_path)
+        existing_upload = await db.upload_history.find_one(
+            {"tenant_id": tenant_id, "file_hash": file_hash, "status": "completed"},
+            {"_id": 0},
+        )
+        duplicate_warning = None
+        if existing_upload:
+            prev_date = existing_upload.get("uploaded_at")
+            date_str = prev_date.strftime("%Y-%m-%d") if hasattr(prev_date, "strftime") else str(prev_date)[:10]
+            time_str = prev_date.strftime("%I:%M %p") if hasattr(prev_date, "strftime") else ""
+            duplicate_warning = {
+                "code": "E054",
+                "category": "duplicate",
+                "message": "Same file uploaded twice",
+                "user_message": f"This file was already uploaded on {date_str} at {time_str}.",
+                "severity": "warning",
+            }
+
         # Fetch master data for cross-validation
-        master_skus = await _get_master_skus(db)
-        master_stores = await _get_master_stores(db)
+        master_skus = await _get_master_skus(db, tenant_id)
+        master_stores = await _get_master_stores(db, tenant_id)
+        master_warehouses = await _get_master_warehouses(db, tenant_id)
 
         service = UniversalUploadService(
             upload_type=upload_type,
             master_skus=master_skus,
             master_stores=master_stores,
+            master_warehouses=master_warehouses,
+            file_hash=file_hash,
         )
 
         result = service.process_file(file_path, file.filename)
         records = result.pop("data", None)
+
+        # Add duplicate warning if found
+        if duplicate_warning:
+            result.setdefault("warnings", []).insert(0, duplicate_warning)
 
         # If validation passed, save to database
         if result["success"] and records:
             saved = await _save_to_database(db, tenant_id, user_email, upload_type, records, replace_existing)
             result["saved"] = saved
 
-        # Record history
+        # Record history (include file hash for duplicate detection)
         await db.upload_history.insert_one({
             "tenant_id": tenant_id,
             "upload_type": upload_type,
             "upload_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "file_name": file.filename,
+            "file_hash": file_hash,
+            "file_size_bytes": len(content),
             "rows_uploaded": result.get("total_rows", 0),
             "rows_valid": result.get("valid_rows", 0),
             "rows_with_warnings": len(result.get("warnings", [])),
@@ -341,9 +389,19 @@ async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: b
             os.remove(file_path)
 
 
-async def _get_master_skus(db):
-    """Get distinct SKUs from uploaded_files or sku_master."""
+# ============================================================
+# MASTER DATA FETCHERS
+# ============================================================
+
+async def _get_master_skus(db, tenant_id):
+    """Get distinct SKUs from v2 sku_master collection OR v1 uploaded_files."""
     try:
+        # Try v2 collection first
+        skus = await db.sku_master.distinct("sku", {"tenant_id": tenant_id})
+        if skus:
+            return [str(s) for s in skus if s]
+
+        # Fall back to v1 uploaded_files
         styles = await db.uploaded_files.find_one({"file_type": "sku_master"})
         if styles and "data" in styles:
             return list({str(r.get("sku", "")) for r in styles["data"] if r.get("sku")})
@@ -355,12 +413,35 @@ async def _get_master_skus(db):
     return []
 
 
-async def _get_master_stores(db):
-    """Get distinct stores from uploaded_files or store_master."""
+async def _get_master_stores(db, tenant_id):
+    """Get distinct stores from v2 store_master collection OR v1 uploaded_files."""
     try:
-        stores = await db.uploaded_files.find_one({"file_type": "store_master"})
-        if stores and "data" in stores:
-            return list({str(r.get("store_code", "")) for r in stores["data"] if r.get("store_code")})
+        # Try v2 collection first
+        stores = await db.store_master.distinct("store_code", {"tenant_id": tenant_id})
+        if stores:
+            return [str(s) for s in stores if s]
+
+        # Fall back to v1 uploaded_files
+        doc = await db.uploaded_files.find_one({"file_type": "store_master"})
+        if doc and "data" in doc:
+            return list({str(r.get("store_code", "")) for r in doc["data"] if r.get("store_code")})
+    except Exception:
+        pass
+    return []
+
+
+async def _get_master_warehouses(db, tenant_id):
+    """Get distinct warehouses from v2 warehouse_master collection OR v1 uploaded_files."""
+    try:
+        # Try v2 collection first
+        warehouses = await db.warehouse_master.distinct("warehouse", {"tenant_id": tenant_id})
+        if warehouses:
+            return [str(w) for w in warehouses if w]
+
+        # Fall back to v1 uploaded_files
+        doc = await db.uploaded_files.find_one({"file_type": "warehouse_master"})
+        if doc and "data" in doc:
+            return list({str(r.get("warehouse", "")) for r in doc["data"] if r.get("warehouse")})
     except Exception:
         pass
     return []
@@ -379,7 +460,6 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
 
     collection_name = collection_map.get(upload_type)
     if not collection_name:
-        # Fall back to uploaded_files (v1 pattern)
         return False
 
     collection = db[collection_name]
@@ -391,7 +471,6 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
         record["uploaded_by"] = user_email
 
     if replace_existing:
-        # Clear existing data based on upload type
         if upload_type == "daily_sales":
             days = set()
             for r in records:
