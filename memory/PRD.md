@@ -70,20 +70,21 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Testing: 48/48 PASS (Iteration 54)**
 
 ### Phase 53 — Demand Planning Audit + P0 Fixes (Apr 2026)
-- Generated comprehensive audit report: `/app/memory/DEMAND_PLANNING_AUDIT_V2.md`
-- **P0.1 V2 Data Bridge**: Updated `get_cached_data()` in server.py to check V2 collections first, fall back to V1 `uploaded_files`. Includes field compatibility mapping (V2 `closing_stock`→`quantity`, `sku`→`ean`).
-- **P0.2 Seasonal Decomposition Fix**: Fixed numpy.ndarray attribute error in `ml_forecast_engine.py` — converts input to pd.Series and uses np.asarray() on decomposition results. All 3 ML models now active in ensemble.
-- **P0.3 Database Indexes**: Added V2 collection indexes on startup (daily_sales, store_inventory, sku_master, etc.)
-- **Data Health Dashboard**: New `GET /api/analytics/ai-demand/data-health` endpoint + collapsible DataHealthDashboard component on AI Demand page. Shows progress to 180-day ML minimum, per-data-type status, estimated ML activation date, and "Upload Historical Data" CTA.
-- **25-Month Historical Data Seed**: Generated 757 days (Apr 2024 → Apr 2026) of realistic data: 30,961 daily sales rows, 37,850 store inventory rows, 15,140 warehouse inventory rows. SKUs: TSHIRT-BLK-M/L, HOODIE-GRY-M/L, CAP-BLK-ONE, SOCKS-WHT-3PK, JOGGER-BLK-M, SNEAKER-WHT-9, BACKPACK-BLK, WATER-BOTTLE-500. Stores: MAIN-01, SOUTH-02, WEST-03, ONLINE-01, POPUP-01. Data includes weekly seasonality, 5% monthly growth, festive peaks (Oct-Dec).
-- **ML Forecast Activated**: All 3 models (Holt-Winters, Random Forest, Seasonal Decomposition) now running on real data. Confidence 92.7%, trend "accelerating". Data Health badge shows "REAL ML FORECAST".
-- **Testing: 31/31 PASS (Iteration 55) + 35/35 PASS (Iteration 56) + 39/39 PASS (Iteration 57) + 43/43 PASS (Iteration 58)**
+- V2 Data Bridge, Seasonal Decomposition Fix, Data Health Dashboard, 25-month seed data
+- **Testing: 43/43 PASS (Iteration 58)**
 
 ### Phase 54 — P1 Enterprise Features (Apr 2026)
-- **P1.1 EOQ**: Replaced 1.5× ROP heuristic with proper EOQ formula `sqrt(2*D*S/H)`. Added `ordering_cost` (₹500 default) and `holding_cost_pct` (25% default) query params. Recommended order rounds up to nearest EOQ multiple.
-- **P1.2 Lead Times**: Added `lead_time_days` field to SKU master (TSHIRT=7d, HOODIE=14d, SNEAKER=21d, SOCKS=3d, etc.). Reorder endpoint reads per-SKU lead time with 14d fallback. Data Health shows 10/10 SKUs with lead times.
-- **P1.3 SKU Forecast**: New `GET /api/analytics/ai-demand/forecast/sku/{sku}` endpoint with full ML pipeline. Falls back to category-share proportioning if <24 months. Frontend SkuForecastPanel with search, chips, forecast chart, confidence meter, and reorder recommendation card showing EOQ/LT/SS/ROP/annual demand.
-- **Testing: 43/43 PASS (Iteration 58)** — Backend 26/26, Frontend 17/17
+- EOQ, Per-SKU Lead Times, SKU-level Forecasting
+- **Testing: 43/43 PASS (Iteration 58)**
+
+### Phase 55 — Technical Audit Documents (Apr 2026)
+- `CORE_ALGORITHMS_AUDIT.md` — Parts 4-9: Core Algorithms, Backend Architecture, Frontend, Scalability, Gaps
+- `DATA_INFRASTRUCTURE_AUDIT.md` — Parts 1-3: Data Upload Infrastructure, Master Data Management, Transactional Data
+
+## Audit Documents
+- `/app/memory/CORE_ALGORITHMS_AUDIT.md` — Parts 4-9 (204 lines)
+- `/app/memory/DATA_INFRASTRUCTURE_AUDIT.md` — Parts 1-3 (168 lines)
+- `/app/memory/DEMAND_PLANNING_AUDIT_V2.md` — Original demand planning audit
 
 ## Route Map
 ```
@@ -124,41 +125,12 @@ AUTHENTICATED (PlanGuard-wrapped):
 - `/app/frontend/src/context/AuthContext.js` — JWT/Tenant state
 - `/app/frontend/src/App.js` — Routing with PlanGuard
 
-## API Endpoints (Upload V2)
-```
-POST /api/upload/v2/daily-sales          — Upload daily sales
-POST /api/upload/v2/store-inventory      — Upload store inventory
-POST /api/upload/v2/warehouse-inventory  — Upload warehouse inventory
-POST /api/upload/v2/sku-master           — Upload SKU master
-POST /api/upload/v2/store-master         — Upload store master
-POST /api/upload/v2/warehouse-master     — Upload warehouse master
-POST /api/upload/v2/{type}/validate      — Validate without saving
-GET  /api/upload/v2/daily-status         — Today's upload status
-GET  /api/upload/v2/master-status        — Master data counts
-GET  /api/upload/v2/history              — Grouped upload history
-GET  /api/upload/v2/history/days         — Per-day upload status
-GET  /api/upload/v2/template/{type}      — Download Excel template
-```
-
-## API Endpoints (AI Demand)
-```
-GET  /api/analytics/ai-demand/options           — Filter values + data status
-GET  /api/analytics/ai-demand/forecast          — ML ensemble forecast
-GET  /api/analytics/ai-demand/stockout-risk     — SKU×Store stockout prediction
-GET  /api/analytics/ai-demand/topseller-prediction — X-Factor classification
-GET  /api/analytics/ai-demand/reorder-optimisation — Safety stock + ROP
-GET  /api/analytics/ai-demand/supply-feasibility   — 12-month DOH coverage
-POST /api/analytics/ai-demand/generate-plan     — Generate blended demand plan
-GET  /api/analytics/ai-demand/plans             — List saved plans
-GET  /api/analytics/ai-demand/plans/{id}        — Get specific plan
-PUT  /api/analytics/ai-demand/plans/{id}        — Update plan (optimistic locking)
-```
-
 ## Prioritized Backlog
 
 ### P1 — Next
 - Forecast accuracy tracking over time (MAPE trend)
 - Holiday/promotional calendar integration
+- Address gaps identified in audit (COGS/margin, PO tracking, planogram management)
 
 ### P2
 - USER-18: MFA (Multi-factor authentication)
@@ -166,7 +138,7 @@ PUT  /api/analytics/ai-demand/plans/{id}        — Update plan (optimistic lock
 - TENANT-31: Invoice generation
 - User Funnel Analytics Dashboard
 - Buy Plan integration with demand forecast
-- Holiday/promotional calendar
+- Custom validation rules per tenant (wire Data Quality Rules into upload pipeline)
 
 ### P3
 - Auto-scheduled SFTP uploads for Data Upload V2
@@ -174,3 +146,6 @@ PUT  /api/analytics/ai-demand/plans/{id}        — Update plan (optimistic lock
 - Automated daily/weekly forecast regeneration
 - Purchase order creation from reorder recommendations
 - Warehouse-level demand allocation
+- Chunked file uploads for >50MB files
+- Async upload processing with job queues
+- Pre-computed aggregation tables for analytics performance
