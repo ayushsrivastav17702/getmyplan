@@ -1,0 +1,166 @@
+{
+  "summary": "Iteration 58: P1 Features Testing - EOQ Calculation, Per-SKU Lead Times, SKU-Level Forecasting. All 26 backend tests PASSED. Frontend verified: Data Health shows 'REAL ML FORECAST' badge, Replenishment table shows LT and EOQ columns, SKU Forecast Panel with search and chips, Reorder Recommendation with EOQ/Lead Time/Safety Stock/ROP/Annual Demand/Status.",
+
+  "test_case_matrix": {
+    "P1_1_EOQ_CALCULATION": {
+      "TEST_01_reorder_returns_eoq_field": {"status": "PASS", "notes": "Each item has 'eoq' field with positive numeric value"},
+      "TEST_02_accepts_ordering_cost_param": {"status": "PASS", "notes": "ordering_cost=750 accepted, shown in summary"},
+      "TEST_03_accepts_holding_cost_pct_param": {"status": "PASS", "notes": "holding_cost_pct=0.30 accepted, shown in summary"},
+      "TEST_04_eoq_formula_correctness": {"status": "PASS", "notes": "EOQ = sqrt(2*D*S/H) verified for multiple SKUs"},
+      "TEST_05_recommended_order_eoq_multiple": {"status": "PASS", "notes": "recommended_order is rounded up to nearest EOQ multiple"},
+      "TEST_06_summary_includes_eoq_params": {"status": "PASS", "notes": "Summary shows ordering_cost=500, holding_cost_pct=0.25"},
+      "TEST_07_items_show_annual_demand_holding_cost": {"status": "PASS", "notes": "Each item has annual_demand and holding_cost fields"}
+    },
+    "P1_2_LEAD_TIMES": {
+      "TEST_08_sku_master_has_lead_time_days": {"status": "PASS", "notes": "10/10 SKUs have lead_time_days, status='complete'"},
+      "TEST_09_reorder_uses_per_sku_lead_time": {"status": "PASS", "notes": "Different SKUs have different lead times from SKU master"},
+      "TEST_10_specific_sku_lead_times": {"status": "PASS", "notes": "TSHIRT=7d, HOODIE=14d, SNEAKER=21d, SOCKS=3d verified"},
+      "TEST_11_reorder_items_show_lead_time_field": {"status": "PASS", "notes": "All items have 'lead_time' field with positive value"},
+      "TEST_12_data_health_lead_times_complete": {"status": "PASS", "notes": "lead_times.status='complete', 10/10 SKUs, 100%"}
+    },
+    "P1_3_SKU_FORECAST": {
+      "TEST_13_sku_forecast_endpoint_exists": {"status": "PASS", "notes": "GET /api/analytics/ai-demand/forecast/sku/{sku} returns 200"},
+      "TEST_14_response_structure": {"status": "PASS", "notes": "Response has sku, sku_meta, forecast, confidence_intervals, models_used, confidence_score, reorder"},
+      "TEST_15_all_3_models_active": {"status": "PASS", "notes": "Holt-Winters, Random Forest, Seasonal Decomposition all active"},
+      "TEST_16_reorder_includes_eoq_lead_time": {"status": "PASS", "notes": "reorder has eoq and lead_time_days fields"},
+      "TEST_17_all_10_skus_valid_forecast": {"status": "PASS", "notes": "All 10 SKUs return valid forecast data"},
+      "TEST_18_options_returns_skus_list": {"status": "PASS", "notes": "Options endpoint returns 'skus' list with all 10 SKUs"}
+    },
+    "REGRESSION_TESTS": {
+      "TEST_19_forecast_endpoint": {"status": "PASS", "notes": "data_source='uploaded'"},
+      "TEST_20_stockout_risk_endpoint": {"status": "PASS", "notes": "data_source='uploaded'"},
+      "TEST_21_topseller_prediction_endpoint": {"status": "PASS", "notes": "data_source='uploaded'"},
+      "TEST_22_supply_feasibility_endpoint": {"status": "PASS", "notes": "data_source='uploaded'"},
+      "TEST_23_options_endpoint": {"status": "PASS", "notes": "Returns categories, subcategories, skus"},
+      "TEST_24_plans_endpoint": {"status": "PASS", "notes": "Returns plans list"},
+      "TEST_25_data_health_endpoint": {"status": "PASS", "notes": "using_demo_data=false, 757 days"},
+      "TEST_26_real_ml_forecast_badge": {"status": "PASS", "notes": "progress_pct=100%, days_available>=180"}
+    },
+    "FRONTEND_TESTS": {
+      "FE_01_data_health_dashboard": {"status": "PASS", "notes": "Data Health Dashboard found with data-testid"},
+      "FE_02_real_ml_forecast_badge": {"status": "PASS", "notes": "Badge shows 'Real ML Forecast'"},
+      "FE_03_replenishment_tab": {"status": "PASS", "notes": "Replenishment tab clickable"},
+      "FE_04_reorder_table_lt_column": {"status": "PASS", "notes": "LT column found in Optimal Reorder Points table"},
+      "FE_05_reorder_table_eoq_column": {"status": "PASS", "notes": "EOQ column found in Optimal Reorder Points table"},
+      "FE_06_sku_forecast_panel": {"status": "PASS", "notes": "SKU Forecast Panel found with data-testid"},
+      "FE_07_sku_search_input": {"status": "PASS", "notes": "Search SKU code input found"},
+      "FE_08_sku_chips": {"status": "PASS", "notes": "6 SKU chips displayed"},
+      "FE_09_sku_chip_click": {"status": "PASS", "notes": "Clicking chip loads SKU forecast"},
+      "FE_10_sku_reorder_info": {"status": "PASS", "notes": "Reorder Recommendation section found"},
+      "FE_11_sku_reorder_eoq": {"status": "PASS", "notes": "EOQ shown in reorder info (68 for SNEAKER)"},
+      "FE_12_sku_reorder_lead_time": {"status": "PASS", "notes": "Lead Time shown (21 days for SNEAKER)"},
+      "FE_13_sku_reorder_safety_stock": {"status": "PASS", "notes": "Safety Stock shown (51.7 units)"},
+      "FE_14_sku_reorder_rop": {"status": "PASS", "notes": "Reorder Point shown (386.9 units)"},
+      "FE_15_sku_reorder_annual_demand": {"status": "PASS", "notes": "Annual Demand shown (5,826 units/yr)"},
+      "FE_16_sku_reorder_status": {"status": "PASS", "notes": "Status shown (REORDER)"},
+      "FE_17_all_3_models_badges": {"status": "PASS", "notes": "Holt-Winters, Random Forest, Seasonal Decomposition badges shown"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 26,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 17,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 43,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SKU Forecast Panel", "issues": ["Only 6 SKU chips shown initially (BACKPACK-BLK, CAP-BLK-ONE, HOODIE-GRY-L, HOODIE-GRY-M, JOGGER-BLK-M, SNEAKER-WHT-9). TSHIRT-BLK-M, TSHIRT-BLK-L, SOCKS-WHT-3PK, WATER-BOTTLE-500 not visible in quick chips - user needs to use search. This is by design (slice 0-6)."]}
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_ai_demand_p1_iter58.py",
+    "/app/test_reports/pytest/pytest_results_iter58.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "P1.1 EOQ: Correctly implements EOQ formula sqrt(2*D*S/H) with ordering_cost and holding_cost_pct query params",
+    "P1.1 EOQ: recommended_order correctly rounds up to nearest EOQ multiple instead of 1.5×ROP heuristic",
+    "P1.2 Lead Times: Per-SKU lead_time_days correctly read from sku_ean_master and used in reorder calculations",
+    "P1.2 Lead Times: Data Health correctly shows lead_times status='complete' with 10/10 SKUs",
+    "P1.3 SKU Forecast: New endpoint /api/analytics/ai-demand/forecast/sku/{sku} works correctly",
+    "P1.3 SKU Forecast: All 3 ML models active for SKUs with 25 months of data",
+    "P1.3 SKU Forecast: Reorder info includes EOQ, lead_time_days, safety_stock, reorder_point, annual_demand, status",
+    "P1.3 SKU Forecast: Frontend SkuForecastPanel shows search input, SKU chips, forecast chart, and reorder recommendation"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_ai_demand_p1_iter58.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 26/26 tests passed",
+    "frontend": "100% - 17/17 UI tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "p1_features_verification": {
+    "P1_1_EOQ": {
+      "eoq_field_in_items": true,
+      "ordering_cost_param": true,
+      "holding_cost_pct_param": true,
+      "eoq_formula_correct": true,
+      "recommended_order_eoq_multiple": true,
+      "summary_includes_params": true,
+      "items_show_annual_demand_holding_cost": true
+    },
+    "P1_2_LEAD_TIMES": {
+      "sku_master_has_lead_time_days": true,
+      "per_sku_lead_times_used": true,
+      "specific_lead_times_verified": {
+        "TSHIRT-BLK-M": "7d",
+        "HOODIE-GRY-M": "14d",
+        "SNEAKER-WHT-9": "21d",
+        "SOCKS-WHT-3PK": "3d",
+        "CAP-BLK-ONE": "5d",
+        "JOGGER-BLK-M": "10d",
+        "BACKPACK-BLK": "12d",
+        "WATER-BOTTLE-500": "4d"
+      },
+      "data_health_lead_times_complete": true
+    },
+    "P1_3_SKU_FORECAST": {
+      "endpoint_exists": true,
+      "response_structure_correct": true,
+      "all_3_models_active": true,
+      "reorder_includes_eoq_lead_time": true,
+      "all_10_skus_valid": true,
+      "options_returns_skus": true,
+      "frontend_panel_works": true,
+      "frontend_reorder_recommendation": {
+        "eoq": true,
+        "lead_time": true,
+        "safety_stock": true,
+        "reorder_point": true,
+        "annual_demand": true,
+        "status": true
+      }
+    }
+  },
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "P1 features fully verified: (1) EOQ calculation with ordering_cost and holding_cost_pct params, (2) Per-SKU lead times from SKU master (10/10 SKUs), (3) SKU-level forecasting endpoint with full ML pipeline. All 3 ML models active (Holt-Winters, Random Forest, Seasonal Decomposition). Frontend shows LT and EOQ columns in Replenishment table, SKU Forecast Panel with search/chips/chart/reorder recommendation. Data Health shows 'REAL ML FORECAST' badge with 757 days available.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

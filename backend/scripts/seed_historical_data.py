@@ -22,16 +22,16 @@ END_DATE = datetime(2026, 4, 28)  # ~25 months
 NUM_DAYS = (END_DATE - START_DATE).days  # ~758
 
 SKUS = [
-    {"ean": "TSHIRT-BLK-M",     "style": "TSHIRT-BLK",    "size": "M",   "mrp": 999},
-    {"ean": "TSHIRT-BLK-L",     "style": "TSHIRT-BLK",    "size": "L",   "mrp": 999},
-    {"ean": "HOODIE-GRY-M",     "style": "HOODIE-GRY",    "size": "M",   "mrp": 2499},
-    {"ean": "HOODIE-GRY-L",     "style": "HOODIE-GRY",    "size": "L",   "mrp": 2499},
-    {"ean": "CAP-BLK-ONE",      "style": "CAP-BLK",       "size": "ONE", "mrp": 599},
-    {"ean": "SOCKS-WHT-3PK",    "style": "SOCKS-WHT",     "size": "3PK", "mrp": 399},
-    {"ean": "JOGGER-BLK-M",     "style": "JOGGER-BLK",    "size": "M",   "mrp": 1999},
-    {"ean": "SNEAKER-WHT-9",    "style": "SNEAKER-WHT",   "size": "9",   "mrp": 4999},
-    {"ean": "BACKPACK-BLK",     "style": "BACKPACK",       "size": "ONE", "mrp": 2999},
-    {"ean": "WATER-BOTTLE-500", "style": "WATER-BOTTLE",   "size": "500", "mrp": 799},
+    {"ean": "TSHIRT-BLK-M",     "style": "TSHIRT-BLK",    "size": "M",   "mrp": 999,  "lead_time_days": 7},
+    {"ean": "TSHIRT-BLK-L",     "style": "TSHIRT-BLK",    "size": "L",   "mrp": 999,  "lead_time_days": 7},
+    {"ean": "HOODIE-GRY-M",     "style": "HOODIE-GRY",    "size": "M",   "mrp": 2499, "lead_time_days": 14},
+    {"ean": "HOODIE-GRY-L",     "style": "HOODIE-GRY",    "size": "L",   "mrp": 2499, "lead_time_days": 14},
+    {"ean": "CAP-BLK-ONE",      "style": "CAP-BLK",       "size": "ONE", "mrp": 599,  "lead_time_days": 5},
+    {"ean": "SOCKS-WHT-3PK",    "style": "SOCKS-WHT",     "size": "3PK", "mrp": 399,  "lead_time_days": 3},
+    {"ean": "JOGGER-BLK-M",     "style": "JOGGER-BLK",    "size": "M",   "mrp": 1999, "lead_time_days": 10},
+    {"ean": "SNEAKER-WHT-9",    "style": "SNEAKER-WHT",   "size": "9",   "mrp": 4999, "lead_time_days": 21},
+    {"ean": "BACKPACK-BLK",     "style": "BACKPACK",       "size": "ONE", "mrp": 2999, "lead_time_days": 12},
+    {"ean": "WATER-BOTTLE-500", "style": "WATER-BOTTLE",   "size": "500", "mrp": 799,  "lead_time_days": 4},
 ]
 
 STYLES = [

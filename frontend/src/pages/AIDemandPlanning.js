@@ -6,7 +6,7 @@ import {
   RefreshCw, AlertTriangle, TrendingUp, TrendingDown,
   Package, Zap, Target, BarChart3, AlertCircle, CheckCircle, Clock,
   Loader2, Save, FileText, ChevronDown, ChevronUp, Edit3, Lock,
-  Database, Upload, Activity, Calendar
+  Database, Upload, Activity, Calendar, Search
 } from "lucide-react";
 import { LineChart, BarChart } from "../components/Charts";
 
@@ -287,6 +287,158 @@ const DataHealthDashboard = ({ health, onNavigateUpload }) => {
               </button>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── SKU Forecast Panel ──────────────────────────────────────── */
+const SkuForecastPanel = ({ API, fmt }) => {
+  const [skuSearch, setSkuSearch] = useState("");
+  const [selectedSku, setSelectedSku] = useState(null);
+  const [skuData, setSkuData] = useState(null);
+  const [skuLoading, setSkuLoading] = useState(false);
+  const [skuList, setSkuList] = useState([]);
+
+  useEffect(() => {
+    axios.get(`${API}/analytics/ai-demand/options`).then(r => {
+      setSkuList(r.data?.skus || []);
+    }).catch(() => {});
+  }, [API]);
+
+  const fetchSkuForecast = useCallback(async (sku) => {
+    setSkuLoading(true);
+    setSelectedSku(sku);
+    try {
+      const r = await axios.get(`${API}/analytics/ai-demand/forecast/sku/${encodeURIComponent(sku)}`);
+      setSkuData(r.data);
+    } catch { setSkuData(null); }
+    setSkuLoading(false);
+  }, [API]);
+
+  const filtered = skuSearch.length >= 1
+    ? skuList.filter(s => s.toLowerCase().includes(skuSearch.toLowerCase())).slice(0, 8)
+    : [];
+
+  return (
+    <div data-testid="sku-forecast-panel" className="space-y-4">
+      {/* SKU Search */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <Search className="h-4 w-4 text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-800">SKU-Level Forecast</h3>
+        </div>
+        <div className="relative">
+          <input data-testid="sku-search-input" type="text" placeholder="Search SKU code..."
+                 value={skuSearch} onChange={e => setSkuSearch(e.target.value)}
+                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0176D3] focus:ring-1 focus:ring-[#0176D3]" />
+          {filtered.length > 0 && (
+            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {filtered.map(s => (
+                <button key={s} data-testid={`sku-option-${s}`}
+                        onClick={() => { setSkuSearch(s); fetchSkuForecast(s); }}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 transition-colors ${s === selectedSku ? "bg-blue-50 font-medium text-[#0176D3]" : ""}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Quick SKU chips */}
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {skuList.slice(0, 6).map(s => (
+            <button key={s} data-testid={`sku-chip-${s}`}
+                    onClick={() => { setSkuSearch(s); fetchSkuForecast(s); }}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors ${
+                      s === selectedSku ? "bg-[#0176D3] text-white border-[#0176D3]" : "bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0176D3] hover:text-[#0176D3]"
+                    }`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {skuLoading && <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-[#0176D3]" /></div>}
+
+      {/* SKU Forecast Result */}
+      {skuData && !skuLoading && (
+        <div className="space-y-4">
+          {/* SKU Meta + Confidence */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 data-testid="sku-forecast-title" className="text-base font-bold text-gray-900">{skuData.sku}</h3>
+                  {skuData.sku_meta?.category && <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{skuData.sku_meta.category}</span>}
+                  {skuData.sku_meta?.subcategory && <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{skuData.sku_meta.subcategory}</span>}
+                </div>
+                <div className="flex gap-3 mt-1 text-xs text-gray-500">
+                  {skuData.sku_meta?.mrp > 0 && <span>MRP: ₹{skuData.sku_meta.mrp}</span>}
+                  {skuData.sku_meta?.lead_time_days > 0 && <span>Lead Time: {skuData.sku_meta.lead_time_days} days</span>}
+                  {skuData.fallback_method && <span className="text-amber-600">Method: {skuData.fallback_method}</span>}
+                </div>
+              </div>
+              {skuData.confidence_score > 0 && <ConfidenceMeter score={skuData.confidence_score} />}
+            </div>
+
+            {skuData.insufficient_data && (
+              <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>{skuData.message}</span>
+              </div>
+            )}
+
+            {skuData.models_used?.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {skuData.models_used.map(m => (
+                  <span key={m} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-medium">{m}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* SKU Forecast Chart */}
+          {skuData.forecast?.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-3">Revenue Forecast — {skuData.sku}</p>
+              <LineChart
+                labels={skuData.months?.map(m => m.label) || []}
+                datasets={[
+                  { label: "Forecast", data: skuData.forecast, color: "#0176D3", fill: true },
+                  ...(skuData.confidence_intervals?.upper ? [{ label: "Upper", data: skuData.confidence_intervals.upper, color: "#93C5FD", fill: false }] : []),
+                  ...(skuData.confidence_intervals?.lower ? [{ label: "Lower", data: skuData.confidence_intervals.lower, color: "#BFDBFE", fill: false }] : []),
+                ]}
+                height={280}
+                formatValue={fmt}
+              />
+            </div>
+          )}
+
+          {/* SKU Reorder Info */}
+          {skuData.reorder && Object.keys(skuData.reorder).length > 0 && (
+            <div data-testid="sku-reorder-info" className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">Reorder Recommendation</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { l: "Avg Daily", v: skuData.reorder.avg_daily, u: "units" },
+                  { l: "Lead Time", v: skuData.reorder.lead_time_days, u: "days" },
+                  { l: "Safety Stock", v: skuData.reorder.safety_stock, u: "units" },
+                  { l: "Reorder Point", v: skuData.reorder.reorder_point, u: "units" },
+                  { l: "Current Stock", v: skuData.reorder.current_stock, u: "units" },
+                  { l: "EOQ", v: skuData.reorder.eoq, u: "units" },
+                  { l: "Annual Demand", v: (skuData.reorder.annual_demand || 0).toLocaleString(), u: "units/yr" },
+                  { l: "Status", v: skuData.reorder.status === "reorder_needed" ? "REORDER" : "HEALTHY", u: "",
+                    cls: skuData.reorder.status === "reorder_needed" ? "text-red-600 font-bold" : "text-emerald-600 font-bold" },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-2.5">
+                    <p className="text-[10px] text-gray-500">{item.l}</p>
+                    <p className={`text-sm font-semibold ${item.cls || "text-gray-900"}`}>{item.v} <span className="text-[10px] font-normal text-gray-400">{item.u}</span></p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -677,6 +829,9 @@ const AIDemandPlanning = () => {
               {!canEdit && <p className="text-xs text-gray-400 mt-1">Ask an Admin or Merchandiser to generate a plan.</p>}
             </div>
           )}
+
+          {/* SKU-Level Forecast */}
+          <SkuForecastPanel API={API} fmt={fmt} />
         </div>
       )}
 
@@ -839,10 +994,10 @@ const AIDemandPlanning = () => {
                 <KPI title="Total SKUs" value={reorder.summary?.total_skus || 0} icon={Package} color="blue" />
                 <KPI title="Reorder Needed" value={reorder.summary?.reorder_needed || 0} icon={AlertTriangle} color="red" />
                 <KPI title="Healthy" value={reorder.summary?.healthy || 0} icon={CheckCircle} color="green" />
-                <KPI title="Service Level" value={`${reorder.summary?.service_level || 95}%`} sub={`Lead: ${reorder.summary?.lead_time_days || 14}d`} icon={Target} color="purple" />
+                <KPI title="Service Level" value={`${reorder.summary?.service_level || 95}%`} sub={`Default LT: ${reorder.summary?.lead_time_days || 14}d | S=₹${reorder.summary?.ordering_cost || 500} H=${((reorder.summary?.holding_cost_pct || 0.25) * 100)}%`} icon={Target} color="purple" />
               </div>
 
-              <Collapsible title="Optimal Reorder Points" defaultOpen={true} testId="reorder-table-section">
+              <Collapsible title="Optimal Reorder Points (EOQ-Based)" defaultOpen={true} testId="reorder-table-section">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-100 text-sm">
                     <thead className="bg-gray-50">
@@ -850,12 +1005,14 @@ const AIDemandPlanning = () => {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Style</th>
                         <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Avg/Day</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Safety Stock</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Reorder Pt</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Current</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">LT</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Safety</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">ROP</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Stock</th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">DOH</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Order Qty</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">EOQ</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Order</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -864,6 +1021,7 @@ const AIDemandPlanning = () => {
                           <td className="px-3 py-2 font-mono text-xs">{item.sku}</td>
                           <td className="px-3 py-2 text-xs">{item.style}</td>
                           <td className="px-3 py-2 text-right text-xs">{item.avg_daily}</td>
+                          <td className="px-3 py-2 text-right text-xs text-gray-500">{item.lead_time || '-'}d</td>
                           <td className="px-3 py-2 text-right text-xs">{item.safety_stock}</td>
                           <td className="px-3 py-2 text-right text-xs font-medium">{item.reorder_point}</td>
                           <td className="px-3 py-2 text-right text-xs">{item.current_stock}</td>
@@ -873,6 +1031,7 @@ const AIDemandPlanning = () => {
                             }`}>{item.status === 'reorder_needed' ? 'REORDER' : 'OK'}</span>
                           </td>
                           <td className="px-3 py-2 text-center"><DOHBadge status={item.doh_status} /></td>
+                          <td className="px-3 py-2 text-right text-xs font-medium text-purple-700">{item.eoq > 0 ? item.eoq : '-'}</td>
                           <td className="px-3 py-2 text-right text-xs font-bold text-[#0176D3]">{item.recommended_order > 0 ? item.recommended_order : '-'}</td>
                         </tr>
                       ))}

@@ -72,11 +72,15 @@ def init_ai_demand(mongo_client, get_cached_data_func, get_db_func, get_current_
 
 @router.get("/analytics/ai-demand/options")
 async def ai_demand_options(request: Request):
-    """Dynamic categories, subcategories, channels, and data status for AI Demand filters."""
+    """Dynamic categories, subcategories, channels, SKUs, and data status for AI Demand filters."""
     if _get_current_user:
         await _get_current_user(request)
     provider = await get_tenant_provider()
-    return await provider.get_analytics_options()
+    opts = await provider.get_analytics_options()
+    # Add SKU list for SKU-level forecasting
+    sku_df = await _get_cached_data('sku_ean_master')
+    opts['skus'] = sorted(sku_df['ean'].dropna().unique().tolist()) if sku_df is not None and 'ean' in sku_df.columns else []
+    return opts
 
 
 # ── helpers ──────────────────────────────────────────────────
@@ -189,6 +193,154 @@ async def ml_forecast(
         'insufficient_data': insufficient,
         'generated_at': now.isoformat(),
         'data_source': 'demo' if insufficient else 'uploaded',
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 1a. SKU-LEVEL FORECAST  (RBAC: all authenticated users)
+# ═══════════════════════════════════════════════════════════════
+
+async def _sku_monthly_revenue(sku: str) -> List[dict]:
+    """Aggregate monthly revenue for a single SKU."""
+    sales_df = await _get_cached_data('daily_sales')
+    if sales_df is None:
+        return []
+    df = sales_df[sales_df['sku'] == sku].copy()
+    if len(df) == 0:
+        return []
+    df['day'] = pd.to_datetime(df['day'])
+    df['month'] = df['day'].dt.to_period('M')
+    grouped = df.groupby('month').agg(revenue=('revenue', 'sum'), quantity=('quantity', 'sum')).reset_index().sort_values('month')
+    return [{'year': r['month'].year, 'month': r['month'].month, 'month_name': MONTH_NAMES[r['month'].month - 1],
+             'revenue': round(float(r['revenue']), 2), 'quantity': int(r['quantity'])} for _, r in grouped.iterrows()]
+
+
+@router.get("/analytics/ai-demand/forecast/sku/{sku}")
+async def sku_forecast(
+    request: Request,
+    sku: str,
+    forecast_horizon: int = Query(12, ge=1, le=24),
+):
+    """Run ML ensemble forecast for a single SKU.
+    Falls back to category-share proportioning if the SKU has < 24 months of data."""
+    _check_rate_limit(request)
+    if _get_current_user:
+        await _get_current_user(request)
+
+    from ml_forecast_engine import MLForecastEngine
+    historical = await _sku_monthly_revenue(sku)
+
+    # SKU metadata
+    sku_df = await _get_cached_data('sku_ean_master')
+    style_df = await _get_cached_data('style_master')
+    sku_meta = {}
+    if sku_df is not None and len(sku_df) > 0:
+        row = sku_df[sku_df['ean'] == sku]
+        if len(row) > 0:
+            sku_meta['style'] = row.iloc[0].get('style', '')
+            sku_meta['mrp'] = float(row.iloc[0].get('mrp', 0))
+            sku_meta['lead_time_days'] = int(pd.to_numeric(row.iloc[0].get('lead_time_days', 0), errors='coerce') or 0)
+            if style_df is not None and sku_meta['style']:
+                srow = style_df[style_df['style_code'] == sku_meta['style']]
+                if len(srow) > 0:
+                    sku_meta['category'] = srow.iloc[0].get('category', '')
+                    sku_meta['subcategory'] = srow.iloc[0].get('subcategory', '')
+
+    now = datetime.now(timezone.utc)
+    months = []
+    for i in range(forecast_horizon):
+        m = (now.month + i - 1) % 12 + 1
+        y = now.year + ((now.month + i - 1) // 12)
+        months.append({'month': m, 'year': y, 'month_name': MONTH_NAMES[m - 1], 'label': f"{MONTH_NAMES[m - 1]} {y}"})
+
+    fallback_method = None
+
+    if len(historical) >= 24:
+        # Direct ML forecast for this SKU
+        values = [h['revenue'] for h in historical]
+        engine = MLForecastEngine()
+        result = engine.ensemble_forecast(values, seasonal_periods=12, forecast_horizon=forecast_horizon)
+        confidence = result.get('ensemble_accuracy', {}).get('confidence_score', 70)
+    elif len(historical) >= 6:
+        # Category-share fallback: forecast at category level, allocate by SKU's share
+        cat = sku_meta.get('category')
+        cat_historical = await _monthly_revenue(cat) if cat else await _monthly_revenue()
+        if len(cat_historical) >= 24:
+            cat_values = [h['revenue'] for h in cat_historical]
+            engine = MLForecastEngine()
+            result = engine.ensemble_forecast(cat_values, seasonal_periods=12, forecast_horizon=forecast_horizon)
+            # Calculate SKU's average share of category revenue
+            sku_total = sum(h['revenue'] for h in historical[-6:])
+            cat_total = sum(h['revenue'] for h in cat_historical[-6:])
+            share = sku_total / cat_total if cat_total > 0 else 0.1
+            result['forecast'] = [round(f * share, 2) for f in result['forecast']]
+            if result.get('confidence_intervals'):
+                result['confidence_intervals']['lower'] = [round(v * share, 2) for v in result['confidence_intervals']['lower']]
+                result['confidence_intervals']['upper'] = [round(v * share, 2) for v in result['confidence_intervals']['upper']]
+            confidence = min(result.get('ensemble_accuracy', {}).get('confidence_score', 50), 75)
+            fallback_method = f"category_share ({round(share * 100, 1)}% of {cat})"
+        else:
+            # Not enough category data either — simple average
+            values = [h['revenue'] for h in historical]
+            avg = float(np.mean(values[-6:])) if values else 0
+            result = {'forecast': [round(avg, 2)] * forecast_horizon, 'models_used': ['Moving Average (Fallback)'],
+                      'confidence_intervals': {}, 'ensemble_accuracy': {}}
+            confidence = 40
+            fallback_method = "moving_average"
+    else:
+        # Insufficient data
+        return {
+            'sku': sku, 'sku_meta': sku_meta, 'forecast_horizon': forecast_horizon, 'months': months,
+            'forecast': [], 'confidence_intervals': {}, 'models_used': [],
+            'confidence_score': 0, 'historical_data': historical, 'insufficient_data': True,
+            'message': f"Need at least 6 months of data for {sku}. Currently have {len(historical)} months.",
+            'data_source': 'insufficient',
+        }
+
+    # Reorder recommendation for this SKU
+    reorder_info = {}
+    sales_df = await _get_cached_data('daily_sales')
+    inv_df = await _get_cached_data('store_inventory')
+    if sales_df is not None and inv_df is not None:
+        sku_sales = sales_df[sales_df['sku'] == sku].copy()
+        if len(sku_sales) > 0:
+            sku_sales['day'] = pd.to_datetime(sku_sales['day'])
+            daily_q = sku_sales.groupby('day')['quantity'].sum()
+            avg_d = float(daily_q.mean())
+            std_d = float(daily_q.std()) if len(daily_q) > 1 else 0
+            lt = sku_meta.get('lead_time_days') or 14
+            z = 1.645  # 95% service level
+            ss = round(z * std_d * np.sqrt(lt), 1)
+            rop = round(avg_d * lt + ss, 1)
+            inv_df2 = inv_df.copy()
+            inv_df2['day'] = pd.to_datetime(inv_df2['day'])
+            latest = inv_df2[inv_df2['day'] == inv_df2['day'].max()]
+            stock = int(latest[latest['ean'] == sku]['quantity'].sum()) if len(latest[latest['ean'] == sku]) > 0 else 0
+            annual_d = round(avg_d * 365)
+            mrp = sku_meta.get('mrp', 1000)
+            h_cost = mrp * 0.25
+            eoq_val = round(np.sqrt(2 * annual_d * 500 / h_cost)) if h_cost > 0 else round(annual_d / 12)
+            reorder_info = {
+                'avg_daily': round(avg_d, 2), 'std_daily': round(std_d, 2),
+                'lead_time_days': lt, 'safety_stock': ss, 'reorder_point': rop,
+                'current_stock': stock, 'eoq': int(eoq_val), 'annual_demand': annual_d,
+                'status': 'reorder_needed' if stock <= rop else 'healthy',
+            }
+
+    return {
+        'sku': sku, 'sku_meta': sku_meta,
+        'forecast_horizon': forecast_horizon, 'months': months,
+        'forecast': result['forecast'],
+        'confidence_intervals': result.get('confidence_intervals', {}),
+        'models_used': result.get('models_used', []),
+        'confidence_score': confidence,
+        'seasonality_factors': _seasonality_factors([h['revenue'] for h in historical]) if len(historical) >= 12 else {},
+        'growth_trend': _growth_trend([h['revenue'] for h in historical]) if len(historical) >= 3 else {},
+        'historical_data': historical[-12:],
+        'insufficient_data': False,
+        'fallback_method': fallback_method,
+        'reorder': reorder_info,
+        'data_source': 'uploaded',
     }
 
 
@@ -470,7 +622,7 @@ async def topseller_prediction(
 
 
 # ═══════════════════════════════════════════════════════════════
-# 4. REORDER POINT OPTIMISATION + DOH  (RBAC: admin, allocator)
+# 4. REORDER POINT OPTIMISATION + DOH + EOQ  (RBAC: admin, allocator)
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/analytics/ai-demand/reorder-optimisation")
@@ -479,6 +631,8 @@ async def reorder_optimisation(
     limit: int = Query(15, ge=1, le=50),
     lead_time_days: int = Query(14, ge=1, le=90),
     service_level: float = Query(95, ge=80, le=99.9),
+    ordering_cost: float = Query(500, ge=1, description="Cost per order (₹)"),
+    holding_cost_pct: float = Query(0.25, ge=0.01, le=1.0, description="Annual holding cost as fraction of item cost"),
 ):
     _check_rate_limit(request)
     if _get_current_user:
@@ -503,8 +657,38 @@ async def reorder_optimisation(
         stats['std_daily'] = stats['std_daily'].fillna(0)
         z_map = {80: 0.84, 85: 1.04, 90: 1.28, 95: 1.645, 97.5: 1.96, 99: 2.33, 99.9: 3.09}
         z = z_map.get(service_level, 1.645)
-        stats['safety_stock'] = (z * stats['std_daily'] * np.sqrt(lead_time_days)).round(1)
-        stats['reorder_point'] = (stats['avg_daily'] * lead_time_days + stats['safety_stock']).round(1)
+
+        # Per-SKU lead time from sku_ean_master (P1.2)
+        sku_lt = {}
+        if 'lead_time_days' in sku_df.columns:
+            for _, row in sku_df.iterrows():
+                lt_val = pd.to_numeric(row.get('lead_time_days'), errors='coerce')
+                if pd.notna(lt_val) and lt_val > 0:
+                    sku_lt[row.get('ean', '')] = int(lt_val)
+        stats['lead_time'] = stats['sku'].map(sku_lt).fillna(lead_time_days).astype(int)
+
+        # Per-SKU MRP for EOQ holding cost
+        sku_mrp = {}
+        if 'mrp' in sku_df.columns:
+            for _, row in sku_df.iterrows():
+                mrp_val = pd.to_numeric(row.get('mrp'), errors='coerce')
+                if pd.notna(mrp_val) and mrp_val > 0:
+                    sku_mrp[row.get('ean', '')] = float(mrp_val)
+        stats['mrp'] = stats['sku'].map(sku_mrp).fillna(1000)
+
+        # Safety stock & ROP (using per-SKU lead time)
+        stats['safety_stock'] = (z * stats['std_daily'] * np.sqrt(stats['lead_time'])).round(1)
+        stats['reorder_point'] = (stats['avg_daily'] * stats['lead_time'] + stats['safety_stock']).round(1)
+
+        # EOQ: sqrt(2 * D * S / H) where D=annual demand, S=ordering cost, H=holding cost per unit
+        stats['annual_demand'] = (stats['avg_daily'] * 365).round(0)
+        stats['holding_cost'] = (stats['mrp'] * holding_cost_pct).round(2)
+        stats['eoq'] = np.where(
+            stats['holding_cost'] > 0,
+            np.sqrt(2 * stats['annual_demand'] * ordering_cost / stats['holding_cost']).round(0),
+            stats['annual_demand'] / 12  # fallback: 1 month supply
+        )
+
         latest_date = inv_df['day'].max()
         latest_inv = inv_df[inv_df['day'] == latest_date].groupby('ean')['quantity'].sum().reset_index()
         latest_inv.columns = ['sku', 'current_stock']
@@ -512,9 +696,14 @@ async def reorder_optimisation(
         merged['current_stock'] = merged['current_stock'].fillna(0)
         merged['days_until_reorder'] = np.where(merged['avg_daily'] > 0, ((merged['current_stock'] - merged['reorder_point']) / merged['avg_daily']).round(1), 999)
         merged['status'] = np.where(merged['current_stock'] <= merged['reorder_point'], 'reorder_needed', 'healthy')
-        merged['recommended_order'] = np.where(merged['status'] == 'reorder_needed', (merged['reorder_point'] * 1.5 - merged['current_stock']).clip(lower=0).round(0), 0)
-        # DOH classification
-        merged['doh_info'] = merged.apply(lambda r: _doh_classify(r['current_stock'], r['avg_daily'], lead_time_days), axis=1)
+        # EOQ-based recommended order: round up to nearest EOQ multiple
+        merged['recommended_order'] = np.where(
+            merged['status'] == 'reorder_needed',
+            (np.ceil((merged['reorder_point'] - merged['current_stock']).clip(lower=0) / merged['eoq'].clip(lower=1)) * merged['eoq']).round(0),
+            0,
+        )
+        # DOH classification (using per-SKU lead time)
+        merged['doh_info'] = merged.apply(lambda r: _doh_classify(r['current_stock'], r['avg_daily'], r['lead_time']), axis=1)
         merged['doh_status'] = merged['doh_info'].apply(lambda x: x['status'])
         merged['coverage_pct'] = merged['doh_info'].apply(lambda x: x['coverage_pct'])
         if 'style' in sku_df.columns:
@@ -522,13 +711,17 @@ async def reorder_optimisation(
         else:
             merged['style'] = 'Unknown'
         merged = merged.sort_values(['status', 'days_until_reorder'], ascending=[False, True])
-        items = merged.head(limit)[['sku', 'style', 'avg_daily', 'std_daily', 'safety_stock', 'reorder_point', 'current_stock', 'days_until_reorder', 'status', 'recommended_order', 'doh_status', 'coverage_pct']].round(2).fillna(0).to_dict('records')
+        cols = ['sku', 'style', 'avg_daily', 'std_daily', 'safety_stock', 'reorder_point',
+                'current_stock', 'days_until_reorder', 'status', 'recommended_order',
+                'doh_status', 'coverage_pct', 'lead_time', 'eoq', 'annual_demand', 'holding_cost']
+        items = merged.head(limit)[cols].round(2).fillna(0).to_dict('records')
         doh_counts = merged['doh_status'].value_counts().to_dict()
         return {
             'summary': {
                 'total_skus': len(merged), 'reorder_needed': int((merged['status'] == 'reorder_needed').sum()),
                 'healthy': int((merged['status'] == 'healthy').sum()),
                 'lead_time_days': lead_time_days, 'service_level': service_level,
+                'ordering_cost': ordering_cost, 'holding_cost_pct': holding_cost_pct,
                 'doh_achievable': doh_counts.get('achievable', 0),
                 'doh_at_risk': doh_counts.get('at_risk', 0),
                 'doh_unachievable': doh_counts.get('unachievable', 0),
