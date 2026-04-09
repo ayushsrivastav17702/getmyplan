@@ -127,6 +127,39 @@ class SMTPEmailService:
 
         return self.send_email(to_email, f"Welcome to {company_name}!", html)
 
+    def send_admin_signup_notification(self, tenant_email: str, company_name: str,
+                                        subdomain: str, plan_type: str, tenant_id: str) -> bool:
+        """Notify admin (info@getmyplan.in) about a new tenant registration."""
+        from datetime import datetime, timezone
+        admin_email = "info@getmyplan.in"
+        registered_at = datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p UTC")
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f3f4f6;">
+<div style="max-width:600px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+  <div style="padding:28px 24px;background:#6366f1;text-align:center;">
+    <h1 style="margin:0;color:#fff;font-size:22px;">New Signup Alert</h1>
+  </div>
+  <div style="padding:32px 28px;">
+    <h2 style="margin:0 0 16px;color:#1e293b;">A new tenant just registered!</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:8px 0;color:#64748b;width:140px;">Company</td><td style="padding:8px 0;color:#1e293b;font-weight:600;">{company_name}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;">Email</td><td style="padding:8px 0;color:#1e293b;">{tenant_email}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;">Subdomain</td><td style="padding:8px 0;color:#1e293b;">{subdomain}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;">Tenant ID</td><td style="padding:8px 0;color:#1e293b;">{tenant_id}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;">Plan</td><td style="padding:8px 0;color:#1e293b;">{plan_type}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;">Registered At</td><td style="padding:8px 0;color:#1e293b;">{registered_at}</td></tr>
+    </table>
+  </div>
+  <div style="padding:16px;text-align:center;background:#f8fafc;font-size:12px;color:#94a3b8;">
+    GetMyPlan Admin Notification
+  </div>
+</div>
+</body></html>"""
+
+        return self.send_email(admin_email, f"New Signup: {company_name} ({tenant_email})", html)
+
     def send_password_reset_email(self, to_email: str, token: str, app_url: str = None) -> bool:
         cfg = self._cfg
         base_url = app_url or cfg['app_url']

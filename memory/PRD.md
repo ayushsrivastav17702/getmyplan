@@ -50,6 +50,12 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Open Orders → Replenishment: `total_in_transit`, `open_orders_source`, `in_transit_qty` per row
 - **Testing: 26/26 PASS (Iteration 61)**
 
+### Phase 60 — Admin Signup Notification (Apr 2026)
+- Added `send_admin_signup_notification()` to SMTP email service
+- Wired into `/api/signup/register` as background task — fires on every new tenant registration (including free trials)
+- Email sent to `info@getmyplan.in` with company name, email, subdomain, tenant ID, plan type, timestamp
+- **Testing: Verified via curl — both verification email and admin notification confirmed in logs**
+
 ## Prioritized Backlog
 
 ### P1 — Next

@@ -205,6 +205,16 @@ async def register(body: SignupRequest, request: Request, background_tasks: Back
         app_url=origin or None,
     )
 
+    # Notify admin about new signup
+    background_tasks.add_task(
+        email_service.send_admin_signup_notification,
+        tenant_email=body.email,
+        company_name=body.company_name,
+        subdomain=body.subdomain,
+        plan_type="trial",
+        tenant_id=tenant_id,
+    )
+
     return {
         "success": True,
         "message": "Registration successful! Please check your email to verify your account.",
