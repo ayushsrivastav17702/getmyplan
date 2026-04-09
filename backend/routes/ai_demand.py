@@ -737,6 +737,45 @@ async def reorder_optimisation(
 
 
 # ═══════════════════════════════════════════════════════════════
+# 4b. SAVE REORDER RECOMMENDATIONS
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/analytics/ai-demand/reorder-optimisation/save")
+async def save_reorder_recommendations(request: Request):
+    """Save reorder recommendations from forecast → reorder pipeline."""
+    _check_rate_limit(request)
+    db = _get_db()
+    reorder = await reorder_optimisation(request)
+    items = reorder.get("items", [])
+    if not items:
+        return {"status": "error", "message": "No reorder data to save"}
+
+    now = datetime.now(timezone.utc).isoformat()
+    user_email = "system"
+    try:
+        user = await _get_current_user(request)
+        user_email = user.get("email", "system")
+    except Exception:
+        pass
+
+    doc = {
+        "type": "reorder_recommendation",
+        "generated_at": now,
+        "generated_by": user_email,
+        "summary": reorder.get("summary", {}),
+        "data_source": reorder.get("data_source", "unknown"),
+        "items": items,
+    }
+    await db.reorder_recommendations.insert_one(doc)
+    return {
+        "status": "saved",
+        "items_saved": len(items),
+        "generated_at": now,
+        "reorder_needed": reorder.get("summary", {}).get("reorder_needed", 0),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
 # 5. GENERATE AI DEMAND PLAN  (RBAC: admin, merchandiser)
 # ═══════════════════════════════════════════════════════════════
 

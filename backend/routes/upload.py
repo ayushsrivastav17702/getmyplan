@@ -24,6 +24,16 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 MAX_FILE_SIZE_MB = 50
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
+# Per-tenant upload lock (in-memory — sufficient for single-node)
+import asyncio
+_upload_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_upload_lock(tenant_id: str) -> asyncio.Lock:
+    if tenant_id not in _upload_locks:
+        _upload_locks[tenant_id] = asyncio.Lock()
+    return _upload_locks[tenant_id]
+
 
 def _get_db():
     """Import here to avoid circular imports."""
@@ -395,6 +405,28 @@ async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: b
     tenant_id = _get_tenant_id()
     user_email = _get_user_email()
     session_id = f"UPL-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+
+    lock = _get_upload_lock(tenant_id)
+    if lock.locked() and not validate_only:
+        return JSONResponse(content={
+            "success": False,
+            "errors": [{
+                "code": "E057",
+                "category": "file_structure",
+                "message": "Another upload is in progress",
+                "user_message": "Another upload is already being processed for this workspace. Please wait and try again.",
+                "severity": "blocking",
+            }],
+            "total_rows": 0, "valid_rows": 0,
+            "corrections": [], "warnings": [], "preview": [],
+        })
+
+    async with lock:
+        return await _handle_upload_inner(file, upload_type, replace_existing, validate_only, db, tenant_id, user_email, session_id)
+
+
+async def _handle_upload_inner(file, upload_type, replace_existing, validate_only, db, tenant_id, user_email, session_id):
+    """Inner upload logic after acquiring the tenant lock."""
 
     file_path = os.path.join(UPLOAD_DIR, f"{session_id}_{file.filename}")
 

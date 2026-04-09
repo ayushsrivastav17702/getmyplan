@@ -1430,6 +1430,51 @@ async def get_executive_dashboard(
     }
 
 
+@api_router.get("/analytics/executive-export/csv")
+async def export_executive_csv(
+    start_date: str = None, end_date: str = None,
+    categories: str = None, channels: str = None, regions: str = None,
+):
+    """Export executive dashboard KPIs and alerts as CSV."""
+    import io as _io
+    from fastapi.responses import StreamingResponse as _SR
+
+    kpis = await get_executive_kpis(start_date, end_date, categories, channels, regions)
+    dashboard = await get_executive_dashboard(start_date, end_date, categories, channels, regions)
+
+    rows = []
+    rows.append(["Executive Dashboard Export"])
+    rows.append(["Generated", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")])
+    rows.append([])
+    rows.append(["KPI", "Value"])
+    rows.append(["Revenue", kpis.get("revenue", 0)])
+    rows.append(["Units Sold", kpis.get("units_sold", 0)])
+    rows.append(["Margin %", kpis.get("margin_pct", "N/A")])
+    rows.append(["Margin Source", kpis.get("margin_source", "N/A")])
+    rows.append(["Total COGS", kpis.get("total_cogs", 0)])
+    rows.append(["MRP Realisation %", kpis.get("mrp_realisation_pct", "N/A")])
+    rows.append(["WoW Revenue Change %", kpis.get("wow", {}).get("revenue_change", 0)])
+    rows.append(["YoY Revenue Change %", kpis.get("yoy", {}).get("revenue_change", 0)])
+    rows.append(["Health Score", dashboard.get("health_score", 0)])
+    rows.append([])
+    rows.append(["Alerts"])
+    rows.append(["Priority", "Title", "Description"])
+    for a in dashboard.get("alerts", []):
+        rows.append([a.get("priority", ""), a.get("title", ""), a.get("description", "")])
+
+    buf = _io.StringIO()
+    import csv as _csv
+    writer = _csv.writer(buf)
+    writer.writerows(rows)
+    buf.seek(0)
+
+    return _SR(
+        _io.BytesIO(buf.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=executive_dashboard.csv"},
+    )
+
+
 
 @api_router.get("/analytics/executive-revenue-trend")
 async def get_executive_revenue_trend(

@@ -1162,3 +1162,81 @@ async def set_schedule(body: ScheduleConfig):
         upsert=True,
     )
     return {"status": "ok", "schedule": doc}
+
+
+
+# REP-33: Execute IST with inventory auto-update
+class ISTExecuteBody(BaseModel):
+    transfers: list  # [{from_store, to_store, sku, quantity}, ...]
+
+
+@router.post("/ist/execute")
+async def execute_ist(body: ISTExecuteBody):
+    """
+    Execute IST transfers and auto-update store_inventory.
+    For each transfer: decrement source store SOH, increment destination store SOH.
+    Records are logged in ist_history for audit.
+    """
+    db = _get_db()
+    from multi_tenant import tenant_context
+    ctx = tenant_context.get()
+    tenant_id = ctx.tenant_id if ctx else "default"
+    results = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for t in body.transfers:
+        from_store = t.get("from_store") or t.get("source_store")
+        to_store = t.get("to_store") or t.get("destination_store")
+        sku = t.get("sku")
+        qty = int(t.get("quantity", 0))
+        if not from_store or not to_store or not sku or qty <= 0:
+            results.append({"sku": sku, "status": "skipped", "reason": "invalid data"})
+            continue
+
+        # Decrement source store
+        src = await db.store_inventory.find_one(
+            {"tenant_id": tenant_id, "store_code": from_store, "sku": sku},
+            {"_id": 0, "closing_stock": 1, "quantity": 1},
+        )
+        src_soh = src.get("closing_stock", src.get("quantity", 0)) if src else 0
+        if src_soh < qty:
+            results.append({"sku": sku, "from": from_store, "to": to_store, "status": "failed", "reason": f"insufficient stock ({src_soh} < {qty})"})
+            continue
+
+        stock_field = "closing_stock" if src and "closing_stock" in src else "quantity"
+        await db.store_inventory.update_one(
+            {"tenant_id": tenant_id, "store_code": from_store, "sku": sku},
+            {"$inc": {stock_field: -qty}},
+        )
+
+        # Increment destination store
+        dst = await db.store_inventory.find_one(
+            {"tenant_id": tenant_id, "store_code": to_store, "sku": sku},
+        )
+        if dst:
+            await db.store_inventory.update_one(
+                {"tenant_id": tenant_id, "store_code": to_store, "sku": sku},
+                {"$inc": {stock_field: qty}},
+            )
+        else:
+            await db.store_inventory.insert_one({
+                "tenant_id": tenant_id, "store_code": to_store, "sku": sku,
+                stock_field: qty, "uploaded_at": now,
+            })
+
+        # Audit log
+        await db.ist_history.insert_one({
+            "tenant_id": tenant_id, "from_store": from_store, "to_store": to_store,
+            "sku": sku, "quantity": qty, "executed_at": now,
+            "executed_by": ctx.user.get("email", "system") if ctx and hasattr(ctx, "user") else "system",
+        })
+
+        results.append({"sku": sku, "from": from_store, "to": to_store, "quantity": qty, "status": "executed"})
+
+    executed = [r for r in results if r["status"] == "executed"]
+    return {
+        "total_requested": len(body.transfers),
+        "executed": len(executed),
+        "failed": len(body.transfers) - len(executed),
+        "details": results,
+    }

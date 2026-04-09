@@ -3,11 +3,13 @@ BI Dashboard Endpoints (BI-01 to BI-35)
 Covers: KPI Cards, Revenue Trends, Channel/Category/Regional Breakdown, Export
 """
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 import pandas as pd
 import numpy as np
 import os
+import io
 
 router = APIRouter(prefix="/analytics/bi", tags=["bi-dashboard"])
 _client: Optional[AsyncIOMotorClient] = None
@@ -561,6 +563,145 @@ async def get_regional_performance(
             "total_revenue": round(float(by_region["revenue"].sum()), 2),
             "total_quantity": int(by_region["quantity"].sum()),
         }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+
+# =========================================================================
+# CSV EXPORT (BI-32 to BI-35)
+# =========================================================================
+@router.get("/export/csv")
+async def export_bi_csv(
+    report: str = "sales_detail",
+    start_date: str = None, end_date: str = None,
+    categories: str = None, channels: str = None,
+    regions: str = None,
+):
+    """
+    BI-32: Export filtered sales detail  BI-33: Export store ranking
+    BI-34: Export category breakdown  BI-35: Export channel breakdown
+    report= sales_detail | store_ranking | category_breakdown | channel_breakdown
+    """
+    sales_df = await _cached("daily_sales")
+    sku_df = await _cached("sku_ean_master")
+    style_df = await _cached("style_master")
+    store_df = await _cached("store_master")
+
+    if sales_df is None:
+        return {"error": "Sales data not uploaded"}
+
+    try:
+        sales = _filt(sales_df.copy(), start_date, end_date, "day")
+        sales["day"] = pd.to_datetime(sales["day"])
+        cl, chl, rgl = _pl(categories), _pl(channels), _pl(regions)
+        if chl:
+            sales = _chf(sales, chl)
+        if rgl:
+            sales = _rgf(sales, rgl, store_df)
+        if sku_df is not None and "ean" in sku_df.columns:
+            sales = sales.merge(
+                sku_df[["ean", "style"]].drop_duplicates("ean"),
+                left_on="sku", right_on="ean", how="left",
+            )
+        if cl:
+            sales = _catf(sales, cl, style_df)
+
+        # Enrich with store info
+        if store_df is not None:
+            store_cols = ["store_code"]
+            for c in ["store_name", "channel", "region", "city", "class", "cluster"]:
+                if c in store_df.columns:
+                    store_cols.append(c)
+            sales = sales.merge(
+                store_df[store_cols].drop_duplicates("store_code"),
+                on="store_code", how="left",
+            )
+
+        # Enrich with style info
+        if style_df is not None and "style" in sales.columns:
+            style_cols = ["style_code"]
+            for c in ["category", "subcategory", "gender", "brand", "season"]:
+                if c in style_df.columns:
+                    style_cols.append(c)
+            sales = sales.merge(
+                style_df[style_cols].drop_duplicates("style_code"),
+                left_on="style", right_on="style_code", how="left",
+            )
+
+        if len(sales) == 0:
+            return {"error": "No data matches filters"}
+
+        export_df = None
+        filename = "export.csv"
+
+        if report == "sales_detail":
+            keep = [c for c in [
+                "day", "sku", "store_code", "store_name", "channel", "region",
+                "city", "category", "subcategory", "brand", "season",
+                "quantity", "revenue",
+            ] if c in sales.columns]
+            export_df = sales[keep].sort_values("day", ascending=False)
+            filename = "sales_detail.csv"
+
+        elif report == "store_ranking":
+            agg = sales.groupby("store_code").agg(
+                revenue=("revenue", "sum"), quantity=("quantity", "sum"),
+                days=("day", "nunique"),
+            ).reset_index()
+            agg["asp"] = (agg["revenue"] / agg["quantity"].clip(lower=1)).round(2)
+            agg["daily_avg_revenue"] = (agg["revenue"] / agg["days"].clip(lower=1)).round(2)
+            if store_df is not None:
+                for c in ["store_name", "channel", "region", "city", "class"]:
+                    if c in store_df.columns:
+                        m = store_df.groupby("store_code")[c].first()
+                        agg[c] = agg["store_code"].map(m)
+            export_df = agg.sort_values("revenue", ascending=False)
+            filename = "store_ranking.csv"
+
+        elif report == "category_breakdown":
+            if "category" not in sales.columns:
+                return {"error": "Style master required for category breakdown"}
+            agg = sales.groupby("category").agg(
+                revenue=("revenue", "sum"), quantity=("quantity", "sum"),
+                sku_count=("sku", "nunique"), store_count=("store_code", "nunique"),
+            ).reset_index()
+            agg["asp"] = (agg["revenue"] / agg["quantity"].clip(lower=1)).round(2)
+            agg["revenue_pct"] = (agg["revenue"] / agg["revenue"].sum() * 100).round(1)
+            export_df = agg.sort_values("revenue", ascending=False)
+            filename = "category_breakdown.csv"
+
+        elif report == "channel_breakdown":
+            ch_col = "channel"
+            if ch_col not in sales.columns:
+                if store_df is not None and "channel" in store_df.columns:
+                    ch_map = store_df.groupby("store_code")["channel"].first().to_dict()
+                    sales[ch_col] = sales["store_code"].map(ch_map).fillna("Unknown")
+                else:
+                    sales[ch_col] = "Retail"
+            agg = sales.groupby(ch_col).agg(
+                revenue=("revenue", "sum"), quantity=("quantity", "sum"),
+                store_count=("store_code", "nunique"),
+            ).reset_index()
+            agg["asp"] = (agg["revenue"] / agg["quantity"].clip(lower=1)).round(2)
+            agg["revenue_pct"] = (agg["revenue"] / agg["revenue"].sum() * 100).round(1)
+            export_df = agg.sort_values("revenue", ascending=False)
+            filename = "channel_breakdown.csv"
+
+        else:
+            return {"error": f"Unknown report type: {report}. Use: sales_detail, store_ranking, category_breakdown, channel_breakdown"}
+
+        buf = io.StringIO()
+        export_df.round(2).fillna("").to_csv(buf, index=False)
+        buf.seek(0)
+
+        return StreamingResponse(
+            io.BytesIO(buf.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
     except Exception as e:
         import traceback
         traceback.print_exc()
