@@ -77,7 +77,13 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - **Data Health Dashboard**: New `GET /api/analytics/ai-demand/data-health` endpoint + collapsible DataHealthDashboard component on AI Demand page. Shows progress to 180-day ML minimum, per-data-type status, estimated ML activation date, and "Upload Historical Data" CTA.
 - **25-Month Historical Data Seed**: Generated 757 days (Apr 2024 → Apr 2026) of realistic data: 30,961 daily sales rows, 37,850 store inventory rows, 15,140 warehouse inventory rows. SKUs: TSHIRT-BLK-M/L, HOODIE-GRY-M/L, CAP-BLK-ONE, SOCKS-WHT-3PK, JOGGER-BLK-M, SNEAKER-WHT-9, BACKPACK-BLK, WATER-BOTTLE-500. Stores: MAIN-01, SOUTH-02, WEST-03, ONLINE-01, POPUP-01. Data includes weekly seasonality, 5% monthly growth, festive peaks (Oct-Dec).
 - **ML Forecast Activated**: All 3 models (Holt-Winters, Random Forest, Seasonal Decomposition) now running on real data. Confidence 92.7%, trend "accelerating". Data Health badge shows "REAL ML FORECAST".
-- **Testing: 31/31 PASS (Iteration 55) + 35/35 PASS (Iteration 56) + 39/39 PASS (Iteration 57)**
+- **Testing: 31/31 PASS (Iteration 55) + 35/35 PASS (Iteration 56) + 39/39 PASS (Iteration 57) + 43/43 PASS (Iteration 58)**
+
+### Phase 54 — P1 Enterprise Features (Apr 2026)
+- **P1.1 EOQ**: Replaced 1.5× ROP heuristic with proper EOQ formula `sqrt(2*D*S/H)`. Added `ordering_cost` (₹500 default) and `holding_cost_pct` (25% default) query params. Recommended order rounds up to nearest EOQ multiple.
+- **P1.2 Lead Times**: Added `lead_time_days` field to SKU master (TSHIRT=7d, HOODIE=14d, SNEAKER=21d, SOCKS=3d, etc.). Reorder endpoint reads per-SKU lead time with 14d fallback. Data Health shows 10/10 SKUs with lead times.
+- **P1.3 SKU Forecast**: New `GET /api/analytics/ai-demand/forecast/sku/{sku}` endpoint with full ML pipeline. Falls back to category-share proportioning if <24 months. Frontend SkuForecastPanel with search, chips, forecast chart, confidence meter, and reorder recommendation card showing EOQ/LT/SS/ROP/annual demand.
+- **Testing: 43/43 PASS (Iteration 58)** — Backend 26/26, Frontend 17/17
 
 ## Route Map
 ```
@@ -151,10 +157,8 @@ PUT  /api/analytics/ai-demand/plans/{id}        — Update plan (optimistic lock
 ## Prioritized Backlog
 
 ### P1 — Next
-- EOQ (Economic Order Quantity) implementation
-- Lead times from SKU master (currently hardcoded default 14 days)
-- SKU-level forecasting
-- Forecast accuracy tracking over time
+- Forecast accuracy tracking over time (MAPE trend)
+- Holiday/promotional calendar integration
 
 ### P2
 - USER-18: MFA (Multi-factor authentication)
