@@ -1,0 +1,147 @@
+{
+  "summary": "Iteration 54: Data Upload V2 - Validate Endpoint & History/Days Testing. Backend: 28/28 pytest tests passed. Frontend: 20/20 UI tests passed. New validate-only endpoint and history/days endpoint working correctly. Two-step Validate->Save flow verified.",
+
+  "test_case_matrix": {
+    "VALIDATE_ENDPOINT": {
+      "TEST_01_valid_sku_master_validate": {"status": "PASS", "notes": "POST /api/upload/v2/sku_master/validate -> success=True, validate_only=True"},
+      "TEST_02_missing_columns_error": {"status": "PASS", "notes": "Missing columns -> E043 error, validate_only=True"},
+      "TEST_03_validate_no_history": {"status": "PASS", "notes": "Validate endpoint does NOT create upload_history records"},
+      "TEST_04_unknown_sku_error": {"status": "PASS", "notes": "Unknown SKU -> E003 blocking error in validate mode"},
+      "TEST_05_unknown_store_error": {"status": "PASS", "notes": "Unknown store -> E011 blocking error in validate mode"},
+      "TEST_06_valid_daily_sales": {"status": "PASS", "notes": "Valid daily_sales validate -> success=True"},
+      "TEST_07_valid_store_inventory": {"status": "PASS", "notes": "Valid store_inventory validate -> success=True"},
+      "TEST_08_valid_warehouse_inventory": {"status": "PASS", "notes": "Valid warehouse_inventory validate -> success=True with AUTO_CALC"},
+      "TEST_09_negative_inventory": {"status": "PASS", "notes": "Negative stock -> E068 blocking error in validate mode"},
+      "TEST_10_empty_file": {"status": "PASS", "notes": "Empty file -> E045 blocking error in validate mode"}
+    },
+    "HISTORY_DAYS_ENDPOINT": {
+      "TEST_11_returns_data": {"status": "PASS", "notes": "GET /api/upload/v2/history/days?days=7 returns per-day status"},
+      "TEST_12_structure": {"status": "PASS", "notes": "Each day has: date, label, uploads, has_data"},
+      "TEST_13_labels": {"status": "PASS", "notes": "First day is 'Yesterday', dates in YYYY-MM-DD format"},
+      "TEST_14_days_parameter": {"status": "PASS", "notes": "days parameter controls result count"}
+    },
+    "REGULAR_UPLOAD": {
+      "TEST_15_saved_field": {"status": "PASS", "notes": "Regular upload has 'saved' field and validate_only=False"},
+      "TEST_16_daily_status": {"status": "PASS", "notes": "GET /api/upload/v2/daily-status returns today's status"},
+      "TEST_17_master_status": {"status": "PASS", "notes": "GET /api/upload/v2/master-status returns master counts"}
+    },
+    "VALIDATION_RULES_IN_VALIDATE_MODE": {
+      "TEST_18_e004_duplicate": {"status": "PASS", "notes": "E004 duplicate primary key warning"},
+      "TEST_19_e006_special_chars": {"status": "PASS", "notes": "E006 special characters auto-correction"},
+      "TEST_20_e007_whitespace": {"status": "PASS", "notes": "E007 whitespace trim auto-correction"},
+      "TEST_21_e020_future_date": {"status": "PASS", "notes": "E020 future date warning"},
+      "TEST_22_e027_negative_qty": {"status": "PASS", "notes": "E027 negative quantity warning"},
+      "TEST_23_e041_zero_revenue": {"status": "PASS", "notes": "E041 zero revenue warning"},
+      "TEST_24_e066_low_stock": {"status": "PASS", "notes": "E066 low stock warning"},
+      "TEST_25_e067_available_exceeds": {"status": "PASS", "notes": "E067 available exceeds on-hand warning"},
+      "TEST_26_e069_invalid_flag": {"status": "PASS", "notes": "E069 invalid fulfillment flag warning"},
+      "TEST_27_mixed_currency": {"status": "PASS", "notes": "MIXED_CURRENCY warning"},
+      "TEST_28_e030_decimal_qty": {"status": "PASS", "notes": "E030 decimal quantity warning"}
+    },
+    "FRONTEND_UI": {
+      "FE_01_data_upload_page": {"status": "PASS", "notes": "data-testid='data-upload-page' present"},
+      "FE_02_master_data_section": {"status": "PASS", "notes": "data-testid='master-data-section' present"},
+      "FE_03_daily_status_section": {"status": "PASS", "notes": "data-testid='daily-status-section' present"},
+      "FE_04_upload_section": {"status": "PASS", "notes": "data-testid='upload-section' present"},
+      "FE_05_previous_days_section": {"status": "PASS", "notes": "data-testid='previous-days-section' present"},
+      "FE_06_master_cards": {"status": "PASS", "notes": "3 master cards (SKU/Store/Warehouse) present with counts"},
+      "FE_07_daily_cards": {"status": "PASS", "notes": "3 daily cards with Uploaded badges"},
+      "FE_08_all_complete_banner": {"status": "PASS", "notes": "Banner shows 'All daily data uploaded for today'"},
+      "FE_09_dropdown_6_options": {"status": "PASS", "notes": "All 6 options present in dropdown"},
+      "FE_10_file_dropzone": {"status": "PASS", "notes": "File dropzone accepts CSV/XLSX"},
+      "FE_11_validate_button": {"status": "PASS", "notes": "Button text is 'Validate File' (not 'Upload & Validate')"},
+      "FE_12_validation_results": {"status": "PASS", "notes": "Validation results displayed with stats"},
+      "FE_13_proceed_save_btn": {"status": "PASS", "notes": "'Proceed to Save' button appears after successful validation"},
+      "FE_14_save_confirm_dialog": {"status": "PASS", "notes": "Save confirmation dialog with 'Save Today's Data' button"},
+      "FE_15_previous_days_list": {"status": "PASS", "notes": "Shows Yesterday, weekday names, dates, status dots"},
+      "FE_16_template_buttons": {"status": "PASS", "notes": "Sales Template and Inventory Template buttons present"},
+      "FE_17_refresh_button": {"status": "PASS", "notes": "Refresh button present"},
+      "FE_18_change_file_btn": {"status": "PASS", "notes": "'Change File' button appears after file selection"},
+      "FE_19_replace_warning": {"status": "PASS", "notes": "Warning shown when replacing existing data"},
+      "FE_20_retry_button": {"status": "PASS", "notes": "'Fix Errors & Retry' button shown for failed validation"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_PASS": 28,
+    "BACKEND_FAIL": 0,
+    "FRONTEND_PASS": 20,
+    "FRONTEND_FAIL": 0,
+    "TOTAL_PASS": 48,
+    "TOTAL_FAIL": 0
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_upload_v2_validate_iter54.py",
+    "/app/test_reports/pytest/pytest_results_iter54.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Validate endpoint correctly returns validate_only=True and does NOT save to DB",
+    "Validate endpoint does NOT create upload_history records (verified)",
+    "Regular upload endpoint returns validate_only=False and 'saved' field",
+    "History/days endpoint returns correct structure: date, label, uploads, has_data",
+    "All 20 validation rules work correctly in validate mode",
+    "Two-step Validate->Save flow working: Validate File -> Proceed to Save -> Save Today's Data",
+    "Frontend components properly split into MasterCard, DailyStatusCard, PreviousDaysList, FileDropzone",
+    "Button text changed from 'Upload & Validate' to 'Validate File' as specified"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_upload_v2_validate_iter54.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% - 28/28 tests passed",
+    "frontend": "100% - 20/20 tests passed"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 / tenant: demo"
+  },
+
+  "seed_data_creation": "Used existing master data: SKU=ITER54-TEST-SKU, Store=STATUS-STORE, Warehouse=STATUS-WH. Created test SKU during testing.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Data Upload V2 validate endpoint and history/days endpoint fully tested. Validate endpoint URL format: /api/upload/v2/{upload_type}/validate (underscore in type name). Regular upload uses hyphen: /api/upload/v2/sku-master. Master data in demo tenant: SKU=ITER54-TEST-SKU, Store=STATUS-STORE, Warehouse=STATUS-WH. All daily types uploaded for today. Two-step flow: 1) Select file -> 'Validate File' button, 2) Validation results -> 'Proceed to Save', 3) Save confirm -> 'Save Today's Data'.",
+
+  "validation_rules_tested": {
+    "E003": "SKU not found in catalog - BLOCKING",
+    "E004": "Duplicate primary key - WARNING",
+    "E006": "Special characters in SKU - AUTO_FIX",
+    "E007": "Whitespace in SKU - AUTO_FIX",
+    "E011": "Store/Warehouse not found - BLOCKING",
+    "E020": "Future date - WARNING",
+    "E027": "Negative quantity - WARNING",
+    "E030": "Decimal quantity - WARNING",
+    "E041": "Zero revenue with positive qty - WARNING",
+    "E043": "Missing required columns - BLOCKING",
+    "E045": "Empty file - BLOCKING",
+    "E066": "Low stock warning - WARNING",
+    "E067": "Available exceeds on-hand - WARNING",
+    "E068": "Negative inventory - BLOCKING",
+    "E069": "Invalid fulfillment flag - WARNING",
+    "MIXED_CURRENCY": "Mixed currency symbols - WARNING",
+    "AUTO_CALC": "allocated_qty auto-calculation - INFO"
+  },
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

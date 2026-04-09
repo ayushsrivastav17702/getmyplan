@@ -103,8 +103,59 @@ async def upload_warehouse_master(
 
 
 # ============================================================
+# VALIDATE-ONLY ENDPOINT
+# ============================================================
+
+@router.post("/{upload_type}/validate")
+async def validate_file(
+    upload_type: str,
+    file: UploadFile = File(...),
+):
+    """Validate a file without saving to database."""
+    return await _handle_upload(file, upload_type, replace_existing=False, validate_only=True)
+
+
+# ============================================================
 # STATUS & HISTORY ENDPOINTS
 # ============================================================
+
+@router.get("/history/days")
+async def get_previous_days_history(days: int = 7):
+    """Get upload status for previous days — per-day breakdown."""
+    db = _get_db()
+    tenant_id = _get_tenant_id()
+    today = datetime.now(timezone.utc).date()
+    result = []
+
+    for i in range(1, days + 1):
+        date = today - timedelta(days=i)
+        date_str = date.strftime("%Y-%m-%d")
+
+        uploads = {}
+        for upload_type in ["daily_sales", "store_inventory", "warehouse_inventory"]:
+            doc = await db.upload_history.find_one(
+                {"tenant_id": tenant_id, "upload_type": upload_type, "upload_date": date_str, "status": "completed"},
+                {"_id": 0},
+            )
+            uploads[upload_type] = doc is not None
+
+        if i == 1:
+            label = "Yesterday"
+        elif i < 7:
+            label = date.strftime("%A")
+        else:
+            label = date.strftime("%b %d")
+
+        if any(uploads.values()) or i <= 3:
+            result.append({
+                "date": date_str,
+                "label": label,
+                "uploads": uploads,
+                "has_data": any(uploads.values()),
+            })
+
+    return {"days": result}
+
 
 @router.get("/history")
 async def get_upload_history(
@@ -283,8 +334,8 @@ async def download_template(upload_type: str):
 # CORE HANDLER
 # ============================================================
 
-async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: bool):
-    """Internal handler — validates file, saves to DB if valid."""
+async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: bool, validate_only: bool = False):
+    """Internal handler — validates file, saves to DB if valid (unless validate_only)."""
     db = _get_db()
     tenant_id = _get_tenant_id()
     user_email = _get_user_email()
@@ -353,28 +404,31 @@ async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: b
         if duplicate_warning:
             result.setdefault("warnings", []).insert(0, duplicate_warning)
 
-        # If validation passed, save to database
-        if result["success"] and records:
+        result["validate_only"] = validate_only
+
+        # If validation passed, save to database (skip if validate_only)
+        if result["success"] and records and not validate_only:
             saved = await _save_to_database(db, tenant_id, user_email, upload_type, records, replace_existing)
             result["saved"] = saved
 
-        # Record history (include file hash for duplicate detection)
-        await db.upload_history.insert_one({
-            "tenant_id": tenant_id,
-            "upload_type": upload_type,
-            "upload_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "file_name": file.filename,
-            "file_hash": file_hash,
-            "file_size_bytes": len(content),
-            "rows_uploaded": result.get("total_rows", 0),
-            "rows_valid": result.get("valid_rows", 0),
-            "rows_with_warnings": len(result.get("warnings", [])),
-            "rows_with_errors": len(result.get("errors", [])),
-            "status": "completed" if result["success"] else "failed",
-            "uploaded_by": user_email,
-            "uploaded_at": datetime.now(timezone.utc),
-            "session_id": session_id,
-        })
+        # Record history (skip for validate_only)
+        if not validate_only:
+            await db.upload_history.insert_one({
+                "tenant_id": tenant_id,
+                "upload_type": upload_type,
+                "upload_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "file_name": file.filename,
+                "file_hash": file_hash,
+                "file_size_bytes": len(content),
+                "rows_uploaded": result.get("total_rows", 0),
+                "rows_valid": result.get("valid_rows", 0),
+                "rows_with_warnings": len(result.get("warnings", [])),
+                "rows_with_errors": len(result.get("errors", [])),
+                "status": "completed" if result["success"] else "failed",
+                "uploaded_by": user_email,
+                "uploaded_at": datetime.now(timezone.utc),
+                "session_id": session_id,
+            })
 
         return JSONResponse(content=result)
 
