@@ -44,6 +44,9 @@ import ChangePassword from "./pages/ChangePassword";
 import PlanUpgrade from "./pages/PlanUpgrade";
 import ScheduledJobs from "./pages/ScheduledJobs";
 import LandingPage from "./pages/LandingPage";
+import VsAnaplan from "./pages/VsAnaplan";
+import VsBlueYonder from "./pages/VsBlueYonder";
+import AiDemandPlanningPage from "./pages/AiDemandPlanning";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -229,6 +232,10 @@ const AppRouter = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
+      {/* SEO pages — always public */}
+      <Route path="/vs/anaplan" element={<VsAnaplan />} />
+      <Route path="/vs/blue-yonder" element={<VsBlueYonder />} />
+      <Route path="/ai-demand-planning" element={<AiDemandPlanningPage />} />
       {isAuthenticated ? (
         <Route path="/*" element={<AuthenticatedApp />} />
       ) : (

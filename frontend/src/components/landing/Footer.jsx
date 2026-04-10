@@ -5,7 +5,7 @@ export default function Footer() {
   return (
     <footer data-testid="footer" className="bg-gray-900 text-white pt-12 pb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
@@ -52,6 +52,16 @@ export default function Footer() {
               <li><a href="#" className="hover:text-white transition">Careers</a></li>
               <li><a href="#" className="hover:text-white transition">Press</a></li>
               <li><a href="#" className="hover:text-white transition">Contact</a></li>
+            </ul>
+          </div>
+
+          {/* Compare */}
+          <div className="sm:hidden lg:block">
+            <h4 className="font-semibold mb-4">Compare</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li><Link to="/vs/anaplan" className="hover:text-white transition">Getmyplan vs Anaplan</Link></li>
+              <li><Link to="/vs/blue-yonder" className="hover:text-white transition">Getmyplan vs Blue Yonder</Link></li>
+              <li><Link to="/ai-demand-planning" className="hover:text-white transition">AI Demand Planning Guide</Link></li>
             </ul>
           </div>
 
