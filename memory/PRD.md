@@ -79,6 +79,13 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 - Logo optimized: 3.8MB original -> 46KB web version, 3.6KB favicon, 13KB apple-touch-icon
 - **Test Report**: iteration_71.json -- 9/9 PASS
 
+#### SEO Crawlability & Legal Pages (Phase 2)
+- **SSR Shell**: Static HTML content injected into `public/index.html` inside `#root` — nav, H1 hero, 8 feature cards, skeleton loader. Crawlers see real content in raw HTML before JS loads.
+- **Request a Demo CTA**: Prominent button added to both Navbar and Hero section. Opens ContactModal form (name, email, company, source, goals) with proper autocomplete attrs.
+- **Legal Pages**: Created `/privacy` (9-section Privacy Policy) and `/terms` (13-section Terms of Service). Linked from footer with React Router.
+- **Loading State**: Enhanced `<noscript>` message for JS-disabled users + CSS `ssr-pulse` skeleton animation.
+- **Test Report**: iteration_72.json -- 13/13 PASS
+
 ---
 
 ## Pending / Backlog
