@@ -36,7 +36,6 @@ import TenantAdminPanel from "./pages/TenantAdminPanel";
 import AIDemandPlanning from "./pages/AIDemandPlanning";
 import BuyPlanDashboard from "./pages/BuyPlanDashboard";
 import OnboardingWizard, { ReturnUserBanner } from "./pages/OnboardingWizard";
-import { SEOSchemas } from "./components/SEOSchemas";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -128,7 +127,6 @@ const AuthenticatedApp = () => {
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FA]">
-      <SEOSchemas />
       <Sidebar uploadStatus={uploadStatus} isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
       <main className="flex-1 min-h-screen">
