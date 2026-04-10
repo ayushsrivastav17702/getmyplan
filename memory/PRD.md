@@ -1,113 +1,102 @@
-# GetMyPlan - AI-Powered Retail Analytics Platform — PRD
+# GetMyPlan - AI-Powered Retail Demand Planning Platform
 
-## Original Problem Statement
-Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with React + FastAPI featuring CSV data uploading, multiple analytics dashboards, dynamic filtering with presets, Chart.js visualizations, GPT-5.2 FAQ Chatbot, multi-tenant architecture, and role-based access control.
+## Product Requirements Document
 
-## Architecture
-- **Frontend**: React with Tailwind CSS (Salesforce theme for dashboard, Enterprise SaaS for marketing)
-- **Backend**: FastAPI with Python/Pandas
-- **Database**: MongoDB (multi-tenant: separate DB per tenant, shared registry)
-- **AI**: GPT 5.2 via Emergent LLM Key
-- **Charts**: Chart.js + react-chartjs-2 (NO Recharts)
-- **Auth**: JWT with bcrypt, RBAC with 8 roles + custom roles
-- **Email**: SMTP via Hostinger
+### Original Problem Statement
+Multi-tenant demand planning system with comprehensive V2 data pipelines, UI dashboards, ML forecasting, scalable sample data onboarding, Redis caching, email alerts, and contextual data upload guidance.
 
-## Data Architecture — Complete
+### Tech Stack
+- **Frontend**: React 18, Chart.js (react-chartjs-2), Shadcn/UI, TailwindCSS
+- **Backend**: FastAPI (Python 3.11), Motor (async MongoDB)
+- **Database**: MongoDB (multi-tenant with shared + tenant-specific DBs)
+- **Cache**: Redis Cloud (non-SSL)
+- **Auth**: JWT-based multi-tenant auth with RBAC
+- **AI/ML**: Holt-Winters, Random Forest, Seasonal Decomposition (3-model ensemble)
+- **Email**: Hostinger SMTP
+- **LLM**: OpenAI GPT-5.2 via Emergent LLM Key (FAQ Chatbot)
 
-### Upload Hub (10/10 Types)
-| Upload Type | Endpoint | Collection | Category |
-|-------------|----------|------------|----------|
-| Store Master | `POST /api/upload/v2/store-master` | `store_master` | Master |
-| SKU Master | `POST /api/upload/v2/sku-master` | `sku_master` | Master |
-| Warehouse Master | `POST /api/upload/v2/warehouse-master` | `warehouse_master` | Master |
-| Style Master | `POST /api/upload/v2/style-master` | `style_master` | Master |
-| Planogram | `POST /api/upload/v2/planogram` | `planogram` | Master |
-| Daily Sales | `POST /api/upload/v2/daily-sales` | `daily_sales` | Daily |
-| Store Inventory | `POST /api/upload/v2/store-inventory` | `store_inventory` | Daily |
-| Warehouse Inventory | `POST /api/upload/v2/warehouse-inventory` | `warehouse_inventory` | Daily |
-| COGS | `POST /api/upload/v2/cogs` | `cogs` | Daily |
-| Open Orders | `POST /api/upload/v2/open-orders` | `open_orders` | Daily |
+### Architecture
+```
+/app
+├── backend/
+│   ├── routes/ (ai_demand.py, bi_dashboard.py, doh_analysis.py, gap_analysis.py, stock_out.py, replenishment.py, upload.py, signup.py, warehouse.py, core_logic.py, planogram.py)
+│   ├── services/ (cache_service.py, smtp_email_service.py, upload_service.py, tenant_data_provider.py)
+│   ├── multi_tenant/ (tenant_db.py, rbac.py)
+│   └── server.py (main FastAPI app, analytics endpoints)
+├── frontend/
+│   ├── src/pages/ (DataUploadPage.jsx, GapAnalysis.js, AIDemandPlanning.jsx, etc.)
+│   ├── src/components/ (Sidebar.jsx, upload/DataRequirementsPanel.jsx, upload/FileDropzone.jsx, etc.)
+│   └── src/context/ (AuthContext.js)
+```
 
-### V2 Data Bridge — All 9 Modules Connected
-### Cross-Module Wiring — All 3 Integrations Live
-- COGS → Executive Dashboard (true margin: `(Revenue-COGS)/Revenue`)
-- Planogram → Fill Rate (uploaded norms replace auto-derived)
-- Open Orders → Replenishment (in-transit deducted from order qty)
+### Key DB Schema
+- `forecast_snapshots`: tenant_id, snapshot_id, created_at, forecast_data, metadata
+- `daily_sales`: day, store_code, sku, quantity, revenue, tenant_id
+- Redis keys: `module:tenant_id:date:extra` (e.g., `executive_kpis:increff:2026-04-10:all`)
 
-## Recent Phases
+---
 
-### Phase 56 — V2 Bridge Migration (Apr 2026)
-- Fixed 5 modules (core_logic, doh, bi, planogram, replenishment) to use V2 data bridge
-- **Testing: 22/22 PASS (Iteration 59)**
+## Completed Features
 
-### Phase 57 — New Upload Types (Apr 2026)
-- Added COGS, Planogram, Open Orders, Style Master V2 with full validation
-- **Testing: 26/26 PASS (Iteration 60)**
+### Session 1 (Previous)
+- Full multi-tenant platform with auth, RBAC, 10 upload types
+- Executive Dashboard, BI Dashboard, Gap Analysis, DOH Analysis, Stock-Out Analysis
+- Replenishment Planner, Planogram Fill Rate, AI Demand Forecasting
+- Admin signup email notifications (SMTP)
+- Forecast Accuracy Tracking with MAPE calculation
+- Collapsible sidebar with categories and keyboard shortcuts
+- Data Upload Page with preview modals and data summary cards
+- Enterprise-scale sample data generation (~380k rows, 30 stores, 100 SKUs)
 
-### Phase 58 — Wire Everything Together (Apr 2026)
-- COGS → Executive KPIs: `margin_source`, `total_cogs`, `mrp_realisation_pct` fields
-- Planogram upload → Fill Rate: `norm_source` field, prefers uploaded norms
-- Open Orders → Replenishment: `total_in_transit`, `open_orders_source`, `in_transit_qty` per row
-- **Testing: 26/26 PASS (Iteration 61)**
+### Session 2 (Current — Apr 10, 2026)
 
-### Phase 60 — Admin Signup Notification (Apr 2026)
-- Added `send_admin_signup_notification()` to SMTP email service
-- Wired into `/api/signup/register` as background task — fires on every new tenant registration (including free trials)
-- Email sent to `info@getmyplan.in` with company name, email, subdomain, tenant ID, plan type, timestamp
-- **Testing: Verified via curl — both verification email and admin notification confirmed in logs**
+#### Redis Caching Implementation (P0) ✅
+- Created `/app/backend/services/cache_service.py` with `cache_get`, `cache_set`, `invalidate_for_upload`, `invalidate_tenant`
+- TTLs: 1h (DOH/stockout/replenishment/planogram), 6h (executive/BI/gap), 24h (topseller), 7d (AI forecast)
+- Wired caching to 11 analytics endpoints in server.py and route files
+- Cache invalidation on successful uploads (type-specific) and sample data loads (full tenant clear)
+- Performance: executive-kpis 3s→0.37s, exec-dashboard 3.65s→0.35s, BI overview 1.09s→0.34s, forecast 1.63s→0.34s
+- **Test Report**: iteration_67.json — 24/24 PASS
 
-### Phase 61 — Forecast Accuracy Tracking (Apr 2026)
-- Auto-saves forecast snapshots to `forecast_snapshots` collection on every forecast generation
-- New endpoint: `GET /api/analytics/ai-demand/forecast-accuracy` — compares snapshots vs actual monthly revenue, calculates MAPE
-- Returns: per-snapshot MAPE, trend direction, grade (Excellent/Good/Fair/Needs Improvement), month-by-month errors
-- New "Forecast Accuracy" tab in AI Demand Planning with KPIs, MAPE trend chart, forecast vs actual table, snapshot history
-- **Testing: 27/27 PASS (Iteration 63)**
+#### Data Requirements Panel (P1) ✅
+- Created `/app/frontend/src/components/upload/DataRequirementsPanel.jsx`
+- Panel appears above dropzone for every upload type with dynamic content
+- Sections: Required Date Range (min/recommended/AI), Date Format, Important Rules, Date Range Impact Table
+- Data days indicator: "Your current data: X days" with color-coded status
+- Master data types show simplified panel (When to Upload + tip)
+- Expected date range hint below dropzone for transactional types
+- Backend endpoint `GET /api/upload/v2/data-days` returns distinct day count
+- **Test Report**: iteration_68.json — 19/19 PASS
 
-### Phase 62 — Gap Analysis UX Audit (Apr 2026)
-- New endpoint: `GET /api/analytics/data-status` — returns per-file upload status for all 7 required file types
-- Added Data Completeness progress bar (X/7 files with color-coded fill)
-- Added Data Summary bar (Styles, Stores, Sales Records, Days History)
-- Added actionable Missing Files checklist with green/red badges per file + "Upload Missing Files" CTA
-- Added module readiness badges on tabs (Ready checkmark vs Locked lock icon based on file availability)
-- Added clean header with "Back to Dashboard" breadcrumb + "Data Upload" button
-- Preserved all existing analytics (ROS Gap, Size Gap, NOOS) untouched
-- **Testing: 27/27 PASS (Iteration 63)**
+---
 
-### Phase 63 — Sidebar Redesign (Apr 2026)
-- Extracted sidebar from inline App.js into dedicated `/components/Sidebar.jsx`
-- Collapsible: 260px expanded / 72px collapsed with localStorage persistence
-- Section grouping: MAIN, ANALYTICS, INVENTORY, OPERATIONS, ADMIN, TOOLS
-- Workflow-ordered modules: Upload -> Executive -> Analytics -> Inventory -> Operations -> Admin
-- Active page indicator (blue left bar + bg highlight)
-- Keyboard shortcut: Ctrl+B toggle
-- Hover tooltips in collapsed mode (CSS-only)
-- Preserved RBAC, plan guards, upload status, tenant info, data files, user bar
-- Dark theme (#0B1628) with proper contrast
-- **Testing: 18/18 PASS, 1 INFO (Iteration 64)**
+## Pending / Backlog
 
-### Phase 64 — Data Upload UX Improvements (Apr 2026)
-- Added Sample Data Banner (onboarding CTA) — shown only for tenants with zero data, dismissible with localStorage
-- Added data preview: Eye icon on master cards with data, opens PreviewModal showing first 10 rows in a clean table
-- Backend: `GET /api/upload/v2/preview/{type}` — returns preview rows (V2 + V1 fallback), excludes system fields
-- Backend: `POST /api/upload/v2/load-sample-data` — loads 15 SKUs, 5 stores, 90 days sales for demo/onboarding
-- **Testing: 32/32 PASS (Iteration 65)**
+### P1 — Next Up
+- Executive Dashboard & Configuration Page UX Fixes (from message 152):
+  - KPI labels, unique keys, compact INR formatting, filter dropdown wiring
+  - Configuration page: typos, save button, numeric inputs
 
-## Prioritized Backlog
-
-### P1 — Next
-- UI: Update Executive Dashboard KPI card to show "True Margin" vs "MRP Realisation" label
-- UI: Update Replenishment formula display to include "- In Transit"
-- Holiday/promotional calendar integration
-- Custom validation rules per tenant
-
-### P2
-- USER-18: MFA
+### P2 — Future
+- USER-18: Multi-factor authentication (MFA)
 - TENANT-10: Tenant backup/restore
 - TENANT-31: Invoice generation
 - User Funnel Analytics Dashboard
 
-### P3
-- Auto-scheduled SFTP uploads
-- Chunked file uploads for >50MB
-- Async upload processing
-- Pre-computed aggregation tables
+### P3 — Backlog
+- Auto-scheduled SFTP uploads for Data Upload V2
+- Chunked uploads & async processing
+- MongoDB pipeline migration (replace in-memory Pandas aggregation)
+
+---
+
+## 3rd Party Integrations
+| Service | Status | Key Source |
+|---------|--------|-----------|
+| OpenAI GPT-5.2 | Active | Emergent LLM Key |
+| Hostinger SMTP | Active | .env credentials |
+| Redis Cloud | Active | .env credentials |
+
+## Test Credentials
+- Increff Admin: ayush.srivastav@increff.com / Ayush@114988
+- Demo Admin: admin@demo.com / demo1234
