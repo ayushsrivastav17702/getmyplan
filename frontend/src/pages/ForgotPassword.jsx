@@ -70,6 +70,8 @@ export default function ForgotPassword() {
                       <input
                         data-testid="forgot-email"
                         type="email"
+                        id="email"
+                        name="email"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                         className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"

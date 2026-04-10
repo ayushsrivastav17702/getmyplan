@@ -85,12 +85,15 @@ export default function ResetPassword() {
                       <input
                         data-testid="reset-password"
                         type={showPassword ? "text" : "password"}
+                        id="new-password"
+                        name="new-password"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                         className="w-full border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
                         placeholder="Min 8 characters"
                         required
                         minLength={8}
+                        autoComplete="new-password"
                       />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -106,12 +109,15 @@ export default function ResetPassword() {
                       <input
                         data-testid="reset-confirm-password"
                         type={showPassword ? "text" : "password"}
+                        id="confirm-password"
+                        name="confirm-password"
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
                         className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
                         placeholder="Confirm password"
                         required
                         minLength={8}
+                        autoComplete="new-password"
                       />
                     </div>
                   </div>

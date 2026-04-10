@@ -71,6 +71,8 @@ const LoginPage = () => {
                   <input
                     data-testid="login-email"
                     type="email"
+                    id="email"
+                    name="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"
@@ -88,6 +90,8 @@ const LoginPage = () => {
                   <input
                     data-testid="login-password"
                     type={showPassword ? "text" : "password"}
+                    id="password"
+                    name="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     className="w-full border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3] focus:border-transparent"

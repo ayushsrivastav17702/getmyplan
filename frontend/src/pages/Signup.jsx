@@ -197,12 +197,14 @@ const Signup = () => {
                     <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-company"
+                      id="company_name"
                       name="company_name"
                       value={formData.company_name}
                       onChange={handleChange}
                       className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
                       placeholder="Your company"
                       required
+                      autoComplete="organization"
                     />
                   </div>
                 </div>
@@ -212,6 +214,7 @@ const Signup = () => {
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-email"
+                      id="email"
                       name="email"
                       type="email"
                       value={formData.email}
@@ -219,6 +222,7 @@ const Signup = () => {
                       className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
                       placeholder="you@company.com"
                       required
+                      autoComplete="email"
                     />
                   </div>
                 </div>
@@ -228,6 +232,7 @@ const Signup = () => {
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-password"
+                      id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
@@ -235,6 +240,7 @@ const Signup = () => {
                       className="w-full border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
                       placeholder="Min 8 characters"
                       required
+                      autoComplete="new-password"
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -249,6 +255,7 @@ const Signup = () => {
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       data-testid="signup-confirm-password"
+                      id="confirm_password"
                       name="confirm_password"
                       type={showPassword ? "text" : "password"}
                       value={formData.confirm_password}
@@ -256,6 +263,7 @@ const Signup = () => {
                       className="w-full border border-slate-200 rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0176D3]"
                       placeholder="Confirm password"
                       required
+                      autoComplete="new-password"
                     />
                   </div>
                 </div>
