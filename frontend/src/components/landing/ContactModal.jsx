@@ -25,10 +25,10 @@ export default function ContactModal({ isOpen, onClose }) {
       <div className="relative min-h-screen flex items-center justify-center p-4">
         <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 animate-fadeIn" data-testid="contact-modal">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Contact Sales</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Request a Demo</h2>
             <button onClick={onClose} data-testid="contact-modal-close" className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
           </div>
-          <p className="text-gray-600 mb-6 text-sm">Tell us about your business and we'll get back to you within 24 hours.</p>
+          <p className="text-gray-600 mb-6 text-sm">Tell us about your business and we'll schedule a personalized demo within 24 hours.</p>
 
           {submitted ? (
             <div className="text-center py-8" data-testid="contact-success">
@@ -41,16 +41,19 @@ export default function ContactModal({ isOpen, onClose }) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
                 <input type="text" required value={form.name} onChange={(e) => set("name", e.target.value)} data-testid="contact-name"
+                  id="demo-name" name="fullName" autoComplete="name"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Rahul Sharma" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
                 <input type="email" required value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="contact-email"
+                  id="demo-email" name="email" autoComplete="email"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="rahul@fashionhub.com" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
                 <input type="text" required value={form.company} onChange={(e) => set("company", e.target.value)} data-testid="contact-company"
+                  id="demo-company" name="companyName" autoComplete="organization"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="FashionHub" />
               </div>
               <div>
@@ -73,7 +76,7 @@ export default function ContactModal({ isOpen, onClose }) {
               </div>
               <button type="submit" disabled={loading} data-testid="contact-submit"
                 className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" /> : <><Send className="h-4 w-4" /> Submit</>}
+                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" /> : <><Send className="h-4 w-4" /> Request Demo</>}
               </button>
             </form>
           )}

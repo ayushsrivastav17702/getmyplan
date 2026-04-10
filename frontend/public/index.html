@@ -149,8 +149,82 @@
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
     </head>
     <body>
-        <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
+        <noscript>
+            <div style="max-width:600px;margin:80px auto;padding:40px;text-align:center;font-family:system-ui,-apple-system,sans-serif;">
+                <h1 style="font-size:24px;color:#1e293b;">JavaScript Required</h1>
+                <p style="color:#64748b;margin-top:12px;">Getmyplan requires JavaScript to run. Please enable JavaScript in your browser settings and reload the page.</p>
+                <p style="color:#94a3b8;margin-top:8px;font-size:14px;">Need help? Contact <a href="mailto:info@getmyplan.in" style="color:#2563eb;">info@getmyplan.in</a></p>
+            </div>
+        </noscript>
+        <div id="root">
+            <!-- SSR-equivalent: Critical landing page content for crawlers & perceived performance -->
+            <style>
+                .ssr-shell{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b}
+                .ssr-nav{position:fixed;top:0;width:100%;z-index:50;background:#fff;border-bottom:1px solid #e2e8f0;height:64px;display:flex;align-items:center;padding:0 24px}
+                .ssr-nav img{height:40px;width:auto}
+                .ssr-nav-links{margin-left:auto;display:flex;gap:16px;align-items:center}
+                .ssr-nav-links a{font-size:14px;color:#475569;text-decoration:none;padding:8px 12px}
+                .ssr-btn-demo{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;padding:8px 20px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;border:none}
+                .ssr-btn-outline{border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-size:14px;color:#475569;text-decoration:none}
+                .ssr-hero{padding:120px 24px 60px;text-align:center;max-width:900px;margin:0 auto}
+                .ssr-hero h1{font-size:clamp(32px,5vw,64px);font-weight:800;line-height:1.1;margin:0}
+                .ssr-hero h1 span{background:linear-gradient(135deg,#2563eb,#4f46e5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+                .ssr-hero p{font-size:18px;color:#64748b;margin:24px auto 0;max-width:640px;line-height:1.6}
+                .ssr-hero-ctas{display:flex;gap:12px;justify-content:center;margin-top:32px;flex-wrap:wrap}
+                .ssr-hero-trust{display:flex;gap:24px;justify-content:center;margin-top:20px;font-size:14px;color:#64748b}
+                .ssr-features{padding:60px 24px;background:#f8fafc;max-width:1200px;margin:0 auto}
+                .ssr-features h2{font-size:clamp(24px,3vw,40px);font-weight:700;text-align:center;margin:0 0 40px}
+                .ssr-features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px}
+                .ssr-fcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px}
+                .ssr-fcard h3{font-size:16px;font-weight:600;margin:0 0 8px}
+                .ssr-fcard p{font-size:14px;color:#64748b;margin:0;line-height:1.5}
+                .ssr-skeleton-pulse{animation:ssr-pulse 1.5s ease-in-out infinite}
+                @keyframes ssr-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+                @media(max-width:640px){.ssr-nav-links{display:none}.ssr-hero-trust{flex-direction:column;align-items:center;gap:8px}}
+            </style>
+
+            <nav class="ssr-nav" aria-label="Main navigation">
+                <img src="/getmyplan-logo-sm.png" alt="Getmyplan - AI Demand Forecasting for Fashion Retail" width="160" height="40" />
+                <div class="ssr-nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="/login">Log in</a>
+                    <a href="/signup" class="ssr-btn-demo">Request a Demo</a>
+                </div>
+            </nav>
+
+            <main class="ssr-hero">
+                <h1>Predict demand with <span>91% accuracy</span></h1>
+                <p>Stop guessing. Start planning with AI. GetMyPlan uses 3-model ensemble ML to forecast demand, optimize inventory, and prevent stockouts for fashion retailers.</p>
+                <div class="ssr-hero-ctas">
+                    <a href="/signup" class="ssr-btn-demo" style="padding:12px 28px;font-size:16px;">Start Free Trial</a>
+                    <a href="/signup" class="ssr-btn-outline" style="padding:12px 28px;font-size:16px;">Request a Demo</a>
+                </div>
+                <div class="ssr-hero-trust">
+                    <span>No credit card required</span>
+                    <span>7-day free trial</span>
+                    <span>Cancel anytime</span>
+                </div>
+            </main>
+
+            <section class="ssr-features" id="features">
+                <h2>Everything you need to plan smarter</h2>
+                <div class="ssr-features-grid">
+                    <div class="ssr-fcard"><h3>AI Demand Forecasting</h3><p>3-model ensemble (Holt-Winters + Random Forest + Seasonal Decomposition) with 12-month horizon and confidence intervals.</p></div>
+                    <div class="ssr-fcard"><h3>Buy Plan Generator</h3><p>Set revenue targets, select categories, configure channel splits. ML generates optimal buy quantities per SKU.</p></div>
+                    <div class="ssr-fcard"><h3>Stock-Out Prediction</h3><p>Real-time risk scoring with 4 severity levels. Get alerts before you run out of bestsellers.</p></div>
+                    <div class="ssr-fcard"><h3>Inventory Optimization</h3><p>Days-on-Hand analysis, replenishment planning, inter-store transfer optimization.</p></div>
+                    <div class="ssr-fcard"><h3>Executive Dashboard</h3><p>Health Score, KPI cards, revenue trends, critical alerts. Export PDF or Excel with one click.</p></div>
+                    <div class="ssr-fcard"><h3>Enterprise Security</h3><p>Per-tenant DB isolation, rate limiting, HSTS, CSP headers, NoSQL injection prevention. RBAC with 11 roles.</p></div>
+                    <div class="ssr-fcard"><h3>Multi-Channel Analytics</h3><p>Amazon, Flipkart, Myntra, Ajio, Nykaa marketplace support. Channel-split forecasting.</p></div>
+                    <div class="ssr-fcard"><h3>Automated Replenishment</h3><p>Statistical reorder points with safety stock. 5-tab planner: Reorder, Quantity, Transfer, Run, Orders.</p></div>
+                </div>
+            </section>
+
+            <div style="text-align:center;padding:40px 24px;">
+                <p class="ssr-skeleton-pulse" style="color:#94a3b8;font-size:14px;">Loading full experience...</p>
+            </div>
+        </div>
         <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

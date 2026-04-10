@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
+import ContactModal from "./ContactModal";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -61,6 +63,13 @@ export default function Navbar() {
             <Link to="/login" data-testid="nav-login-btn" className="px-4 py-2 text-gray-600 hover:text-gray-900 transition">
               Log in
             </Link>
+            <button
+              onClick={() => setShowDemo(true)}
+              data-testid="nav-demo-btn"
+              className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition"
+            >
+              Request a Demo
+            </button>
             <Link
               to="/signup"
               data-testid="nav-signup-btn"
@@ -83,6 +92,9 @@ export default function Navbar() {
             <a href="#customers" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Customers</a>
             <div className="pt-3 border-t border-gray-100">
               <Link to="/login" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Log in</Link>
+              <button onClick={() => { setIsOpen(false); setShowDemo(true); }} className="block w-full py-2 text-center border border-blue-600 text-blue-600 rounded-lg mt-2">
+                Request a Demo
+              </button>
               <Link to="/signup" onClick={() => setIsOpen(false)} className="block py-2 text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg mt-2">
                 Start Free Trial
               </Link>
@@ -90,6 +102,7 @@ export default function Navbar() {
           </div>
         )}
       </div>
+      <ContactModal isOpen={showDemo} onClose={() => setShowDemo(false)} />
     </nav>
   );
 }

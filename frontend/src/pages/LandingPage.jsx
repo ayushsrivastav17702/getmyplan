@@ -12,19 +12,22 @@ import FAQ from "../components/landing/FAQ";
 import CTASection from "../components/landing/CTASection";
 import Footer from "../components/landing/Footer";
 import ProductTour from "../components/landing/ProductTour";
+import ContactModal from "../components/landing/ContactModal";
 
 export default function LandingPage() {
   const [showTour, setShowTour] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const openTour = useCallback(() => setShowTour(true), []);
   const closeTour = useCallback(() => setShowTour(false), []);
+  const openDemo = useCallback(() => setShowDemo(true), []);
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <Hero onWatchDemo={openTour} />
+      <Hero onWatchDemo={openTour} onRequestDemo={openDemo} />
       <TrustBar />
       <StatsSection />
       <Features />
@@ -36,6 +39,7 @@ export default function LandingPage() {
       <CTASection />
       <Footer />
       <ProductTour isOpen={showTour} onClose={closeTour} />
+      <ContactModal isOpen={showDemo} onClose={() => setShowDemo(false)} />
     </div>
   );
 }

@@ -165,7 +165,7 @@ function MiniBuyPlan() {
 const MOCKUPS = [MiniUpload, MiniDashboard, MiniForecast, MiniAlerts, MiniBuyPlan];
 const CYCLE_MS = 4000;
 
-export default function Hero({ onWatchDemo }) {
+export default function Hero({ onWatchDemo, onRequestDemo }) {
   const [active, setActive] = useState(0);
 
   useEffect(() => {
@@ -223,12 +223,11 @@ export default function Hero({ onWatchDemo }) {
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition" />
             </Link>
             <button
-              onClick={onWatchDemo}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
+              onClick={onRequestDemo}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition"
               data-testid="hero-demo-btn"
             >
-              <Play className="h-5 w-5" />
-              Watch Demo
+              Request a Demo
             </button>
           </div>
 

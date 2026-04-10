@@ -45,6 +45,8 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
 const AiDemandPlanningPage = lazy(() => import("./pages/AiDemandPlanning"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Eagerly loaded (used on every auth page load)
@@ -254,6 +256,9 @@ const AppRouter = () => {
       <Route path="/vs/anaplan" element={<VsAnaplan />} />
       <Route path="/vs/blue-yonder" element={<VsBlueYonder />} />
       <Route path="/ai-demand-planning" element={<AiDemandPlanningPage />} />
+      {/* Legal pages — always public */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
       {isAuthenticated ? (
         <Route path="/*" element={<AuthenticatedApp />} />
       ) : (
