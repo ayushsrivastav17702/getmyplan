@@ -47,7 +47,7 @@ export default function VsAnaplan() {
                   ["Stock-out prediction", "Real-time risk scoring", "Not available"],
                   ["Unlimited users", "Included", "Per-seat pricing"],
                   ["Implementation time", "15 minutes", "3-6 months"],
-                  ["India-based support", "24/7", "US hours only"],
+                  ["Regional support", "24/7", "US hours only"],
                   ["Free trial", "7 days, no credit card", "Not available"],
                   ["Starting price", "\u20B930,000/month", "$2,000+/month (~\u20B91,66,000)"],
                 ].map(([feat, gmp, ana], i) => (

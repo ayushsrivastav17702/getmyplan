@@ -115,7 +115,7 @@ export default function TermsOfService() {
 
             <section>
               <h2 className="text-xl font-semibold text-gray-900">11. Governing Law</h2>
-              <p>These terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the courts of Mumbai, India.</p>
+              <p>These terms are governed by the laws of Singapore. Any disputes shall be subject to the exclusive jurisdiction of the courts of Singapore.</p>
             </section>
 
             <section>
@@ -128,7 +128,7 @@ export default function TermsOfService() {
               <p>For questions about these terms, contact us at:</p>
               <ul className="list-none pl-0 space-y-1">
                 <li>Email: <a href="mailto:legal@getmyplan.in" className="text-blue-600 hover:underline">legal@getmyplan.in</a></li>
-                <li>Address: Mumbai, India</li>
+                <li>Address: Singapore</li>
               </ul>
             </section>
           </div>

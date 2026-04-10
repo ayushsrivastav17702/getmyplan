@@ -92,6 +92,14 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 - Updated `ContactModal.jsx` — calls real API instead of setTimeout mock. Shows error state on failure.
 - **Verified**: Form submission stores in DB + email notification sent + success UI shown.
 
+#### Landing Page Global Positioning (Step 2)
+- **Hero Rewrite**: H1 "Stop losing revenue to stockouts." + subheadline "AI demand planning for fashion retail."
+- **Real Dashboard Screenshot**: Replaced animated Mini* mockups with actual `dashboard-screenshot.webp` (106KB)
+- **Video Walkthrough**: Click-to-play section with placeholder (VIDEO_ID = null, YouTube embed ready)
+- **91% Footnote**: Added methodology backtest footnote to StatsSection
+- **India References Removed**: All public pages — marketplaces, cities, currency, schema.org JSON-LD
+- **Test Report**: iteration_73.json -- 19/19 PASS
+
 ---
 
 ## Pending / Backlog

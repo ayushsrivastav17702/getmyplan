@@ -105,7 +105,7 @@ export default function PrivacyPolicy() {
               <p>If you have questions about this privacy policy or our data practices, contact us at:</p>
               <ul className="list-none pl-0 space-y-1">
                 <li>Email: <a href="mailto:privacy@getmyplan.in" className="text-blue-600 hover:underline">privacy@getmyplan.in</a></li>
-                <li>Address: Mumbai, India</li>
+                <li>Address: Singapore</li>
               </ul>
             </section>
           </div>
