@@ -1,52 +1,61 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
-import {
-  ChevronRight
-} from "lucide-react";
 
-// Auth
+// Auth — eagerly loaded (needed on every page)
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import LoginPage from "./pages/LoginPage";
-import Unauthorized from "./pages/Unauthorized";
-import PlanGuard, { NAV_PLAN_MODULE_MAP } from "./components/PlanGuard";
+import PlanGuard from "./components/PlanGuard";
 import NotificationBell from "./components/NotificationBell";
 import Sidebar from "./components/Sidebar";
 
-// Pages
-import GettingStarted from "./pages/GettingStarted";
-import ExecutiveDashboard from "./pages/ExecutiveDashboard";
-import DataUpload from "./pages/DataUpload";
-import DataUploadPage from "./pages/DataUploadPage";
-import Configuration from "./pages/Configuration";
-import CoreLogics from "./pages/CoreLogics";
-import GapAnalysis from "./pages/GapAnalysis";
-import BIDashboards from "./pages/BIDashboards";
-import FAQChatbot from "./pages/FAQChatbot";
-import WarehouseAnalysis from "./pages/WarehouseAnalysis";
-import SFTPMonitor from "./pages/SFTPMonitor";
-import DataQuality from "./pages/DataQuality";
-import StockOutAnalysis from "./pages/StockOutAnalysis";
-import ReplenishmentPlanner from "./pages/ReplenishmentPlanner";
-import DOHAnalysis from "./pages/DOHAnalysis";
-import PlanogramFillRate from "./pages/PlanogramFillRate";
-import UserManagement from "./pages/UserManagement";
-import TenantAdminPanel from "./pages/TenantAdminPanel";
-import AIDemandPlanning from "./pages/AIDemandPlanning";
-import BuyPlanDashboard from "./pages/BuyPlanDashboard";
-import OnboardingWizard, { ReturnUserBanner } from "./pages/OnboardingWizard";
-import Signup from "./pages/Signup";
-import VerifyEmail from "./pages/VerifyEmail";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import ChangePassword from "./pages/ChangePassword";
-import PlanUpgrade from "./pages/PlanUpgrade";
-import ScheduledJobs from "./pages/ScheduledJobs";
-import LandingPage from "./pages/LandingPage";
-import VsAnaplan from "./pages/VsAnaplan";
-import VsBlueYonder from "./pages/VsBlueYonder";
-import AiDemandPlanningPage from "./pages/AiDemandPlanning";
+// Eagerly loaded (critical path)
+import Unauthorized from "./pages/Unauthorized";
+
+// Lazy-loaded pages — split into separate chunks
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const GettingStarted = lazy(() => import("./pages/GettingStarted"));
+const ExecutiveDashboard = lazy(() => import("./pages/ExecutiveDashboard"));
+const DataUploadPage = lazy(() => import("./pages/DataUploadPage"));
+const Configuration = lazy(() => import("./pages/Configuration"));
+const CoreLogics = lazy(() => import("./pages/CoreLogics"));
+const GapAnalysis = lazy(() => import("./pages/GapAnalysis"));
+const BIDashboards = lazy(() => import("./pages/BIDashboards"));
+const FAQChatbot = lazy(() => import("./pages/FAQChatbot"));
+const WarehouseAnalysis = lazy(() => import("./pages/WarehouseAnalysis"));
+const SFTPMonitor = lazy(() => import("./pages/SFTPMonitor"));
+const DataQuality = lazy(() => import("./pages/DataQuality"));
+const StockOutAnalysis = lazy(() => import("./pages/StockOutAnalysis"));
+const ReplenishmentPlanner = lazy(() => import("./pages/ReplenishmentPlanner"));
+const DOHAnalysis = lazy(() => import("./pages/DOHAnalysis"));
+const PlanogramFillRate = lazy(() => import("./pages/PlanogramFillRate"));
+const UserManagement = lazy(() => import("./pages/UserManagement"));
+const TenantAdminPanel = lazy(() => import("./pages/TenantAdminPanel"));
+const AIDemandPlanning = lazy(() => import("./pages/AIDemandPlanning"));
+const BuyPlanDashboard = lazy(() => import("./pages/BuyPlanDashboard"));
+const OnboardingWizardPage = lazy(() => import("./pages/OnboardingWizard"));
+const Signup = lazy(() => import("./pages/Signup"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
+const PlanUpgrade = lazy(() => import("./pages/PlanUpgrade"));
+const ScheduledJobs = lazy(() => import("./pages/ScheduledJobs"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
+const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
+const AiDemandPlanningPage = lazy(() => import("./pages/AiDemandPlanning"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Eagerly loaded (used on every auth page load)
+import { ReturnUserBanner } from "./components/ReturnUserBanner";
+
+// Suspense fallback
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+    <div className="spinner" />
+  </div>
+);
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -122,7 +131,11 @@ const AuthenticatedApp = () => {
 
   // Show full-page wizard for brand-new tenants
   if (onboardingChecked && needsOnboarding) {
-    return <OnboardingWizard onComplete={() => { setNeedsOnboarding(false); window.location.href = "/upload"; }} />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <OnboardingWizardPage onComplete={() => { setNeedsOnboarding(false); window.location.href = "/upload"; }} />
+      </Suspense>
+    );
   }
 
   const showReturnBanner = onboardingChecked && !needsOnboarding && !bannerDismissed
@@ -145,6 +158,7 @@ const AuthenticatedApp = () => {
           <NotificationBell />
         </div>
         <div className="mx-auto w-full max-w-[1600px] px-6 lg:px-10 py-4">
+          <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Always accessible */}
             <Route path="/" element={<GettingStarted uploadStatus={uploadStatus} />} />
@@ -166,16 +180,17 @@ const AuthenticatedApp = () => {
             <Route path="/data-quality"  element={<ProtectedRoute permission="data.quality.view"><DataQuality /></ProtectedRoute>} />
             <Route path="/ai-demand"     element={<PlanGuard module="ai_forecasting"><AIDemandPlanning /></PlanGuard>} />
             <Route path="/buy-plan"      element={<PlanGuard module="buy_plan"><BuyPlanDashboard /></PlanGuard>} />
-            <Route path="/onboarding"    element={<OnboardingWizard onComplete={() => window.location.href = '/upload'} />} />
+            <Route path="/onboarding"    element={<OnboardingWizardPage onComplete={() => window.location.href = '/upload'} />} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />
             <Route path="/tenant-admin"  element={<ProtectedRoute permission="settings.tenant.view"><TenantAdminPanel /></ProtectedRoute>} />
             <Route path="/plan-upgrade"  element={<PlanUpgrade />} />
             <Route path="/scheduled-jobs" element={<ScheduledJobs />} />
 
-            {/* Catch-all */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 — proper Not Found page */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </div>
       </main>
     </div>
@@ -218,14 +233,17 @@ const AppRouter = () => {
   // Force password change screen — blocks all other routes
   if (isAuthenticated && mustChangePassword) {
     return (
-      <Routes>
-        <Route path="*" element={<ChangePassword />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="*" element={<ChangePassword />} />
+        </Routes>
+      </Suspense>
     );
   }
 
   // Public routes available regardless of auth state
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <Signup />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
@@ -241,10 +259,11 @@ const AppRouter = () => {
       ) : (
         <>
           <Route path="/" element={<LandingPage />} />
-          <Route path="*" element={<LandingPage />} />
+          <Route path="*" element={<NotFound />} />
         </>
       )}
     </Routes>
+    </Suspense>
   );
 };
 

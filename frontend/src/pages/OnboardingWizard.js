@@ -177,8 +177,8 @@ const SetupProgress = ({ status, onGoUpload, onGoDashboard, onSkipAll }) => {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Setup Progress &mdash; 4 Steps to Complete</h1>
-          <p className="text-slate-500 mt-1 text-sm">Follow this order and everything works perfectly.</p>
+          <h2 className="text-2xl font-bold text-slate-900">Setup Progress</h2>
+          <p className="text-slate-500 mt-1 text-sm">4 steps to complete. Follow this order and everything works perfectly.</p>
           <button
             data-testid="skip-all-onboarding"
             onClick={onSkipAll}

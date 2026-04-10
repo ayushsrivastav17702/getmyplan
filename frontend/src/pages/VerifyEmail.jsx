@@ -42,6 +42,8 @@ const VerifyEmail = () => {
               <Building2 size={28} className="text-white" />
             </div>
 
+            <h1 className="sr-only">Email Verification</h1>
+
             {/* Verifying */}
             {status === "verifying" && (
               <>

@@ -119,6 +119,9 @@ const PlanUpgrade = () => {
 
   return (
     <div className="space-y-8" data-testid="plan-upgrade-page">
+      {/* Page H1 */}
+      <h1 className="text-3xl font-bold tracking-tight text-slate-900">Plan & Billing</h1>
+
       {/* Current Plan Banner */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6" data-testid="current-plan-banner">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
