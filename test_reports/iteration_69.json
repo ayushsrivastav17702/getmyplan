@@ -1,0 +1,136 @@
+{
+  "summary": "Iteration 69: Onboarding Wizard API & Frontend Testing - Backend 18/19 PASS (1 expected failure), Frontend 11/11 PASS. All onboarding endpoints working correctly. Both test tenants (increff, demo) are fully onboarded and correctly skip the welcome screen.",
+
+  "test_case_matrix": {
+    "BACKEND_ONBOARDING_STATUS_STRUCTURE": {
+      "TEST_01_status_returns_200": {"status": "PASS", "notes": "GET /api/onboarding/status returns 200"},
+      "TEST_02_has_is_onboarded": {"status": "PASS", "notes": "Response has is_onboarded boolean field"},
+      "TEST_03_has_current_step": {"status": "PASS", "notes": "Response has current_step integer (1-4)"},
+      "TEST_04_has_progress_percentage": {"status": "PASS", "notes": "Response has progress_percentage (0-100)"},
+      "TEST_05_has_sample_data_loaded": {"status": "PASS", "notes": "Response has sample_data_loaded boolean"},
+      "TEST_06_has_master_data_object": {"status": "PASS", "notes": "Response has master_data with sku_master, store_master, style_master, warehouse_master, total_uploaded, complete, all_complete"},
+      "TEST_07_has_transactional_data_object": {"status": "PASS", "notes": "Response has transactional_data with daily_sales (including days), store_inventory, cogs, open_orders, total_uploaded, complete"}
+    },
+    "BACKEND_INCREFF_TENANT": {
+      "TEST_08_increff_is_onboarded_true": {"status": "PASS", "notes": "is_onboarded=true for increff tenant"},
+      "TEST_09_increff_current_step_4": {"status": "PASS", "notes": "current_step=4 for increff tenant"},
+      "TEST_10_increff_progress_100": {"status": "PASS", "notes": "progress_percentage=100 for increff tenant"}
+    },
+    "BACKEND_DEMO_TENANT": {
+      "TEST_11_demo_is_onboarded_true": {"status": "PASS", "notes": "is_onboarded=true for demo tenant"},
+      "TEST_12_demo_has_all_data_types": {"status": "PASS", "notes": "Demo has sku_master, store_master, daily_sales uploaded"}
+    },
+    "BACKEND_SKIP_ENDPOINT": {
+      "TEST_13_skip_returns_200": {"status": "PASS", "notes": "POST /api/onboarding/skip returns 200"},
+      "TEST_14_skip_returns_success": {"status": "PASS", "notes": "Returns {success: true, message: 'Onboarding skipped'}"}
+    },
+    "BACKEND_COMPLETE_ENDPOINT": {
+      "TEST_15_complete_returns_200": {"status": "PASS", "notes": "POST /api/onboarding/complete returns 200"},
+      "TEST_16_complete_returns_success": {"status": "PASS", "notes": "Returns {success: true, message: 'Onboarding complete!'}"}
+    },
+    "BACKEND_RESET_ENDPOINT": {
+      "TEST_17_reset_returns_200": {"status": "PASS", "notes": "POST /api/onboarding/reset returns 200"},
+      "TEST_18_reset_returns_success": {"status": "PASS", "notes": "Returns {success: true, message: 'Onboarding reset'}"}
+    },
+    "BACKEND_AUTH_REQUIRED": {
+      "TEST_19_status_without_auth": {"status": "EXPECTED_FAIL", "notes": "Returns 401 without auth - correct behavior, endpoint requires authentication"}
+    },
+    "FRONTEND_LOGIN": {
+      "TEST_20_increff_login": {"status": "PASS", "notes": "Login with ayush.srivastav@increff.com works, redirects to home"},
+      "TEST_21_demo_login": {"status": "PASS", "notes": "Login with admin@demo.com works, redirects to home"}
+    },
+    "FRONTEND_ONBOARDING_WIZARD": {
+      "TEST_22_no_welcome_for_onboarded": {"status": "PASS", "notes": "Onboarded users do NOT see data-testid='onboarding-welcome'"},
+      "TEST_23_no_banner_for_onboarded": {"status": "PASS", "notes": "Fully onboarded users do NOT see data-testid='return-user-banner'"},
+      "TEST_24_onboarding_route_redirects": {"status": "PASS", "notes": "/onboarding redirects onboarded users to /upload"}
+    },
+    "FRONTEND_DATA_UPLOAD_PAGE": {
+      "TEST_25_data_requirements_panel": {"status": "PASS", "notes": "data-testid='data-requirements-panel' visible on /upload"},
+      "TEST_26_data_days_indicator": {"status": "PASS", "notes": "data-testid='data-days-indicator' shows '90 days' for increff"},
+      "TEST_27_panel_content": {"status": "PASS", "notes": "Panel shows Required Date Range, Minimum/Recommended/AI Forecast sections"}
+    },
+    "FRONTEND_SIDEBAR_NAVIGATION": {
+      "TEST_28_sidebar_visible": {"status": "PASS", "notes": "Sidebar visible after login with all navigation items"},
+      "TEST_29_dashboard_navigation": {"status": "PASS", "notes": "Clicking Executive Dashboard navigates to /dashboard"},
+      "TEST_30_dashboard_loads_data": {"status": "PASS", "notes": "Executive Dashboard shows revenue, units sold, charts"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "18/19 PASS (1 expected failure - auth required)",
+    "FRONTEND_TESTS": "11/11 PASS",
+    "TOTAL": "29/30 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "feature_verification": {
+    "onboarding_status_endpoint": {
+      "endpoint": "GET /api/onboarding/status",
+      "response_fields": ["tenant_id", "is_onboarded", "current_step", "progress_percentage", "sample_data_loaded", "master_data", "transactional_data"],
+      "master_data_fields": ["sku_master", "store_master", "style_master", "warehouse_master", "total_uploaded", "complete", "all_complete"],
+      "transactional_data_fields": ["daily_sales", "store_inventory", "cogs", "open_orders", "total_uploaded", "complete"],
+      "daily_sales_has_days": true
+    },
+    "onboarding_wizard_behavior": {
+      "new_users": "See WelcomeScreen with data-testid='onboarding-welcome'",
+      "onboarded_users": "Auto-complete wizard, redirect to /upload",
+      "partial_users": "See ReturnUserBanner with data-testid='return-user-banner'"
+    },
+    "data_upload_page": {
+      "data_requirements_panel": "data-testid='data-requirements-panel'",
+      "data_days_indicator": "data-testid='data-days-indicator'",
+      "increff_days": 90,
+      "demo_days": 29
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_onboarding_iter69.py",
+    "/app/test_reports/pytest/pytest_results_iter69.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Onboarding status endpoint correctly returns data-driven step detection based on actual collection counts",
+    "Frontend OnboardingWizard correctly auto-completes for onboarded users (is_onboarded=true triggers onComplete callback)",
+    "ReturnUserBanner correctly hidden when is_onboarded=true or progress_percentage>=100",
+    "Data Requirements Panel correctly shows on /upload page with proper data-testid attributes"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_onboarding_iter69.py"
+  ],
+
+  "success_rate": {
+    "backend": "95% (18/19 - 1 expected failure)",
+    "frontend": "100% (11/11)"
+  },
+
+  "test_credentials": {
+    "increff_user": "ayush.srivastav@increff.com / Ayush@114988 (90 days data, fully onboarded)",
+    "demo_admin": "admin@demo.com / demo1234 (29 days data, fully onboarded)"
+  },
+
+  "seed_data_creation": "None - used existing test tenants",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 69 verified Onboarding Wizard feature. Both test tenants (increff, demo) are fully onboarded with is_onboarded=true, current_step=4, progress_percentage=100. The WelcomeScreen only appears for brand new tenants with zero data. For onboarded users, /onboarding route triggers onComplete callback which redirects to /upload. Data Requirements Panel on /upload page has data-testid='data-requirements-panel' and data-testid='data-days-indicator'.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

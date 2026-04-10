@@ -35,7 +35,7 @@ import UserManagement from "./pages/UserManagement";
 import TenantAdminPanel from "./pages/TenantAdminPanel";
 import AIDemandPlanning from "./pages/AIDemandPlanning";
 import BuyPlanDashboard from "./pages/BuyPlanDashboard";
-import OnboardingWizard from "./pages/OnboardingWizard";
+import OnboardingWizard, { ReturnUserBanner } from "./pages/OnboardingWizard";
 import Signup from "./pages/Signup";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -93,6 +93,8 @@ const AuthenticatedApp = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const fetchUploadStatus = useCallback(async () => {
     try {
@@ -108,15 +110,20 @@ const AuthenticatedApp = () => {
   // Check onboarding status once on mount
   useEffect(() => {
     axios.get(`${API}/onboarding/status`).then(res => {
-      setNeedsOnboarding(!res.data?.is_onboarded);
+      const data = res.data;
+      setOnboardingStatus(data);
+      setNeedsOnboarding(!data?.is_onboarded && !data?.sample_data_loaded && data?.progress_percentage === 0);
       setOnboardingChecked(true);
     }).catch(() => setOnboardingChecked(true));
   }, []);
 
-  // Show full-page wizard for non-onboarded tenants
+  // Show full-page wizard for brand-new tenants
   if (onboardingChecked && needsOnboarding) {
     return <OnboardingWizard onComplete={() => { setNeedsOnboarding(false); window.location.href = "/upload"; }} />;
   }
+
+  const showReturnBanner = onboardingChecked && !needsOnboarding && !bannerDismissed
+    && onboardingStatus && !onboardingStatus.is_onboarded && onboardingStatus.progress_percentage < 100;
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FA]">
@@ -124,6 +131,13 @@ const AuthenticatedApp = () => {
 
       <main className="flex-1 min-h-screen">
         <TrialBanner />
+        {showReturnBanner && (
+          <ReturnUserBanner
+            status={onboardingStatus}
+            onContinue={() => { window.location.href = "/onboarding"; }}
+            onDismiss={() => setBannerDismissed(true)}
+          />
+        )}
         <div className="flex items-center justify-end px-6 lg:px-10 pt-4 pb-0">
           <NotificationBell />
         </div>
