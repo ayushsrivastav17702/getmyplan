@@ -38,9 +38,12 @@ const VerifyEmail = () => {
         <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
           <div className="p-8 text-center">
             {/* Logo */}
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#0176D3] mb-6">
-              <Building2 size={28} className="text-white" />
-            </div>
+            <img 
+              src="/getmyplan-logo-sm.png" 
+              alt="Getmyplan" 
+              className="h-12 w-auto mx-auto mb-6"
+              data-testid="verify-email-logo"
+            />
 
             <h1 className="sr-only">Email Verification</h1>
 

@@ -199,23 +199,17 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
               className="w-full flex items-center justify-center h-9 rounded-md hover:bg-white/10 transition-colors"
               title="Expand sidebar (Ctrl+B)"
             >
-              <ChevronRight size={18} className="text-slate-400" />
+              <img src="/getmyplan-logo-sm.png" alt="Getmyplan" className="h-6 w-6 object-contain rounded" data-testid="sidebar-logo-collapsed" />
             </button>
           ) : (
             <>
               <div className="flex items-center gap-2.5 min-w-0">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="" className="h-7 max-w-[140px] object-contain" data-testid="sidebar-logo" onError={e => { e.target.style.display = "none"; }} />
-                ) : (
-                  <>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0" style={{ background: `linear-gradient(135deg, ${primaryColor}, #8B5CF6)` }}>
-                      G
-                    </div>
-                    <span className="text-white font-semibold text-sm truncate" data-testid="sidebar-title">
-                      {tenantInfo?.company_name || "GetMyPlan"}
-                    </span>
-                  </>
-                )}
+                <img 
+                  src="/getmyplan-logo-sm.png" 
+                  alt="Getmyplan - AI Demand Forecasting" 
+                  className="h-8 max-w-[160px] object-contain" 
+                  data-testid="sidebar-logo" 
+                />
               </div>
               <button
                 data-testid="sidebar-collapse-btn"

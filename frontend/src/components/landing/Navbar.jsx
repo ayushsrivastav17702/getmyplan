@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, ChevronDown, Zap } from "lucide-react";
+import { Menu, X, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Navbar() {
@@ -23,12 +23,12 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-              <Zap className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-              GetMyPlan
-            </span>
+            <img 
+              src="/getmyplan-logo-sm.png" 
+              alt="Getmyplan - AI Demand Forecasting for Fashion Retail"
+              className="h-10 w-auto"
+              data-testid="navbar-logo"
+            />
           </Link>
 
           <div className="hidden md:flex items-center space-x-8">

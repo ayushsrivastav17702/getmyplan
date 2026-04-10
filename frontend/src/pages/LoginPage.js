@@ -41,9 +41,12 @@ const LoginPage = () => {
       <div className="w-full max-w-md">
         {/* Logo / Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#0176D3] mb-4">
-            <Building2 size={28} className="text-white" />
-          </div>
+          <img 
+            src="/getmyplan-logo-sm.png" 
+            alt="Getmyplan - AI Demand Forecasting for Fashion Retail" 
+            className="h-12 w-auto mx-auto mb-4"
+            data-testid="login-logo"
+          />
           <h1 className="text-2xl font-bold text-slate-900">GetMyPlan</h1>
           <p className="text-sm text-slate-500 mt-1">AI-Powered Retail Analytics</p>
         </div>

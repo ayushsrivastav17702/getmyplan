@@ -29,9 +29,12 @@ export default function ForgotPassword() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 flex items-center justify-center p-4" data-testid="forgot-password-page">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#0176D3] mb-4">
-            <Building2 size={28} className="text-white" />
-          </div>
+          <img 
+            src="/getmyplan-logo-sm.png" 
+            alt="Getmyplan" 
+            className="h-12 w-auto mx-auto mb-4"
+            data-testid="forgot-password-logo"
+          />
           <h1 className="text-2xl font-bold text-slate-900">GetMyPlan</h1>
         </div>
 
