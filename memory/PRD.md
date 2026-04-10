@@ -73,6 +73,18 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Preserved all existing analytics (ROS Gap, Size Gap, NOOS) untouched
 - **Testing: 27/27 PASS (Iteration 63)**
 
+### Phase 63 — Sidebar Redesign (Apr 2026)
+- Extracted sidebar from inline App.js into dedicated `/components/Sidebar.jsx`
+- Collapsible: 260px expanded / 72px collapsed with localStorage persistence
+- Section grouping: MAIN, ANALYTICS, INVENTORY, OPERATIONS, ADMIN, TOOLS
+- Workflow-ordered modules: Upload -> Executive -> Analytics -> Inventory -> Operations -> Admin
+- Active page indicator (blue left bar + bg highlight)
+- Keyboard shortcut: Ctrl+B toggle
+- Hover tooltips in collapsed mode (CSS-only)
+- Preserved RBAC, plan guards, upload status, tenant info, data files, user bar
+- Dark theme (#0B1628) with proper contrast
+- **Testing: 18/18 PASS, 1 INFO (Iteration 64)**
+
 ## Prioritized Backlog
 
 ### P1 — Next
