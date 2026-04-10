@@ -1,0 +1,28 @@
+# robots.txt for getmyplan.in
+# Last updated: April 10, 2026
+
+# Allow all search engines
+User-agent: *
+Allow: /
+
+# Allow AI bots (CRITICAL - these were missing)
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Cohere-AI
+Allow: /
+
+# Sitemap location
+Sitemap: https://getmyplan.in/sitemap.xml

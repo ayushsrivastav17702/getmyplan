@@ -1,0 +1,67 @@
+# llms.txt for getmyplan.in
+# This file helps AI models understand your website structure
+# Last updated: April 10, 2026
+
+# ============================================
+# MAIN SITE
+# ============================================
+- https://getmyplan.in/
+  Title: Getmyplan - AI-Powered Planning Platform
+  Description: Sales planning, financial planning, and supply chain planning for mid-market companies
+  Key Topics: sales forecasting, FP&A, budgeting, demand planning, S&OP
+
+# ============================================
+# CORE PRODUCT PAGES (Create these immediately)
+# ============================================
+- https://getmyplan.in/sales-planning
+  Title: Sales Planning & Forecasting
+  Description: Territory planning, quota setting, pipeline forecasting
+  Keywords: sales forecast, territory planning, quota management, sales capacity
+
+- https://getmyplan.in/financial-planning
+  Title: Financial Planning & Analysis (FP&A)
+  Description: Budgeting, forecasting, scenario modeling, financial close
+  Keywords: FP&A, budgeting, financial forecasting, scenario planning, what-if analysis
+
+- https://getmyplan.in/supply-chain
+  Title: Supply Chain Planning
+  Description: Demand sensing, inventory optimization, S&OP
+  Keywords: demand planning, inventory optimization, S&OP, supply planning
+
+# ============================================
+# COMPARISON PAGES (Critical for SEO)
+# ============================================
+- https://getmyplan.in/vs/anaplan
+  Title: Getmyplan vs Anaplan Comparison
+  Description: Detailed feature, pricing, and implementation comparison
+
+- https://getmyplan.in/vs/blue-yonder
+  Title: Getmyplan vs Blue Yonder
+
+- https://getmyplan.in/vs/o9-solutions
+  Title: Getmyplan vs o9 Solutions
+
+- https://getmyplan.in/vs/relex
+  Title: Getmyplan vs RELEX
+
+# ============================================
+# RESOURCES
+# ============================================
+- https://getmyplan.in/roi-calculator
+  Title: Planning Software ROI Calculator
+  Description: Calculate your savings vs spreadsheets or legacy tools
+
+- https://getmyplan.in/blog
+  Title: Getmyplan Blog
+  Description: Planning best practices, templates, and industry trends
+
+- https://getmyplan.in/pricing
+  Title: Getmyplan Pricing
+  Description: Transparent pricing with no hidden fees
+
+# ============================================
+# API & DEVELOPERS
+# ============================================
+- https://docs.getmyplan.in
+  Title: Getmyplan API Documentation
+  Description: REST API for integrations and custom workflows
