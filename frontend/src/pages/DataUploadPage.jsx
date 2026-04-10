@@ -6,6 +6,7 @@ import {
 } from "../components/ui/select";
 import {
   Package, CheckCircle, Upload, Download, RefreshCw,
+  Rocket, X, Eye,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -15,6 +16,91 @@ import { PreviousDaysList } from "../components/upload/PreviousDaysList";
 import { FileDropzone } from "../components/upload/FileDropzone";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+
+/* ─── Sample Data Banner ─── */
+const SampleDataBanner = ({ onLoad, loading }) => {
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem("sampleBannerDismissed") === "true");
+  if (dismissed) return null;
+  return (
+    <div data-testid="sample-data-banner" className="relative rounded-xl overflow-hidden mb-6" style={{ background: "linear-gradient(135deg, #0B2545 0%, #13315C 50%, #0176D3 100%)" }}>
+      <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4" />
+      <div className="relative flex items-center gap-5 px-6 py-5 z-10 flex-wrap">
+        <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+          <Rocket className="w-6 h-6 text-blue-300" />
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <h3 className="text-white font-semibold text-base mb-0.5">New here? Try with sample data</h3>
+          <p className="text-blue-200 text-sm">Load 15 SKUs, 5 stores, and 90 days of sales to explore all features instantly.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            data-testid="load-sample-btn"
+            onClick={onLoad}
+            disabled={loading}
+            className="bg-white text-[#0B2545] hover:bg-blue-50 font-medium"
+          >
+            {loading ? "Loading..." : "Load Sample Data"}
+          </Button>
+          <button
+            data-testid="dismiss-sample-banner"
+            onClick={() => { setDismissed(true); localStorage.setItem("sampleBannerDismissed", "true"); }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+          >
+            <X className="w-4 h-4 text-blue-200" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Preview Modal ─── */
+const PreviewModal = ({ type, data, total, onClose }) => {
+  if (!data) return null;
+  const cols = data.length > 0 ? Object.keys(data[0]) : [];
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
+      <div data-testid="preview-modal" className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+          <div>
+            <h3 className="font-semibold text-slate-900 text-sm capitalize">{type?.replace(/_/g, " ")} Preview</h3>
+            <p className="text-xs text-slate-500">{total?.toLocaleString()} total records</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors">
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+        <div className="overflow-auto max-h-[60vh] p-4">
+          {data.length === 0 ? (
+            <p className="text-center text-slate-500 py-8 text-sm">No data to preview.</p>
+          ) : (
+            <table className="min-w-full text-xs border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  {cols.map(c => (
+                    <th key={c} className="sticky top-0 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200 whitespace-nowrap">{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50">
+                    {cols.map(c => (
+                      <td key={c} className="px-3 py-1.5 border-b border-slate-100 whitespace-nowrap max-w-[200px] truncate">{String(row[c] ?? "")}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {data.length > 0 && data.length < (total || 0) && (
+            <p className="text-center text-xs text-slate-400 mt-3">Showing first {data.length} of {total?.toLocaleString()} rows</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const DataUploadPage = () => {
   const { token } = useAuth();
@@ -28,6 +114,8 @@ const DataUploadPage = () => {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
+  const [preview, setPreview] = useState(null); // { type, data, total }
 
   const hdrs = { Authorization: `Bearer ${token}` };
 
@@ -138,8 +226,41 @@ const DataUploadPage = () => {
 
   const downloadTemplate = (t) => window.open(`${API}/api/upload/v2/template/${t}`, "_blank");
 
+  /* ─── Sample data loader ─── */
+  const handleLoadSample = async () => {
+    setLoadingSample(true);
+    try {
+      const r = await fetch(`${API}/api/upload/v2/load-sample-data`, { method: "POST", headers: hdrs });
+      const d = await r.json();
+      if (d.success) {
+        refresh();
+        localStorage.setItem("sampleBannerDismissed", "true");
+      } else {
+        alert(d.message || "Failed to load sample data.");
+      }
+    } catch { alert("Network error loading sample data."); }
+    finally { setLoadingSample(false); }
+  };
+
+  /* ─── Preview handler ─── */
+  const handlePreview = async (type) => {
+    try {
+      const r = await fetch(`${API}/api/upload/v2/preview/${type}`, { headers: hdrs });
+      const d = await r.json();
+      setPreview({ type: d.type || type, data: d.preview || [], total: d.total || 0 });
+    } catch { console.error("Preview failed"); }
+  };
+
+  /* ─── Check if tenant has any data ─── */
+  const hasAnyData = masterStatus && Object.values(masterStatus).some(s => (s?.count || 0) > 0);
+
   return (
     <div className="space-y-8" data-testid="data-upload-page">
+      {/* Sample Data Banner — only when no data */}
+      {!hasAnyData && (
+        <SampleDataBanner onLoad={handleLoadSample} loading={loadingSample} />
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
@@ -167,23 +288,23 @@ const DataUploadPage = () => {
           <MasterCard type="sku" title="SKU Master" description="Products & pricing"
             count={masterStatus?.sku_master?.count} lastUpdated={masterStatus?.sku_master?.last_updated}
             onUpload={() => { setSelectedType("sku_master"); setFile(null); setResult(null); }}
-            onDownload={() => downloadTemplate("sku_master")} />
+            onDownload={() => downloadTemplate("sku_master")} onPreview={() => handlePreview("sku_ean_master")} />
           <MasterCard type="store" title="Store Master" description="Store locations"
             count={masterStatus?.store_master?.count} lastUpdated={masterStatus?.store_master?.last_updated}
             onUpload={() => { setSelectedType("store_master"); setFile(null); setResult(null); }}
-            onDownload={() => downloadTemplate("store_master")} />
+            onDownload={() => downloadTemplate("store_master")} onPreview={() => handlePreview("store_master")} />
           <MasterCard type="warehouse" title="Warehouse Master" description="Warehouses & capacity"
             count={masterStatus?.warehouse_master?.count} lastUpdated={masterStatus?.warehouse_master?.last_updated}
             onUpload={() => { setSelectedType("warehouse_master"); setFile(null); setResult(null); }}
-            onDownload={() => downloadTemplate("warehouse_master")} />
+            onDownload={() => downloadTemplate("warehouse_master")} onPreview={() => handlePreview("warehouse_master")} />
           <MasterCard type="style" title="Style Master" description="Styles & categories"
             count={masterStatus?.style_master?.count} lastUpdated={masterStatus?.style_master?.last_updated}
             onUpload={() => { setSelectedType("style_master"); setFile(null); setResult(null); }}
-            onDownload={() => downloadTemplate("style_master")} />
+            onDownload={() => downloadTemplate("style_master")} onPreview={() => handlePreview("style_master")} />
           <MasterCard type="planogram" title="Planogram" description="Store shelf norms"
             count={masterStatus?.planogram?.count} lastUpdated={masterStatus?.planogram?.last_updated}
             onUpload={() => { setSelectedType("planogram"); setFile(null); setResult(null); }}
-            onDownload={() => downloadTemplate("planogram")} />
+            onDownload={() => downloadTemplate("planogram")} onPreview={() => handlePreview("planogram")} />
         </div>
       </section>
 
@@ -274,6 +395,11 @@ const DataUploadPage = () => {
         </div>
         <PreviousDaysList days={previousDays} onViewDay={(date) => console.log("View day:", date)} />
       </section>
+
+      {/* Preview Modal */}
+      {preview && (
+        <PreviewModal type={preview.type} data={preview.data} total={preview.total} onClose={() => setPreview(null)} />
+      )}
     </div>
   );
 };

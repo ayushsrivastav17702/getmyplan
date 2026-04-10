@@ -1,5 +1,5 @@
 import React from "react";
-import { Package, Store, Warehouse, Download, Upload } from "lucide-react";
+import { Package, Store, Warehouse, Download, Upload, Eye } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 
@@ -10,7 +10,7 @@ const colorMap = {
   warehouse: { bg: "bg-violet-100", fg: "text-violet-600" },
 };
 
-export const MasterCard = ({ type, title, description, count, lastUpdated, onUpload, onDownload }) => {
+export const MasterCard = ({ type, title, description, count, lastUpdated, onUpload, onDownload, onPreview }) => {
   const Icon = iconMap[type] || Package;
   const colors = colorMap[type] || colorMap.sku;
 
@@ -36,6 +36,11 @@ export const MasterCard = ({ type, title, description, count, lastUpdated, onUpl
             </span>
           </div>
           <div className="flex gap-1">
+            {(count ?? 0) > 0 && onPreview && (
+              <Button variant="ghost" size="sm" onClick={onPreview} title="Preview data" data-testid={`preview-${type}`}>
+                <Eye className="w-4 h-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={onDownload} title="Download template">
               <Download className="w-4 h-4" />
             </Button>

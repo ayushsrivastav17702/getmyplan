@@ -643,3 +643,152 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
         await collection.insert_many(records)
 
     return True
+
+
+
+# ============================================================
+# PREVIEW ENDPOINT
+# ============================================================
+
+@router.get("/preview/{upload_type}")
+async def preview_data(upload_type: str, request: Request):
+    """Return first 10 rows of an uploaded collection for preview."""
+    db = _get_db()
+    VALID = ["sku_master", "store_master", "warehouse_master", "style_master",
+             "planogram", "daily_sales", "store_inventory", "warehouse_inventory",
+             "cogs", "open_orders"]
+    slug = upload_type.replace("-", "_")
+    if slug not in VALID:
+        raise HTTPException(400, f"Unknown upload type: {upload_type}")
+
+    cursor = db[slug].find({}, {"_id": 0, "tenant_id": 0, "uploaded_by": 0, "uploaded_at": 0}).limit(10)
+    preview = await cursor.to_list(10)
+    total = await db[slug].estimated_document_count()
+    return {"preview": preview, "total": total, "type": slug}
+
+
+# ============================================================
+# SAMPLE DATA LOADER
+# ============================================================
+
+@router.post("/load-sample-data")
+async def load_sample_data(request: Request):
+    """Load pre-built sample data for onboarding / demo purposes."""
+    import random
+    db = _get_db()
+
+    # Check if tenant already has data
+    existing = await db.daily_sales.estimated_document_count()
+    if existing > 50:
+        return {"success": False, "message": "This tenant already has data. Sample data is for empty tenants."}
+
+    now = datetime.now(timezone.utc)
+    random.seed(42)
+
+    styles = ["POLO-BLK", "POLO-WHT", "POLO-BLU", "JEANS-SLM", "JEANS-REG",
+              "TSHIRT-GRY", "TSHIRT-RED", "CHINO-KHK", "CHINO-NVY", "JACKET-BLK",
+              "SHIRT-STR", "SHIRT-PLN", "SHORT-DNM", "DRESS-FLR", "SKIRT-PLT"]
+    stores = ["MUM-001", "DEL-002", "BLR-003", "HYD-004", "CHN-005"]
+    sizes = ["S", "M", "L", "XL", "XXL"]
+    categories = {"POLO": "Tops", "JEANS": "Bottoms", "TSHIRT": "Tops", "CHINO": "Bottoms",
+                  "JACKET": "Outerwear", "SHIRT": "Tops", "SHORT": "Bottoms", "DRESS": "Dresses", "SKIRT": "Bottoms"}
+
+    # 1. Style Master
+    style_docs = []
+    for s in styles:
+        prefix = s.split("-")[0]
+        style_docs.append({
+            "style_code": s, "style_name": s.replace("-", " ").title(),
+            "category": categories.get(prefix, "Other"), "sub_category": prefix.title(),
+            "brand": "DemoBrand", "season": "SS26",
+        })
+    await db.style_master.delete_many({})
+    await db.style_master.insert_many(style_docs)
+
+    # 2. SKU Master (style x size)
+    sku_docs = []
+    for s in styles:
+        for sz in sizes:
+            ean = f"EAN{styles.index(s):02d}{sizes.index(sz)}"
+            mrp = random.choice([999, 1299, 1499, 1999, 2499])
+            sku_docs.append({
+                "ean": ean, "style": s, "size": sz,
+                "mrp": mrp, "cost": round(mrp * 0.45, 2), "barcode": ean,
+            })
+    await db.sku_ean_master.delete_many({})
+    await db.sku_ean_master.insert_many(sku_docs)
+
+    # 3. Store Master
+    store_docs = [
+        {"store_code": "MUM-001", "store_name": "Mumbai Central", "city": "Mumbai", "region": "West", "channel": "EBO", "area_sqft": 2500},
+        {"store_code": "DEL-002", "store_name": "Delhi Connaught", "city": "Delhi", "region": "North", "channel": "EBO", "area_sqft": 3000},
+        {"store_code": "BLR-003", "store_name": "Bangalore Indiranagar", "city": "Bangalore", "region": "South", "channel": "EBO", "area_sqft": 2200},
+        {"store_code": "HYD-004", "store_name": "Hyderabad Jubilee", "city": "Hyderabad", "region": "South", "channel": "MBO", "area_sqft": 1800},
+        {"store_code": "CHN-005", "store_name": "Chennai T Nagar", "city": "Chennai", "region": "South", "channel": "MBO", "area_sqft": 2000},
+    ]
+    await db.store_master.delete_many({})
+    await db.store_master.insert_many(store_docs)
+
+    # 4. Warehouse Master
+    wh_docs = [
+        {"warehouse_code": "WH-MUM", "warehouse_name": "Mumbai DC", "city": "Mumbai", "capacity": 50000},
+        {"warehouse_code": "WH-DEL", "warehouse_name": "Delhi DC", "city": "Delhi", "capacity": 40000},
+    ]
+    await db.warehouse_master.delete_many({})
+    await db.warehouse_master.insert_many(wh_docs)
+
+    # 5. Daily Sales (90 days)
+    sales = []
+    for day_offset in range(90):
+        day = (now - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+        for store in stores:
+            for style in random.sample(styles, k=random.randint(5, 12)):
+                sz = random.choice(sizes)
+                ean = f"EAN{styles.index(style):02d}{sizes.index(sz)}"
+                qty = random.randint(1, 8)
+                mrp = random.choice([999, 1299, 1499, 1999, 2499])
+                rev = qty * mrp * random.uniform(0.7, 1.0)
+                sales.append({
+                    "day": day, "store_code": store, "sku": ean, "style": style,
+                    "quantity": qty, "revenue": round(rev, 2), "mrp": mrp,
+                })
+    await db.daily_sales.delete_many({})
+    await db.daily_sales.insert_many(sales)
+
+    # 6. Store Inventory
+    inv = []
+    for store in stores:
+        for style in styles:
+            for sz in sizes:
+                ean = f"EAN{styles.index(style):02d}{sizes.index(sz)}"
+                inv.append({
+                    "store_code": store, "sku": ean, "style": style,
+                    "size": sz, "quantity": random.randint(0, 25),
+                    "day": now.strftime("%Y-%m-%d"),
+                })
+    await db.store_inventory.delete_many({})
+    await db.store_inventory.insert_many(inv)
+
+    # 7. Warehouse Inventory
+    wh_inv = []
+    for wh in ["WH-MUM", "WH-DEL"]:
+        for style in styles:
+            for sz in sizes:
+                ean = f"EAN{styles.index(style):02d}{sizes.index(sz)}"
+                wh_inv.append({
+                    "warehouse_code": wh, "sku": ean, "style": style,
+                    "size": sz, "quantity": random.randint(10, 200),
+                })
+    await db.warehouse_inventory.delete_many({})
+    await db.warehouse_inventory.insert_many(wh_inv)
+
+    return {
+        "success": True,
+        "message": "Sample data loaded successfully!",
+        "summary": {
+            "styles": len(styles), "skus": len(sku_docs),
+            "stores": len(stores), "warehouses": 2,
+            "sales_records": len(sales), "inventory_records": len(inv),
+            "days_of_history": 90,
+        },
+    }
