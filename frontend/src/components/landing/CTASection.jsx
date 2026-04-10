@@ -20,7 +20,7 @@ export default function CTASection() {
         </motion.h2>
         <motion.p initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.1 }}
           className="mt-4 text-base sm:text-lg text-blue-100">
-          Join 500+ fashion brands using GetMyPlan to plan smarter.
+          Join fashion brands worldwide using GetMyPlan to plan smarter.
         </motion.p>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.2 }} className="mt-8">
           <Link

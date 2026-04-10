@@ -102,9 +102,9 @@ function MiniForecast() {
 
 function MiniAlerts() {
   const alerts = [
-    { sku: "SKU-1042", store: "Mumbai Central", level: "Critical", color: "red" },
-    { sku: "SKU-2891", store: "Delhi NCR Hub", level: "Warning", color: "orange" },
-    { sku: "SKU-0567", store: "Bangalore M.G.", level: "Watch", color: "yellow" },
+    { sku: "SKU-1042", store: "Warehouse West", level: "Critical", color: "red" },
+    { sku: "SKU-2891", store: "Distribution East", level: "Warning", color: "orange" },
+    { sku: "SKU-0567", store: "Fulfillment South", level: "Watch", color: "yellow" },
   ];
   const cm = { red: "bg-red-50 border-red-200 text-red-700", orange: "bg-orange-50 border-orange-200 text-orange-700", yellow: "bg-yellow-50 border-yellow-200 text-yellow-700" };
   const dm = { red: "bg-red-500", orange: "bg-orange-500", yellow: "bg-yellow-500" };
@@ -202,15 +202,19 @@ export default function Hero({ onWatchDemo, onRequestDemo }) {
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-gray-900 leading-tight max-w-4xl mx-auto">
-            Predict demand with{" "}
+            Stop losing revenue to{" "}
             <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              91% accuracy
+              stockouts.
             </span>
           </h1>
 
-          <p className="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto">
-            Stop guessing. Start planning with AI. GetMyPlan uses 3-model ensemble ML
-            to forecast demand, optimize inventory, and prevent stockouts.
+          <p className="mt-3 text-lg sm:text-xl font-medium text-gray-800 max-w-2xl mx-auto">
+            AI demand planning for fashion retail.
+          </p>
+
+          <p className="mt-4 text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+            GetMyPlan predicts what you'll sell, where, and when &mdash; so you always have
+            stock without tying up cash. Trusted by fashion brands worldwide.
           </p>
 
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">

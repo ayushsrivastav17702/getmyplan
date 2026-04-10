@@ -260,10 +260,10 @@ function ForecastMockup() {
 
 function StockOutMockup() {
   const alerts = [
-    { sku: "SKU-1042", store: "Mumbai Central", level: "Critical", days: "0 days left", color: "red" },
-    { sku: "SKU-2891", store: "Delhi NCR Hub", level: "Warning", days: "3 days left", color: "orange" },
-    { sku: "SKU-0567", store: "Bangalore M.G.", level: "Watch", days: "7 days left", color: "yellow" },
-    { sku: "SKU-3214", store: "Chennai T.Nagar", level: "Critical", days: "1 day left", color: "red" },
+    { sku: "SKU-1042", store: "Warehouse West", level: "Critical", days: "0 days left", color: "red" },
+    { sku: "SKU-2891", store: "Distribution East", level: "Warning", days: "3 days left", color: "orange" },
+    { sku: "SKU-0567", store: "Fulfillment South", level: "Watch", days: "7 days left", color: "yellow" },
+    { sku: "SKU-3214", store: "Hub North", level: "Critical", days: "1 day left", color: "red" },
   ];
   const colorMap = {
     red: { bg: "bg-red-50", border: "border-red-200", badge: "bg-red-100 text-red-700", dot: "bg-red-500" },

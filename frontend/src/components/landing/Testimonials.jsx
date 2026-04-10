@@ -6,7 +6,7 @@ const testimonials = [
   { name: "Rahul Sharma", role: "CEO, FashionHub", content: "GetMyPlan reduced our stockouts by 40% and increased revenue by 25% in just 3 months. The AI forecasts are incredibly accurate and the team is amazing to work with.", rating: 5 },
   { name: "Priya Patel", role: "Head of Merchandising, StyleStore", content: "The buy plan generator saves us 2 days every week. We went from Excel guesswork to ML-powered buy plans overnight. Best decision we made for our inventory.", rating: 5 },
   { name: "Amit Kumar", role: "Operations Director, TrendyWear", content: "Best investment for our supply chain. ROI was evident within the first month. The explainable AI helps us understand exactly why forecasts are made.", rating: 5 },
-  { name: "Neha Gupta", role: "Merchandising Manager, UrbanMatch", content: "The multi-channel analytics helped us optimize inventory across Amazon, Flipkart, and our own website. Stockouts reduced by 60% in first quarter.", rating: 5 },
+  { name: "Neha Gupta", role: "Merchandising Manager, UrbanMatch", content: "The multi-channel analytics helped us optimize inventory across Amazon, Shopify, and our own website. Stockouts reduced by 60% in first quarter.", rating: 5 },
 ];
 
 export default function Testimonials() {
@@ -25,8 +25,8 @@ export default function Testimonials() {
             Trusted by fashion retailers
           </motion.h2>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.1 }} className="mt-4 text-base sm:text-lg text-gray-300">
-            Join 500+ brands using GetMyPlan to plan smarter
-          </motion.p>
+          Join fashion brands worldwide using GetMyPlan to plan smarter.
+        </motion.p>
         </div>
 
         <div className="relative max-w-3xl mx-auto">

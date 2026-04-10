@@ -9,7 +9,7 @@ const features = [
   { icon: Package, title: "Inventory Optimization", desc: "Days-on-Hand analysis, replenishment planning, inter-store transfer optimization.", color: "purple" },
   { icon: BarChart3, title: "Executive Dashboard", desc: "Health Score, KPI cards, revenue trends, critical alerts. Export PDF or Excel with one click.", color: "red" },
   { icon: Shield, title: "Enterprise Security", desc: "Per-tenant DB isolation, rate limiting, HSTS, CSP headers, NoSQL injection prevention. RBAC with 11 roles.", color: "indigo" },
-  { icon: Globe, title: "Multi-Channel Analytics", desc: "Amazon, Flipkart, Myntra, Ajio, Nykaa marketplace support. Channel-split forecasting.", color: "teal" },
+  { icon: Globe, title: "Multi-Channel Analytics", desc: "Amazon, Shopify, Zalando, and more marketplace support. Channel-split forecasting.", color: "teal" },
   { icon: RefreshCw, title: "Automated Replenishment", desc: "Statistical reorder points with safety stock. 5-tab planner: Reorder, Quantity, Transfer, Run, Orders.", color: "pink" },
 ];
 

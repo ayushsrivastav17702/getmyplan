@@ -57,7 +57,7 @@ async def submit_demo_request(body: DemoRequest):
             <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;">This is an automated notification from GetMyPlan.</p>
         </div>
         """
-        admin_email = os.environ.get("SMTP_USER", "info@getmyplan.in")
+        admin_email = "info@getmyplan.in"
         email_service.send_email(admin_email, f"Demo Request: {body.company} ({body.name})", html)
     except Exception as e:
         logger.warning("Failed to send demo notification email: %s", e)

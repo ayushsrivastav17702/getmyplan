@@ -57,7 +57,7 @@ const BILLING_OPTIONS = [
 
 export default function Pricing() {
   const [billing, setBilling] = useState("monthly");
-  const [currency, setCurrency] = useState("INR");
+  const [currency, setCurrency] = useState("USD");
   const [showContact, setShowContact] = useState(false);
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true });
