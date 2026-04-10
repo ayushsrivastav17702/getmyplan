@@ -11,6 +11,8 @@ import numpy as np
 import os
 import io
 
+from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tid
+
 router = APIRouter(prefix="/analytics/bi", tags=["bi-dashboard"])
 _client: Optional[AsyncIOMotorClient] = None
 _get_cached_data_func = None
@@ -91,6 +93,11 @@ async def get_bi_overview(
     BI-05: Trend indicators (up/down)  BI-06: WoW comparison  BI-07: YoY comparison
     BI-08: Targets (progress bars — sent as target values, rendered by frontend)
     """
+    _tid = _cache_tid()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
+    _hit, _data = cache_get("bi_dashboard", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await _cached("daily_sales")
     sku_df = await _cached("sku_ean_master")
     style_df = await _cached("style_master")
@@ -188,7 +195,7 @@ async def get_bi_overview(
         rev_target = cfg.get("revenue_target", total_rev * 1.1)
         qty_target = cfg.get("quantity_target", total_qty * 1.1)
 
-        return {
+        _result = {
             "kpis": {
                 "revenue": {"value": round(total_rev, 2), "wow_change": wow_rev, "yoy_change": yoy_rev_pct,
                             "trend": "up" if wow_rev > 0 else "down" if wow_rev < 0 else "flat",
@@ -203,6 +210,8 @@ async def get_bi_overview(
             "prev_period": {"start": str(prev_start.date()), "end": str(prev_end.date()),
                             "revenue": round(prev_rev, 2), "quantity": prev_qty},
         }
+        cache_set("bi_dashboard", _tid, _result, _ex)
+        return _result
     except Exception as e:
         import traceback
         traceback.print_exc()

@@ -12,6 +12,8 @@ import numpy as np
 import os
 import logging
 
+from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tid
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["stock-out"])
@@ -53,6 +55,11 @@ async def get_stock_out_analysis(
     Daily Sales Loss: ((ROS x 1) - SOH) x ASP
     Severity: LostSales x Duration x Importance
     """
+    _tid = _cache_tid()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
+    _hit, _data = cache_get("stockout_list", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await _get_cached_data('daily_sales')
     inventory_df = await _get_cached_data('store_inventory')
     sku_df = await _get_cached_data('sku_ean_master')
@@ -411,7 +418,7 @@ async def get_stock_out_analysis(
         except Exception:
             pass
 
-        return {
+        _result = {
             "summary": {
                 "total_stockouts": total_stockouts,
                 "stockout_rate": stockout_rate,
@@ -437,6 +444,8 @@ async def get_stock_out_analysis(
             "alternative_suggestions": alt_suggestions,
             "data_source": "uploaded",
         }
+        cache_set("stockout_list", _tid, _result, _ex)
+        return _result
     except Exception as e:
         logger.error(f"Stock-out analysis error: {str(e)}")
         return {"error": str(e), "data": {}, "data_source": "error"}

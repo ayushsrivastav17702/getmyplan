@@ -48,6 +48,7 @@ from routes.data_quality_rules import router as dq_rules_router
 from routes.debug import router as debug_router
 from routes.upload import router as upload_v2_router
 from services.tenant_data_provider import init_tenant_provider
+from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tenant_id, invalidate_for_upload as _invalidate_cache
 
 # Security middleware
 from middleware.security import (
@@ -1133,6 +1134,11 @@ async def get_executive_kpis(
     regions: str = None,
 ):
     """Revenue, Margin, WoW, and YoY KPIs for the executive dashboard."""
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
+    _hit, _data = cache_get("executive_kpis", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await get_cached_data('daily_sales')
     sku_df = await get_cached_data('sku_ean_master')
     cogs_df = await get_cached_data('cogs')
@@ -1255,7 +1261,7 @@ async def get_executive_kpis(
                     "previous_revenue": prev_year_rev,
                 }
 
-    return {
+    _result = {
         "revenue": total_revenue,
         "units_sold": total_units,
         "margin_pct": margin_pct,
@@ -1266,6 +1272,8 @@ async def get_executive_kpis(
         "yoy": yoy,
         "has_data": True,
     }
+    cache_set("executive_kpis", _tid, _result, _ex)
+    return _result
 
 
 @api_router.get("/analytics/executive-dashboard")
@@ -1277,6 +1285,11 @@ async def get_executive_dashboard(
     regions: str = None
 ):
     """Aggregated executive dashboard pulling top KPIs from all analytics modules."""
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
+    _hit, _data = cache_get("executive_dashboard", _tid, _ex)
+    if _hit:
+        return _data
     modules = {}
     alerts = []
 
@@ -1423,11 +1436,13 @@ async def get_executive_dashboard(
     priority_order = {'high': 0, 'medium': 1, 'low': 2}
     alerts.sort(key=lambda a: priority_order.get(a['priority'], 2))
 
-    return {
+    _result = {
         'health_score': health_score,
         'modules': modules,
         'alerts': alerts,
     }
+    cache_set("executive_dashboard", _tid, _result, _ex)
+    return _result
 
 
 @api_router.get("/analytics/executive-export/csv")
@@ -1485,6 +1500,11 @@ async def get_executive_revenue_trend(
     regions: str = None,
 ):
     """Daily revenue & units timeseries for the Executive Dashboard trend chart."""
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
+    _hit, _data = cache_get("bi_revenue_trend", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await get_cached_data('daily_sales')
     sku_df = await get_cached_data('sku_ean_master')
 
@@ -1533,7 +1553,9 @@ async def get_executive_revenue_trend(
     revenue = [round(float(v), 2) for v in daily['revenue']]
     units = [int(v) for v in daily['units']]
 
-    return {"labels": labels, "revenue": revenue, "units": units}
+    _result = {"labels": labels, "revenue": revenue, "units": units}
+    cache_set("bi_revenue_trend", _tid, _result, _ex)
+    return _result
 
 
 
@@ -1553,6 +1575,11 @@ async def get_planogram_fill_rate(
     Lost Sales = Missing Facings x ROS per Facing x ASP
     Compliance: >=90% Good, 80-90% Moderate, <80% Critical
     """
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, tfr=target_fill_rate)
+    _hit, _data = cache_get("planogram_fill", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await get_cached_data('daily_sales')
     inventory_df = await get_cached_data('store_inventory')
     sku_df = await get_cached_data('sku_ean_master')
@@ -1763,7 +1790,7 @@ async def get_planogram_fill_rate(
                 "description": f"At the SKU level, {critical_total} combinations have fill rate below 80%. Prioritize replenishment for highest lost-sales items."
             })
 
-        return {
+        _result = {
             "summary": {
                 "overall_fill_rate": overall_fill,
                 "overall_status": overall_status,
@@ -1783,6 +1810,8 @@ async def get_planogram_fill_rate(
             "recommendations": recommendations,
             "data_source": "uploaded",
         }
+        cache_set("planogram_fill", _tid, _result, _ex)
+        return _result
     except Exception as e:
         logger.error(f"Planogram fill rate error: {str(e)}")
         return {"error": str(e), "data": {}, "data_source": "error"}
@@ -1813,6 +1842,11 @@ async def get_doh_analysis(
     Overall Channel DOH = Sum(DOH x Inventory) / Sum(Inventory)
     Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
     """
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, idoh=ideal_doh)
+    _hit, _data = cache_get("doh_heatmap", _tid, _ex)
+    if _hit:
+        return _data
     # Read ideal_doh from config if not passed as query param
     if ideal_doh is None:
         cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
@@ -2062,7 +2096,7 @@ async def get_doh_analysis(
                 "description": "These stores have DOH above 120% of ideal. Consider reducing order quantities or inter-store transfers."
             })
 
-        return {
+        _result = {
             "summary": {
                 "overall_doh": overall_doh,
                 "ideal_doh": ideal_doh,
@@ -2081,6 +2115,8 @@ async def get_doh_analysis(
             "recommendations": recommendations,
             "data_source": "uploaded",
         }
+        cache_set("doh_heatmap", _tid, _result, _ex)
+        return _result
     except Exception as e:
         logger.error(f"DOH analysis error: {str(e)}")
         return {"error": str(e), "data": {}, "data_source": "error"}
@@ -2104,6 +2140,11 @@ async def get_replenishment_plan(
     Projected Stock-Out Date = Current SOH / ROS
     PO Value = Reorder Qty x ASP
     """
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, lt=lead_time_days, sd2=safety_days, mr=min_ros)
+    _hit, _data = cache_get("replenishment", _tid, _ex)
+    if _hit:
+        return _data
     # Read from config if not passed as query params
     cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
     cfg = cfg or {}
@@ -2268,7 +2309,7 @@ async def get_replenishment_plan(
                        'reorder_qty', 'asp', 'po_value', 'priority']
         detail = needs_reorder[detail_cols].head(200)
 
-        return {
+        _result = {
             "summary": {
                 "total_po_value": round(total_po_value, 2),
                 "total_reorder_units": total_reorder_units,
@@ -2287,6 +2328,8 @@ async def get_replenishment_plan(
             "detail": detail.round(2).fillna(0).to_dict('records'),
             "data_source": "uploaded",
         }
+        cache_set("replenishment", _tid, _result, _ex)
+        return _result
     except Exception as e:
         logger.error(f"Replenishment plan error: {str(e)}")
         return {"error": str(e), "data": {}, "data_source": "error"}
@@ -2301,6 +2344,11 @@ async def get_bi_dashboard(
     regions: str = None
 ):
     """Get BI dashboard data with filters"""
+    _tid = _cache_tenant_id()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
+    _hit, _data = cache_get("bi_category_mix", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await get_cached_data('daily_sales')
     sku_df = await get_cached_data('sku_ean_master')
     store_df = await get_cached_data('store_master')
@@ -2368,7 +2416,7 @@ async def get_bi_dashboard(
         else:
             by_style = pd.DataFrame()
         
-        return {
+        _result = {
             "monthly_trends": monthly.to_dict('records'),
             "by_store": by_store.to_dict('records'),
             "by_region": by_region.to_dict('records') if not by_region.empty else [],
@@ -2381,6 +2429,8 @@ async def get_bi_dashboard(
             },
             "data_source": "uploaded",
         }
+        cache_set("bi_category_mix", _tid, _result, _ex)
+        return _result
     except Exception as e:
         logger.error(f"BI dashboard error: {str(e)}")
         return {"error": str(e), "data": {}, "data_source": "error"}
@@ -3479,6 +3529,13 @@ async def startup():
     init_ai_demand(client, get_cached_data, get_db, get_current_user, require_role)
     init_buy_plan(client, get_db, get_current_user, require_role)
     init_onboarding(client, get_db, get_current_user)
+    init_tenant_provider(get_cached_data, get_db)
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
+
     init_tenant_provider(get_cached_data, get_db)
 
 

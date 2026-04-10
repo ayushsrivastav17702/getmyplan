@@ -12,6 +12,8 @@ import numpy as np
 import os
 from datetime import datetime, timezone
 
+from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tid
+
 router = APIRouter(prefix="/analytics/doh", tags=["doh-analysis"])
 
 _client: Optional[AsyncIOMotorClient] = None
@@ -109,6 +111,11 @@ async def get_doh_analysis(
     DOH-14: Different ideal per category (from config)
     DOH-15: Topseller additional cover (ideal_doh x multiplier)
     """
+    _tid = _cache_tid()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, sc=store_classes, idoh=ideal_doh, wh=include_wh, tm=topseller_multiplier)
+    _hit, _data = cache_get("doh_heatmap", _tid, _ex)
+    if _hit:
+        return _data
     cfg = await _get_config()
     if ideal_doh is None:
         ideal_doh = cfg.get("ideal_doh", 9)
@@ -444,7 +451,7 @@ async def get_doh_analysis(
             detail_df[c] = detail_df[c].astype(bool)
         detail_data = detail_df.round(2).fillna(0).to_dict("records")
 
-        return {
+        _result = {
             "summary": {
                 "overall_doh": overall_doh,
                 "ideal_doh": ideal_doh,
@@ -465,6 +472,8 @@ async def get_doh_analysis(
             "trend_data": trend_data,
             "detail": detail_data,
         }
+        cache_set("doh_heatmap", _tid, _result, _ex)
+        return _result
     except Exception as e:
         import traceback
         traceback.print_exc()

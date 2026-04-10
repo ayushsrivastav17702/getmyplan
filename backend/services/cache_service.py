@@ -16,16 +16,20 @@ CACHE_TTL = {
     # Critical — inventory-dependent (1 hour)
     "doh_heatmap": 3600,
     "stockout": 3600,
+    "stockout_list": 3600,
     "replenishment": 3600,
     "planogram_fill": 3600,
     # Daily aggregates (6 hours)
     "executive_kpis": 21600,
     "executive_dashboard": 21600,
     "executive_trend": 21600,
+    "bi_revenue_trend": 21600,
     "bi_dashboard": 21600,
+    "bi_category_mix": 21600,
     "gap_ros": 21600,
     "gap_size": 21600,
     "gap_noos": 21600,
+    "gap_analysis": 21600,
     "gap_data_status": 21600,
     # Slow-changing (24 hours)
     "topseller": 86400,
@@ -36,9 +40,10 @@ CACHE_TTL = {
 # ─── Upload → cache invalidation map ───
 INVALIDATION_MAP = {
     "daily_sales": ["executive_kpis", "executive_dashboard", "executive_trend",
-                     "bi_dashboard", "gap_ros", "gap_size", "gap_noos",
+                     "bi_revenue_trend", "bi_dashboard", "bi_category_mix",
+                     "gap_ros", "gap_size", "gap_noos", "gap_analysis",
                      "gap_data_status", "topseller"],
-    "store_inventory": ["doh_heatmap", "stockout", "planogram_fill",
+    "store_inventory": ["doh_heatmap", "stockout", "stockout_list", "planogram_fill",
                         "replenishment", "gap_data_status"],
     "warehouse_inventory": ["doh_heatmap", "replenishment", "gap_data_status"],
     "planogram": ["planogram_fill", "replenishment", "gap_data_status"],
@@ -142,6 +147,49 @@ def invalidate_for_upload(tenant_id: str, upload_type: str):
             logger.warning("Redis invalidation error for %s: %s", pattern, e)
     if deleted:
         logger.info("CACHE INVALIDATED: %d keys for tenant=%s upload=%s", deleted, tenant_id, upload_type)
+
+
+def get_tenant_id() -> str:
+    """Get current tenant ID from context."""
+    from multi_tenant import tenant_context
+    ctx = tenant_context.get()
+    return ctx.tenant_id if ctx else "default"
+
+
+def cache_extra(**kwargs) -> str:
+    """Build a deterministic extra string from query params for cache key uniqueness."""
+    parts = [f"{k}={v}" for k, v in sorted(kwargs.items()) if v is not None]
+    return "|".join(parts) if parts else "all"
+
+
+def cache_get(module: str, tenant_id: str, extra: str = ""):
+    """Try to get from cache. Returns (hit: bool, data)."""
+    r = get_redis()
+    if not r:
+        return False, None
+    key = cache_key(module, tenant_id, extra)
+    try:
+        hit = r.get(key)
+        if hit is not None:
+            logger.debug("CACHE HIT: %s", key)
+            return True, json.loads(hit)
+    except Exception as e:
+        logger.warning("Redis GET error: %s", e)
+    return False, None
+
+
+def cache_set(module: str, tenant_id: str, data, extra: str = ""):
+    """Store result in cache with module-specific TTL."""
+    r = get_redis()
+    if not r or data is None:
+        return
+    key = cache_key(module, tenant_id, extra)
+    ttl = CACHE_TTL.get(module, 3600)
+    try:
+        r.setex(key, ttl, json.dumps(data, default=str))
+        logger.debug("CACHE SET: %s (TTL=%ds)", key, ttl)
+    except Exception as e:
+        logger.warning("Redis SET error: %s", e)
 
 
 def invalidate_tenant(tenant_id: str):

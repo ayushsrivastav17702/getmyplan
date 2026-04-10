@@ -1,0 +1,150 @@
+{
+  "summary": "Iteration 67: Redis Caching Testing - Backend 19/19 PASS, Frontend smoke tests PASS. Redis caching is correctly implemented across all analytics endpoints with proper TTLs and cache invalidation on uploads.",
+
+  "test_case_matrix": {
+    "BACKEND_AUTH": {
+      "TEST_01_login_increff_user": {"status": "PASS", "notes": "Login successful, access_token returned"},
+      "TEST_02_login_demo_user": {"status": "PASS", "notes": "Login successful, access_token returned"}
+    },
+    "BACKEND_EXECUTIVE_KPIS_CACHE": {
+      "TEST_03_executive_kpis_first_call": {"status": "PASS", "notes": "First call populates cache"},
+      "TEST_04_executive_kpis_second_call_faster": {"status": "PASS", "notes": "Second call served from cache"}
+    },
+    "BACKEND_EXECUTIVE_DASHBOARD_CACHE": {
+      "TEST_05_executive_dashboard_cache_miss_then_hit": {"status": "PASS", "notes": "Cache MISS then HIT pattern working"}
+    },
+    "BACKEND_EXECUTIVE_REVENUE_TREND_CACHE": {
+      "TEST_06_executive_revenue_trend_cache": {"status": "PASS", "notes": "Revenue trend caching working"}
+    },
+    "BACKEND_BI_OVERVIEW_CACHE": {
+      "TEST_07_bi_overview_cache": {"status": "PASS", "notes": "BI overview caching working (6h TTL)"}
+    },
+    "BACKEND_AI_DEMAND_FORECAST_CACHE": {
+      "TEST_08_ai_demand_forecast_cache": {"status": "PASS", "notes": "AI forecast caching working (7d TTL)"}
+    },
+    "BACKEND_TOPSELLER_PREDICTION_CACHE": {
+      "TEST_09_topseller_prediction_cache": {"status": "PASS", "notes": "Topseller prediction caching working (24h TTL)"}
+    },
+    "BACKEND_PLANOGRAM_FILL_RATE_CACHE": {
+      "TEST_10_planogram_fill_rate_cache": {"status": "PASS", "notes": "Planogram fill rate caching working (1h TTL)"}
+    },
+    "BACKEND_REPLENISHMENT_CACHE": {
+      "TEST_11_replenishment_cache": {"status": "PASS", "notes": "Replenishment caching working (1h TTL)"}
+    },
+    "BACKEND_BI_DASHBOARD_CACHE": {
+      "TEST_12_bi_dashboard_cache": {"status": "PASS", "notes": "BI dashboard caching working (6h TTL)"}
+    },
+    "BACKEND_CACHE_INVALIDATION": {
+      "TEST_13_cache_invalidation_concept": {"status": "PASS", "notes": "Cache invalidation mapping verified in cache_service.py"}
+    },
+    "BACKEND_CACHE_KEY_FORMAT": {
+      "TEST_14_cache_key_format_verification": {"status": "PASS", "notes": "Cache key format: module:tenant_id:date:extra"}
+    },
+    "BACKEND_TENANT_ISOLATION": {
+      "TEST_15_tenant_cache_isolation": {"status": "PASS", "notes": "Different tenants have separate cache entries"}
+    },
+    "BACKEND_TTL_CONFIGURATION": {
+      "TEST_16_ttl_configuration_exists": {"status": "PASS", "notes": "TTL configuration matches requirements"}
+    },
+    "BACKEND_STOCKOUT_CACHE": {
+      "TEST_17_stockout_analysis_cache": {"status": "PASS", "notes": "Stock out analysis caching working (1h TTL)"}
+    },
+    "BACKEND_DOH_ANALYSIS_CACHE": {
+      "TEST_18_doh_analysis_cache": {"status": "PASS", "notes": "DOH analysis caching working (1h TTL)"}
+    },
+    "BACKEND_GAP_ANALYSIS_CACHE": {
+      "TEST_19_gap_analysis_cache": {"status": "PASS", "notes": "Gap analysis caching working (6h TTL)"}
+    },
+    "FRONTEND_SMOKE_TESTS": {
+      "TEST_20_frontend_loads": {"status": "PASS", "notes": "Frontend loads without errors"},
+      "TEST_21_login_flow": {"status": "PASS", "notes": "Login flow works correctly"},
+      "TEST_22_executive_dashboard": {"status": "PASS", "notes": "Executive Dashboard shows ₹301.8Cr revenue, 1.6M units"},
+      "TEST_23_bi_dashboard": {"status": "PASS", "notes": "BI Dashboard shows ₹301.8Cr revenue, 16.2L quantity"},
+      "TEST_24_ai_demand_planning": {"status": "PASS", "notes": "AI Demand Planning page loads, shows 90/180 days data health"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "19/19 PASS",
+    "FRONTEND_TESTS": "5/5 PASS",
+    "TOTAL": "24/24 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "redis_caching_verification": {
+    "cache_service_location": "/app/backend/services/cache_service.py",
+    "redis_connection": "Redis Cloud (non-SSL) - redis-14779.crce281.ap-south-1-3.ec2.cloud.redislabs.com:14779",
+    "ttl_configuration": {
+      "1h_ttl": ["doh_heatmap", "stockout", "stockout_list", "replenishment", "planogram_fill"],
+      "6h_ttl": ["executive_kpis", "executive_dashboard", "executive_trend", "bi_revenue_trend", "bi_dashboard", "bi_category_mix", "gap_ros", "gap_analysis"],
+      "24h_ttl": ["topseller"],
+      "7d_ttl": ["ai_forecast"]
+    },
+    "cache_key_format": "module:tenant_id:date:extra (e.g., executive_kpis:increff:2026-01-11:all)",
+    "invalidation_map": {
+      "daily_sales": ["executive_kpis", "executive_dashboard", "executive_trend", "bi_revenue_trend", "bi_dashboard", "bi_category_mix", "gap_ros", "gap_analysis", "topseller"],
+      "store_inventory": ["doh_heatmap", "stockout", "stockout_list", "planogram_fill", "replenishment"],
+      "warehouse_inventory": ["doh_heatmap", "replenishment"],
+      "planogram": ["planogram_fill", "replenishment"],
+      "cogs": ["executive_kpis", "executive_dashboard"],
+      "open_orders": ["replenishment"],
+      "sku_master": ["topseller"],
+      "style_master": ["bi_dashboard"],
+      "store_master": ["bi_dashboard"]
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_redis_caching_iter67.py",
+    "/app/test_reports/pytest/pytest_results_iter67.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Redis caching correctly implemented in cache_service.py with cache_get/cache_set functions",
+    "TTL configuration matches requirements: 1h for inventory-dependent, 6h for daily aggregates, 24h for topseller, 7d for ML forecast",
+    "Cache invalidation properly wired in upload.py - invalidate_for_upload called after successful uploads",
+    "Cache keys include tenant_id for proper tenant isolation",
+    "Cache keys include date for daily cache rotation"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_redis_caching_iter67.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (19/19)",
+    "frontend": "100% (5/5)"
+  },
+
+  "test_credentials": {
+    "increff_user": "ayush.srivastav@increff.com / Ayush@114988",
+    "demo_admin": "admin@demo.com / demo1234"
+  },
+
+  "performance_observations": {
+    "note": "Main agent reported: executive-kpis went from 3s to 0.37s, exec-dashboard from 3.65s to 0.35s, BI overview from 1.09s to 0.34s, forecast from 1.63s to 0.34s on cache HIT",
+    "cache_hit_improvement": "~10x faster response times on cache HIT"
+  },
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 67 verified Redis caching implementation across all analytics endpoints. All 19 backend tests passed. Cache TTLs are correctly configured (1h/6h/24h/7d). Cache invalidation is wired to upload endpoints. Frontend smoke tests passed - Executive Dashboard shows ₹301.8Cr revenue, BI Dashboard working correctly. Known issue from iteration 66 (master-status returning 0 counts) still exists but is unrelated to caching.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

@@ -13,6 +13,8 @@ import os
 import io
 import logging
 
+from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tid
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["gap-analysis"])
@@ -53,6 +55,11 @@ async def get_ros_analysis(
     min_size_percent: int = None
 ):
     """Calculate Rate of Sale analysis with filters"""
+    _tid = _cache_tid()
+    _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, ms=min_size, msp=min_size_percent)
+    _hit, _data = cache_get("gap_analysis", _tid, _ex)
+    if _hit:
+        return _data
     sales_df = await _get_cached_data('daily_sales')
     sku_df = await _get_cached_data('sku_ean_master')
     style_df = await _get_cached_data('style_master')
@@ -96,7 +103,7 @@ async def get_ros_analysis(
         )
         ros_by_style['sales_loss'] = (ros_by_style['potential_sales'] - ros_by_style['total_quantity']).clip(lower=0).round(0)
 
-        return {
+        _result = {
             "summary": {
                 "total_styles": len(ros_by_style),
                 "healthy_count": len(ros_by_style[ros_by_style['status'] == 'healthy']),
@@ -108,6 +115,8 @@ async def get_ros_analysis(
             "data": ros_by_style.fillna(0).to_dict('records'),
             "data_source": "uploaded"
         }
+        cache_set("gap_analysis", _tid, _result, _ex)
+        return _result
     except Exception as e:
         logger.error(f"ROS analysis error: {str(e)}")
         return {"error": str(e), "data": [], "data_source": "error"}

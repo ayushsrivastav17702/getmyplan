@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from services.upload_service import UniversalUploadService, compute_file_hash
 from multi_tenant.tenant_db import tenant_context
+from services.cache_service import invalidate_for_upload, get_tenant_id as _cache_tid
 
 logger = logging.getLogger(__name__)
 
@@ -497,6 +498,12 @@ async def _handle_upload_inner(file, upload_type, replace_existing, validate_onl
         if result["success"] and records and not validate_only:
             saved = await _save_to_database(db, tenant_id, user_email, upload_type, records, replace_existing)
             result["saved"] = saved
+            # Invalidate Redis caches for this tenant after successful upload
+            try:
+                invalidate_for_upload(tenant_id, upload_type)
+                logger.info("Cache invalidated for tenant=%s upload_type=%s", tenant_id, upload_type)
+            except Exception as cache_err:
+                logger.warning("Cache invalidation failed (non-blocking): %s", cache_err)
 
         # Record history (skip for validate_only)
         if not validate_only:
@@ -972,6 +979,14 @@ async def load_sample_data(request: Request):
         })
     await db.open_orders.delete_many({})
     await db.open_orders.insert_many(open_orders)
+
+    # Invalidate ALL caches for this tenant after sample data load
+    try:
+        from services.cache_service import invalidate_tenant
+        invalidate_tenant(_cache_tid())
+        logger.info("Full cache invalidated for tenant after sample data load")
+    except Exception as cache_err:
+        logger.warning("Cache invalidation after sample data failed: %s", cache_err)
 
     return {
         "success": True,

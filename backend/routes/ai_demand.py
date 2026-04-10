@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from services.tenant_data_provider import get_tenant_provider
+from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tid
 
 try:
     from sklearn.linear_model import LinearRegression
@@ -162,6 +163,12 @@ async def ml_forecast(
     if _get_current_user:
         await _get_current_user(request)  # auth check
 
+    _tid = _cache_tid()
+    _ex = cache_extra(cat=category, sub=subcategory, fh=forecast_horizon)
+    _hit, _data = cache_get("ai_forecast", _tid, _ex)
+    if _hit:
+        return _data
+
     from ml_forecast_engine import MLForecastEngine
     historical = await _monthly_revenue(category, subcategory)
     insufficient = len(historical) < 6
@@ -203,7 +210,7 @@ async def ml_forecast(
         except Exception as e:
             logger.warning("Failed to save forecast snapshot: %s", e)
 
-    return {
+    _forecast_result = {
         'category': category or 'All', 'subcategory': subcategory or 'All',
         'forecast_horizon': forecast_horizon, 'months': months,
         'forecast': result['forecast'],
@@ -218,6 +225,8 @@ async def ml_forecast(
         'generated_at': now.isoformat(),
         'data_source': 'demo' if insufficient else 'uploaded',
     }
+    cache_set("ai_forecast", _tid, _forecast_result, _ex)
+    return _forecast_result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -715,6 +724,12 @@ async def topseller_prediction(
         if user.get('role') not in ('admin', 'merchandiser', 'viewer'):
             raise HTTPException(403, "Insufficient role for topseller predictions")
 
+    _tid = _cache_tid()
+    _ex = cache_extra(cat=category, xf=x_factor, lim=limit)
+    _hit, _data = cache_get("topseller", _tid, _ex)
+    if _hit:
+        return _data
+
     sales_df = await _get_cached_data('daily_sales')
     sku_df = await _get_cached_data('sku_ean_master')
     style_df = await _get_cached_data('style_master')
@@ -781,7 +796,9 @@ async def topseller_prediction(
                 'recommendation': 'Increase safety stock by 50%' if is_topseller else 'Monitor trend',
             })
         predictions.sort(key=lambda x: x['predicted_revenue_3m'], reverse=True)
-        return {'predictions': predictions[:limit], 'x_factor_threshold': x_factor, 'category_avg_revenue': round(cat_avg, 2), 'data_source': 'uploaded'}
+        _topseller_result = {'predictions': predictions[:limit], 'x_factor_threshold': x_factor, 'category_avg_revenue': round(cat_avg, 2), 'data_source': 'uploaded'}
+        cache_set("topseller", _tid, _topseller_result, _ex)
+        return _topseller_result
     except Exception as e:
         logger.error("Topseller prediction error: %s", e)
         resp = _demo_topseller_data(x_factor)
