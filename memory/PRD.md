@@ -86,6 +86,12 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 - **Loading State**: Enhanced `<noscript>` message for JS-disabled users + CSS `ssr-pulse` skeleton animation.
 - **Test Report**: iteration_72.json -- 13/13 PASS
 
+#### Demo Request Backend Wiring
+- Created `POST /api/demo/request` endpoint — validates input (Pydantic), stores lead in `demo_requests` MongoDB collection, sends HTML notification email to admin via Hostinger SMTP.
+- Created `GET /api/demo/requests` endpoint — lists all demo leads (newest first, max 100).
+- Updated `ContactModal.jsx` — calls real API instead of setTimeout mock. Shows error state on failure.
+- **Verified**: Form submission stores in DB + email notification sent + success UI shown.
+
 ---
 
 ## Pending / Backlog

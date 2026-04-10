@@ -1,20 +1,36 @@
 import { useState } from "react";
-import { X, Send, CheckCircle } from "lucide-react";
+import { X, Send, CheckCircle, AlertCircle } from "lucide-react";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function ContactModal({ isOpen, onClose }) {
   const [form, setForm] = useState({ name: "", email: "", company: "", heardFrom: "", goals: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setSubmitted(true);
-    setLoading(false);
-    setTimeout(() => { setSubmitted(false); onClose(); setForm({ name: "", email: "", company: "", heardFrom: "", goals: "" }); }, 2000);
+    setError("");
+    try {
+      await axios.post(`${API}/api/demo/request`, {
+        name: form.name,
+        email: form.email,
+        company: form.company,
+        heard_from: form.heardFrom,
+        goals: form.goals,
+      });
+      setSubmitted(true);
+      setTimeout(() => { setSubmitted(false); onClose(); setForm({ name: "", email: "", company: "", heardFrom: "", goals: "" }); }, 3000);
+    } catch (err) {
+      setError(err.response?.data?.detail || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -29,6 +45,12 @@ export default function ContactModal({ isOpen, onClose }) {
             <button onClick={onClose} data-testid="contact-modal-close" className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
           </div>
           <p className="text-gray-600 mb-6 text-sm">Tell us about your business and we'll schedule a personalized demo within 24 hours.</p>
+
+          {error && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-lg" data-testid="contact-error">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
+            </div>
+          )}
 
           {submitted ? (
             <div className="text-center py-8" data-testid="contact-success">

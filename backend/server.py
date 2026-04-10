@@ -47,6 +47,7 @@ from routes.scheduled_jobs import router as scheduled_jobs_router
 from routes.data_quality_rules import router as dq_rules_router
 from routes.debug import router as debug_router
 from routes.upload import router as upload_v2_router
+from routes.demo import router as demo_router
 from services.tenant_data_provider import init_tenant_provider
 from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tenant_id, invalidate_for_upload as _invalidate_cache
 
@@ -3323,6 +3324,7 @@ api_router.include_router(scheduled_jobs_router)
 api_router.include_router(dq_rules_router)
 api_router.include_router(debug_router)
 api_router.include_router(upload_v2_router, prefix="/upload/v2")
+api_router.include_router(demo_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
