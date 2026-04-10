@@ -664,6 +664,18 @@ async def preview_data(upload_type: str, request: Request):
     cursor = db[slug].find({}, {"_id": 0, "tenant_id": 0, "uploaded_by": 0, "uploaded_at": 0}).limit(10)
     preview = await cursor.to_list(10)
     total = await db[slug].estimated_document_count()
+
+    # V1 fallback: check uploaded_files if V2 collection is empty
+    if not preview:
+        v1_doc = await db.uploaded_files.find_one({"file_type": slug}, {"_id": 0})
+        if v1_doc and v1_doc.get("data"):
+            preview = v1_doc["data"][:10]
+            # Clean system fields from each row
+            for row in preview:
+                row.pop("_id", None)
+                row.pop("tenant_id", None)
+            total = len(v1_doc["data"])
+
     return {"preview": preview, "total": total, "type": slug}
 
 

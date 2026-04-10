@@ -85,6 +85,13 @@ Build a Fashion Retail Gap Analysis platform (branded as **GetMyPlan**) with Rea
 - Dark theme (#0B1628) with proper contrast
 - **Testing: 18/18 PASS, 1 INFO (Iteration 64)**
 
+### Phase 64 — Data Upload UX Improvements (Apr 2026)
+- Added Sample Data Banner (onboarding CTA) — shown only for tenants with zero data, dismissible with localStorage
+- Added data preview: Eye icon on master cards with data, opens PreviewModal showing first 10 rows in a clean table
+- Backend: `GET /api/upload/v2/preview/{type}` — returns preview rows (V2 + V1 fallback), excludes system fields
+- Backend: `POST /api/upload/v2/load-sample-data` — loads 15 SKUs, 5 stores, 90 days sales for demo/onboarding
+- **Testing: 32/32 PASS (Iteration 65)**
+
 ## Prioritized Backlog
 
 ### P1 — Next
