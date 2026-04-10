@@ -14,6 +14,7 @@ import { MasterCard } from "../components/upload/MasterCard";
 import { DailyStatusCard } from "../components/upload/DailyStatusCard";
 import { PreviousDaysList } from "../components/upload/PreviousDaysList";
 import { FileDropzone } from "../components/upload/FileDropzone";
+import { DataRequirementsPanel } from "../components/upload/DataRequirementsPanel";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -116,6 +117,7 @@ const DataUploadPage = () => {
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
   const [preview, setPreview] = useState(null); // { type, data, total }
+  const [currentDataDays, setCurrentDataDays] = useState(null);
 
   const hdrs = { Authorization: `Bearer ${token}` };
 
@@ -125,6 +127,7 @@ const DataUploadPage = () => {
     fetchDailyStatus();
     fetchMasterStatus();
     fetchPreviousDays();
+    fetchDataDays();
   };
 
   const fetchDailyStatus = async () => {
@@ -146,6 +149,14 @@ const DataUploadPage = () => {
       const r = await fetch(`${API}/api/upload/v2/history/days?days=7`, { headers: hdrs });
       const d = await r.json();
       setPreviousDays(d.days || []);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchDataDays = async () => {
+    try {
+      const r = await fetch(`${API}/api/upload/v2/data-days`, { headers: hdrs });
+      const d = await r.json();
+      setCurrentDataDays(d.days ?? null);
     } catch (e) { console.error(e); }
   };
 
@@ -367,6 +378,13 @@ const DataUploadPage = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Data Requirements Panel */}
+            <DataRequirementsPanel
+              selectedType={selectedType}
+              currentDays={currentDataDays}
+              onDownloadTemplate={() => downloadTemplate(selectedType)}
+            />
 
             {/* File Dropzone + Validation + Save */}
             <FileDropzone

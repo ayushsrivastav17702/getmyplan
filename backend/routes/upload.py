@@ -309,6 +309,33 @@ async def get_master_status():
     return result
 
 
+@router.get("/data-days")
+async def get_data_days():
+    """Return the number of distinct days of daily_sales data for the current tenant."""
+    db = _get_db()
+    tenant_id = _get_tenant_id()
+    try:
+        # Try with tenant_id filter first (V2 with tenant_id)
+        days = await db.daily_sales.distinct("day", {"tenant_id": tenant_id})
+        if not days:
+            # Fallback: V2 without tenant_id (enterprise sample data)
+            days = await db.daily_sales.distinct("day")
+        if days:
+            return {"days": len(days)}
+        # Fallback to V1 uploaded_files
+        doc = await db.uploaded_files.find_one({"file_type": "daily_sales"}, {"_id": 0, "data": 1})
+        if doc and "data" in doc:
+            day_set = set()
+            for r in doc["data"]:
+                d = r.get("day") or r.get("date")
+                if d:
+                    day_set.add(str(d))
+            return {"days": len(day_set)}
+        return {"days": 0}
+    except Exception:
+        return {"days": 0}
+
+
 @router.get("/template/{upload_type}")
 async def download_template(upload_type: str):
     """Download template pre-filled with tenant's actual SKUs and stores."""

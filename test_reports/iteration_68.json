@@ -1,0 +1,111 @@
+{
+  "summary": "Iteration 68: Data Requirements Panel Testing - Backend 9/9 PASS, Frontend 10/10 PASS. All features working correctly including dynamic panel content, data days indicator, expected date hints, and collapsible sections.",
+
+  "test_case_matrix": {
+    "BACKEND_DATA_DAYS": {
+      "TEST_01_data_days_increff_90": {"status": "PASS", "notes": "GET /api/upload/v2/data-days returns 90 days for increff tenant"},
+      "TEST_02_data_days_demo_29": {"status": "PASS", "notes": "GET /api/upload/v2/data-days returns 29 days for demo tenant"},
+      "TEST_03_tenant_isolation": {"status": "PASS", "notes": "Different tenants get different day counts (90 vs 29)"}
+    },
+    "BACKEND_TEMPLATES": {
+      "TEST_04_daily_sales_template": {"status": "PASS", "notes": "Template download returns xlsx file"},
+      "TEST_05_sku_master_template": {"status": "PASS", "notes": "Template download returns xlsx file"},
+      "TEST_06_cogs_template": {"status": "PASS", "notes": "Template download returns xlsx file"}
+    },
+    "BACKEND_STATUS": {
+      "TEST_07_daily_status": {"status": "PASS", "notes": "Returns status for all 5 daily upload types"},
+      "TEST_08_master_status": {"status": "PASS", "notes": "Returns status for all 5 master data types"},
+      "TEST_09_history_days": {"status": "PASS", "notes": "Returns upload history for previous days"}
+    },
+    "FRONTEND_DATA_REQUIREMENTS_PANEL": {
+      "TEST_10_panel_visible": {"status": "PASS", "notes": "Data Requirements Panel renders with data-testid='data-requirements-panel'"},
+      "TEST_11_daily_sales_sections": {"status": "PASS", "notes": "Shows 4 collapsible sections: Required Date Range, Date Format, Important Rules, What Happens With Different Date Ranges"},
+      "TEST_12_data_days_indicator_increff": {"status": "PASS", "notes": "Shows 'Your current data: 90 days' with green checkmark for increff tenant"},
+      "TEST_13_data_days_indicator_demo": {"status": "PASS", "notes": "Shows 'Your current data: 29 days' with amber warning for demo tenant"},
+      "TEST_14_expected_date_hint": {"status": "PASS", "notes": "Shows expected date range hint below dropzone for transactional types"},
+      "TEST_15_download_template_link": {"status": "PASS", "notes": "Download Template link present in panel footer"}
+    },
+    "FRONTEND_PANEL_SWITCHING": {
+      "TEST_16_switch_to_sku_master": {"status": "PASS", "notes": "Panel changes to show 'When to Upload' section for master data"},
+      "TEST_17_master_simplified_layout": {"status": "PASS", "notes": "Master data types show simplified panel with tip"},
+      "TEST_18_date_hint_hidden_for_master": {"status": "PASS", "notes": "Expected date hint not shown for master data types"},
+      "TEST_19_switch_to_cogs": {"status": "PASS", "notes": "COGS panel shows special note about matching Daily Sales date range"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "9/9 PASS",
+    "FRONTEND_TESTS": "10/10 PASS",
+    "TOTAL": "19/19 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "feature_verification": {
+    "data_requirements_panel": {
+      "component_location": "/app/frontend/src/components/upload/DataRequirementsPanel.jsx",
+      "data_testids": ["data-requirements-panel", "data-days-indicator", "master-requirements", "transactional-requirements", "panel-download-template", "req-section-*"],
+      "sections_for_transactional": ["Required Date Range", "Date Format", "Important Rules", "What Happens With Different Date Ranges"],
+      "sections_for_master": ["When to Upload", "Tip"]
+    },
+    "expected_date_hint": {
+      "component_location": "/app/frontend/src/components/upload/FileDropzone.jsx",
+      "data_testid": "expected-date-hint",
+      "visibility": "Only shown for transactional types (daily_sales, store_inventory, warehouse_inventory, cogs, open_orders)"
+    },
+    "data_days_endpoint": {
+      "endpoint": "GET /api/upload/v2/data-days",
+      "response_format": {"days": "number"},
+      "increff_tenant": 90,
+      "demo_tenant": 29
+    }
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_data_requirements_panel_iter68.py",
+    "/app/test_reports/pytest/pytest_results_iter68.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "DataRequirementsPanel.jsx correctly implements REQUIREMENTS config for all 10 upload types",
+    "Panel dynamically switches between TransactionalRequirements and MasterRequirements based on isMaster flag",
+    "Data days indicator shows appropriate color/message based on day count thresholds (0, <30, 30-90, 90-180, 180+)",
+    "FileDropzone.jsx correctly shows/hides expected date hint based on TRANSACTIONAL array",
+    "Backend /data-days endpoint correctly counts distinct days from daily_sales collection with tenant isolation"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_data_requirements_panel_iter68.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (9/9)",
+    "frontend": "100% (10/10)"
+  },
+
+  "test_credentials": {
+    "increff_user": "ayush.srivastav@increff.com / Ayush@114988 (90 days data)",
+    "demo_admin": "admin@demo.com / demo1234 (29 days data)"
+  },
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 68 verified Data Requirements Panel feature on Data Upload page. All 19 tests passed. Panel shows upload-type-specific requirements with collapsible sections. Data days indicator correctly shows 90 days for increff and 29 days for demo tenant. Expected date hint appears below dropzone for transactional types only. Master data types show simplified panel with 'When to Upload' section and tip.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

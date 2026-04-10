@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Upload, Save, X, CheckCircle, XCircle, AlertTriangle,
-  ChevronUp, ChevronDown, Info,
+  ChevronUp, ChevronDown, Info, Calendar,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
@@ -127,6 +127,14 @@ export const FileDropzone = ({
     maxFiles: 1,
   });
 
+  /* Expected date range for transactional types */
+  const TRANSACTIONAL = ["daily_sales", "store_inventory", "warehouse_inventory", "cogs", "open_orders"];
+  const isTransactional = TRANSACTIONAL.includes(selectedType);
+  const today = new Date();
+  const d90 = new Date(today); d90.setDate(d90.getDate() - 90);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const fmt = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
   return (
     <>
       {/* Dropzone */}
@@ -162,6 +170,17 @@ export const FileDropzone = ({
           </div>
         )}
       </div>
+
+      {/* Expected date range hint */}
+      {isTransactional && !file && (
+        <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600" data-testid="expected-date-hint">
+          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span>
+            Expected date range in your file: <strong>{fmt(d90)} &mdash; {fmt(yesterday)}</strong>
+          </span>
+          <span className="text-slate-400 ml-auto hidden sm:inline">Different dates? We'll show a warning but still accept it.</span>
+        </div>
+      )}
 
       {/* Replace warning */}
       {file && dailyStatus?.[selectedType]?.uploaded && (
