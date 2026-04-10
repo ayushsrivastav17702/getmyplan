@@ -319,7 +319,7 @@ function StockOutMockup() {
         <Zap className="h-4 w-4 text-blue-500 flex-shrink-0" />
         <div>
           <p className="text-xs font-medium text-gray-800">Auto Replenishment</p>
-          <p className="text-[10px] text-gray-500">Transfer 240 units from Pune warehouse to cover critical gaps</p>
+          <p className="text-[10px] text-gray-500">Transfer 240 units from Central warehouse to cover critical gaps</p>
         </div>
       </motion.div>
     </div>

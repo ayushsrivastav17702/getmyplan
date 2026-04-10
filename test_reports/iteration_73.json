@@ -1,0 +1,134 @@
+{
+  "summary": "Iteration 73: Landing Page Overhaul Testing - All 17 tests PASSED. Verified new hero headline 'Stop losing revenue to stockouts.', dashboard screenshot, video walkthrough placeholder, 91% stat footnote, removal of India-specific references, and global marketplace names.",
+
+  "test_case_matrix": {
+    "HERO_SECTION_TESTS": {
+      "TEST_01_hero_h1_new_headline": {"status": "PASS", "notes": "H1 = 'Stop losing revenue to stockouts.'"},
+      "TEST_02_hero_subheadline": {"status": "PASS", "notes": "Subheadline = 'AI demand planning for fashion retail.'"},
+      "TEST_03_hero_trust_text": {"status": "PASS", "notes": "Description contains 'Trusted by fashion brands worldwide'"},
+      "TEST_04_hero_demo_btn": {"status": "PASS", "notes": "data-testid='hero-demo-btn' with text 'Request a Demo'"},
+      "TEST_05_dashboard_screenshot_exists": {"status": "PASS", "notes": "data-testid='hero-dashboard-screenshot' src='/dashboard-screenshot.webp'"},
+      "TEST_06_dashboard_screenshot_loads": {"status": "PASS", "notes": "Image loads successfully (HTTP 200, 108KB WebP)"}
+    },
+    "VIDEO_WALKTHROUGH_TESTS": {
+      "TEST_07_video_section_exists": {"status": "PASS", "notes": "data-testid='video-walkthrough' present"},
+      "TEST_08_video_play_btn": {"status": "PASS", "notes": "data-testid='video-play-btn' present"},
+      "TEST_15_video_placeholder_text": {"status": "PASS", "notes": "Shows 'Video walkthrough coming soon' (VIDEO_ID = null)"}
+    },
+    "STATS_SECTION_TESTS": {
+      "TEST_09_91_percent_footnote": {"status": "PASS", "notes": "91% stat has footnote '*Based on 12-month backtest across 50+ fashion retail datasets globally'"}
+    },
+    "INDIA_REFERENCES_REMOVAL": {
+      "TEST_10_no_india_references": {"status": "PASS", "notes": "No 'India', 'Indian', 'Mumbai' text found on landing page"},
+      "TEST_11_no_indian_marketplaces": {"status": "PASS", "notes": "No 'Myntra', 'Flipkart', 'Ajio', 'Nykaa' text found"},
+      "TEST_12_global_marketplaces": {"status": "PASS", "notes": "Features section mentions 'Amazon, Shopify, Zalando'"}
+    },
+    "FOOTER_TESTS": {
+      "TEST_13_footer_global_text": {"status": "PASS", "notes": "Footer contains 'Serving fashion brands globally' instead of 'Mumbai, India'"},
+      "TEST_14_footer_links": {"status": "PASS", "notes": "Privacy (/privacy) and Terms (/terms) links work correctly"}
+    },
+    "OTHER_SECTIONS": {
+      "TEST_18_testimonials_worldwide": {"status": "PASS", "notes": "Testimonials mentions 'worldwide', no India reference"},
+      "TEST_19_pricing_default_usd": {"status": "PASS", "notes": "Pricing default currency is USD ($350, $600, $1,200)"},
+      "TEST_20_cta_worldwide": {"status": "PASS", "notes": "CTA section mentions 'fashion brands worldwide'"}
+    },
+    "SSR_TESTS": {
+      "TEST_SSR_new_headline": {"status": "PASS", "notes": "Raw HTML contains 'Stop losing revenue to stockouts.' in SSR shell"}
+    }
+  },
+
+  "summary_counts": {
+    "HERO_SECTION_TESTS": "6/6 PASS",
+    "VIDEO_WALKTHROUGH_TESTS": "3/3 PASS",
+    "STATS_SECTION_TESTS": "1/1 PASS",
+    "INDIA_REFERENCES_REMOVAL": "3/3 PASS",
+    "FOOTER_TESTS": "2/2 PASS",
+    "OTHER_SECTIONS": "3/3 PASS",
+    "SSR_TESTS": "1/1 PASS",
+    "TOTAL": "19/19 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "verified_changes": {
+    "Hero.jsx": [
+      "H1 changed from 'Predict demand with 91% accuracy' to 'Stop losing revenue to stockouts.'",
+      "Subheadline: 'AI demand planning for fashion retail.'",
+      "Description: 'Trusted by fashion brands worldwide'",
+      "Real dashboard screenshot with data-testid='hero-dashboard-screenshot'",
+      "VideoWalkthrough component with placeholder (VIDEO_ID = null)"
+    ],
+    "StatsSection.jsx": [
+      "91% stat has footnote: '*Based on 12-month backtest across 50+ fashion retail datasets globally'"
+    ],
+    "Features.jsx": [
+      "Multi-Channel Analytics mentions 'Amazon, Shopify, Zalando' instead of Indian marketplaces"
+    ],
+    "Footer.jsx": [
+      "Location changed from 'Mumbai, India' to 'Serving fashion brands globally'"
+    ],
+    "Testimonials.jsx": [
+      "Changed 'Flipkart' to 'Shopify' in testimonial",
+      "Changed '500+ brands across India' to 'fashion brands worldwide'"
+    ],
+    "CTASection.jsx": [
+      "Changed '500+ fashion brands' to 'fashion brands worldwide'"
+    ],
+    "Pricing.jsx": [
+      "Default currency changed from INR to USD"
+    ],
+    "ProductTour.jsx": [
+      "Store names changed from Indian cities (Mumbai Central, Delhi NCR Hub) to generic names (Warehouse West, Distribution East, etc.)",
+      "Fixed: Changed 'Pune warehouse' to 'Central warehouse'"
+    ],
+    "index.html": [
+      "SSR shell hero updated to new headline 'Stop losing revenue to stockouts.'"
+    ],
+    "dashboard-screenshot.webp": [
+      "Real dashboard screenshot (106KB) showing Revenue Trend, KPI cards, Inventory Health Score"
+    ]
+  },
+
+  "test_report_links": [],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Note: Schema.org JSON-LD in index.html still has INR pricing (lines 44, 126-128). This is for SEO structured data and not visible to users. Consider updating to USD for consistency if targeting global audience.",
+    "Video walkthrough is MOCKED (VIDEO_ID = null) - shows 'Video walkthrough coming soon' placeholder"
+  ],
+
+  "updated_files": [
+    "/app/frontend/src/components/landing/ProductTour.jsx (fixed 'Pune warehouse' -> 'Central warehouse')"
+  ],
+
+  "success_rate": {
+    "backend": "N/A (no backend changes)",
+    "frontend": "100% (19/19 tests passed)"
+  },
+
+  "test_credentials": "No auth needed - all pages are public",
+
+  "seed_data_creation": "None required",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 73 verified landing page overhaul. All India-specific references removed from visible content. Hero has new outcome-led headline, real dashboard screenshot, and video walkthrough placeholder. 91% stat has methodology footnote. Pricing defaults to USD. Note: Schema.org JSON-LD in index.html still has INR pricing for SEO - may need update if targeting global audience.",
+
+  "mocked_api": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Video walkthrough embed (VIDEO_ID = null, shows 'Video walkthrough coming soon' placeholder)"
+    ]
+  }
+}
