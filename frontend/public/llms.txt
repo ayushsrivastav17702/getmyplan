@@ -52,8 +52,64 @@
   Description: Calculate your savings vs spreadsheets or legacy tools
 
 - https://getmyplan.in/blog
-  Title: Getmyplan Blog
-  Description: Planning best practices, templates, and industry trends
+  Title: GetMyPlan Blog - Demand Planning Insights
+  Description: Expert articles on AI forecasting, inventory optimization, KPI tracking, and retail analytics for fashion brands
+
+- https://getmyplan.in/blog/best-demand-planning-software-india-2026
+  Title: Best Demand Planning Software for Indian Fashion Brands 2026
+  Keywords: demand planning software India, GetMyPlan vs Prediko, fashion inventory planning
+
+- https://getmyplan.in/blog/reduce-stockouts-myntra-flipkart
+  Title: How to Reduce Stockouts on Myntra and Flipkart
+  Keywords: Myntra stockouts, Flipkart FBA fill rate, marketplace inventory
+
+- https://getmyplan.in/blog/what-is-demand-forecasting-guide
+  Title: What Is Demand Forecasting? Complete Guide for D2C Retailers
+  Keywords: demand forecasting, forecasting methods, AI forecasting accuracy
+
+- https://getmyplan.in/blog/ai-demand-planning-vs-excel
+  Title: AI Demand Planning vs Excel - Comparison with Real Data
+  Keywords: AI vs Excel forecasting, demand planning ROI, MAPE comparison
+
+- https://getmyplan.in/blog/demand-planning-kpis-fashion-retail
+  Title: 12 Demand Planning KPIs Every Fashion Retailer Must Track
+  Keywords: demand planning KPIs, MAPE, DOH, sell-through rate, inventory turn
+
+- https://getmyplan.in/blog/build-buy-plan-fashion-brand
+  Title: How to Build a Buy Plan for an Indian Fashion Brand
+  Keywords: buy plan, fashion buying, MOQ planning, phased delivery
+
+- https://getmyplan.in/blog/big-billion-days-bfcm-planning
+  Title: How Fashion Brands Should Plan for Big Billion Days & BFCM 2026
+  Keywords: Big Billion Days planning, BFCM inventory, peak season safety stock
+
+- https://getmyplan.in/blog/what-is-demand-sensing
+  Title: What Is Demand Sensing? Real-Time Forecasting Explained
+  Keywords: demand sensing, True ROS, real-time forecasting, POS data
+
+- https://getmyplan.in/blog/safety-stock-formula-calculate-optimize
+  Title: Safety Stock Formula - How to Calculate and Optimize
+  Keywords: safety stock formula, Z-score, service level, lead time variability
+
+- https://getmyplan.in/blog/what-is-mape-forecast-accuracy
+  Title: What Is MAPE? Forecast Accuracy Metric Explained
+  Keywords: MAPE, forecast accuracy, WAPE, MAE, demand planning metrics
+
+- https://getmyplan.in/blog/ai-agents-supply-chain-2026
+  Title: AI Agents in Supply Chain - 2026 Guide
+  Keywords: AI agents supply chain, autonomous planning, human-in-the-loop
+
+- https://getmyplan.in/blog/generative-ai-demand-planning
+  Title: Generative AI Demand Planning - Hype vs Reality 2026
+  Keywords: GenAI demand planning, ML vs GenAI forecasting, AI hype
+
+- https://getmyplan.in/blog/shopify-demand-planning-tools-2026
+  Title: Shopify Demand Planning - Best Tools 2026
+  Keywords: Shopify demand planning, Prediko vs GetMyPlan, inventory planner
+
+- https://getmyplan.in/blog/improve-forecast-accuracy-methods
+  Title: How to Improve Forecast Accuracy - 7 Proven Methods
+  Keywords: improve forecast accuracy, ensemble models, demand sensing, data cleaning
 
 - https://getmyplan.in/pricing
   Title: Getmyplan Pricing

@@ -53,7 +53,7 @@ export default function Navbar() {
                   <a href="#faq" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">FAQ</a>
                   <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Documentation</a>
                   <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API Reference</a>
-                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Blog</a>
+                  <Link to="/blog" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Blog</Link>
                 </div>
               )}
             </div>

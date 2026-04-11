@@ -48,6 +48,8 @@ const AiDemandPlanningPage = lazy(() => import("./pages/AiDemandPlanning"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const BlogIndex = lazy(() => import("./pages/blog/BlogIndex"));
+const BlogPost = lazy(() => import("./pages/blog/BlogPost"));
 
 // Eagerly loaded (used on every auth page load)
 import { ReturnUserBanner } from "./components/ReturnUserBanner";
@@ -259,6 +261,9 @@ const AppRouter = () => {
       {/* Legal pages — always public */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
+      {/* Blog — always public */}
+      <Route path="/blog" element={<BlogIndex />} />
+      <Route path="/blog/:slug" element={<BlogPost />} />
       {isAuthenticated ? (
         <Route path="/*" element={<AuthenticatedApp />} />
       ) : (
