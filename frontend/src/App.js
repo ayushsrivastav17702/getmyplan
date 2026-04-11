@@ -47,6 +47,7 @@ const MFASettings = lazy(() => import("./pages/MFASettings"));
 const BackupRestore = lazy(() => import("./pages/BackupRestore"));
 const UserFunnelDashboard = lazy(() => import("./pages/UserFunnelDashboard"));
 const DripCampaigns = lazy(() => import("./pages/DripCampaigns"));
+const InvoiceManagement = lazy(() => import("./pages/InvoiceManagement"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -200,6 +201,7 @@ const AuthenticatedApp = () => {
             <Route path="/backups" element={<BackupRestore />} />
             <Route path="/funnel-analytics" element={<UserFunnelDashboard />} />
             <Route path="/drip-campaigns" element={<DripCampaigns />} />
+            <Route path="/invoices" element={<InvoiceManagement />} />
 
             {/* 404 — proper Not Found page */}
             <Route path="*" element={<NotFound />} />
