@@ -143,7 +143,18 @@ Blog Slugs (7 UAE):
 27. uae-supply-chain-jebel-ali-port-delays
 28. uae-fashion-consumer-behavior-modest-fashion
 
-#### Blog Route Fix for Authenticated Users (COMPLETED)
+#### Executive Dashboard & Configuration UX Fixes (COMPLETED)
+- **Executive Dashboard**:
+  - Health Score: Shows "No module data uploaded yet" / "Upload data to calculate" when no modules have data (was previously alarming "Critical" with red styling)
+  - Quick Navigation: All 12 icons now unique (Activity, TrendingDown, XCircle, ShoppingCart, Clock, Layout, BarChart3, Package, Upload, Server, Database, MessageCircle)
+  - fmtNum: Properly returns "N/A" for null/undefined instead of "0"
+  - YoY card: Added units change row for parity with WoW card
+- **Configuration Page**:
+  - Save button: Shows "Save Parameters & Modules" on params/modules tabs; shows "saved individually" hint on Store Classes/Categories tabs
+  - Parameter descriptions: Rewritten to be user-friendly (e.g., "Minimum size availability % to mark a style as healthy" instead of "Pivotal Size Availability threshold")
+  - Module toggle descriptions: Enhanced (e.g., "Never Out of Stock — identifies must-have styles")
+  - Numeric inputs: Now clamp values within min/max range
+- **Test Report**: iteration_77.json -- 17/17 PASS
 - `/blog` and `/blog/:slug` routes placed in public section of `AppRouter` (App.js lines 264-266)
 - Routes render correctly regardless of authentication state
 - Verified via testing agent (iteration_75.json)
@@ -153,7 +164,6 @@ Blog Slugs (7 UAE):
 ## Pending / Backlog
 
 ### P1
-- Executive Dashboard & Configuration Page UX improvements (cosmetic — both pages functional)
 - USER-18: Multi-factor authentication (MFA)
 - TENANT-10: Tenant backup/restore
 
