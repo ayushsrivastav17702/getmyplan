@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/drip", tags=["Drip Campaigns"])
 
 
+def _require_super_admin(user: dict):
+    if user.get("role") != "super_admin" and user.get("tenant_id") != "demo":
+        raise HTTPException(status_code=403, detail="Only super admins can manage drip campaigns")
+
+
 class ToggleRequest(BaseModel):
     enabled: bool
 
@@ -22,6 +27,7 @@ class ToggleRequest(BaseModel):
 @router.get("/campaigns")
 async def list_campaigns(user: dict = Depends(get_current_user)):
     """List all drip campaigns with their enabled/disabled status."""
+    _require_super_admin(user)
     shared = get_shared_db()
     campaigns = await get_campaigns(shared)
     # Add stats from drip_logs
@@ -34,6 +40,7 @@ async def list_campaigns(user: dict = Depends(get_current_user)):
 @router.put("/campaigns/{campaign_id}/toggle")
 async def toggle_campaign(campaign_id: str, body: ToggleRequest, user: dict = Depends(get_current_user)):
     """Enable or disable a drip campaign."""
+    _require_super_admin(user)
     shared = get_shared_db()
     result = await shared.drip_campaigns.update_one(
         {"campaign_id": campaign_id},
@@ -50,6 +57,7 @@ async def toggle_campaign(campaign_id: str, body: ToggleRequest, user: dict = De
 @router.post("/run")
 async def run_drip(user: dict = Depends(get_current_user)):
     """Manually trigger drip campaign check and send emails."""
+    _require_super_admin(user)
     shared = get_shared_db()
     from services.smtp_email_service import email_service
     result = await run_drip_check(shared, email_service)
@@ -69,6 +77,7 @@ async def run_drip(user: dict = Depends(get_current_user)):
 @router.get("/history")
 async def drip_history(limit: int = 50, user: dict = Depends(get_current_user)):
     """Get recent drip email send history."""
+    _require_super_admin(user)
     shared = get_shared_db()
     logs = []
     async for doc in shared.drip_logs.find(
@@ -81,6 +90,7 @@ async def drip_history(limit: int = 50, user: dict = Depends(get_current_user)):
 @router.get("/runs")
 async def drip_runs(limit: int = 10, user: dict = Depends(get_current_user)):
     """Get recent drip run history."""
+    _require_super_admin(user)
     shared = get_shared_db()
     runs = []
     async for doc in shared.drip_runs.find(

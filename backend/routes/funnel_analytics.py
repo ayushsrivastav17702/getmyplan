@@ -43,11 +43,12 @@ async def get_funnel_data(
 ):
     """
     Get user funnel analytics.
-    - Super admins (demo tenant / super_admin role) → platform-wide
-    - Tenant admins → their own tenant
+    Restricted to super admins only.
     """
     role = user.get("role", "viewer")
     tenant_id = user.get("tenant_id")
+    if role != "super_admin" and tenant_id != "demo":
+        raise HTTPException(status_code=403, detail="Only super admins can access funnel analytics")
     is_platform_wide = role in ("super_admin",) or tenant_id == "demo"
 
     shared = get_shared_db()

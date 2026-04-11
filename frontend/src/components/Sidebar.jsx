@@ -65,8 +65,8 @@ const NAV_GROUPS = [
       { path: "/scheduled-jobs",label: "Scheduled Jobs",       icon: Clock,           permission: null },
       { path: "/security",      label: "Security (MFA)",       icon: Shield,          permission: null },
       { path: "/backups",       label: "Backup & Restore",     icon: Database,        permission: null },
-      { path: "/funnel-analytics", label: "User Funnel",       icon: Activity,        permission: null },
-      { path: "/drip-campaigns", label: "Drip Campaigns",     icon: Mail,            permission: null },
+      { path: "/funnel-analytics", label: "User Funnel",       icon: Activity,        permission: null, superAdminOnly: true },
+      { path: "/drip-campaigns", label: "Drip Campaigns",     icon: Mail,            permission: null, superAdminOnly: true },
     ],
   },
   {
@@ -142,13 +142,17 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   /* ─── Permission & module toggle filtering ─── */
   const isItemVisible = useCallback((item) => {
     if (item.permission !== null && !hasPermission(item.permission)) return false;
+    if (item.superAdminOnly) {
+      const isSuperAdmin = user?.role === "super_admin" || tenantId === "demo";
+      if (!isSuperAdmin) return false;
+    }
     if (moduleConfig) {
       for (const [toggleKey, paths] of Object.entries(MODULE_NAV_MAP)) {
         if (paths.includes(item.path) && moduleConfig[toggleKey] === false) return false;
       }
     }
     return true;
-  }, [hasPermission, moduleConfig]);
+  }, [hasPermission, moduleConfig, user?.role, tenantId]);
 
   const getPlanAccess = (path) => {
     const modKey = NAV_PLAN_MODULE_MAP[path];
@@ -358,29 +362,6 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
             );
           })}
         </nav>
-
-        {/* ─── Data Files (expanded only) ─── */}
-        {!collapsed && (
-          <div className="px-4 py-3 border-t border-white/5 shrink-0">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 block mb-2">Data Files</span>
-            <div className="space-y-1">
-              {["style_master", "sku_ean_master", "store_master", "warehouse_master", "daily_sales", "store_inventory", "warehouse_inventory"].map((file) => {
-                const status = uploadStatus?.[file];
-                const isUploaded = status?.uploaded && status?.valid;
-                return (
-                  <div key={file} className="flex items-center gap-1.5 text-[11px]">
-                    {isUploaded
-                      ? <Check size={10} className="text-emerald-400 shrink-0" />
-                      : <AlertCircle size={10} className="text-slate-600 shrink-0" />}
-                    <span className={isUploaded ? "text-slate-300" : "text-slate-600"}>
-                      {file.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* ─── User / Logout ─── */}
         {user && (
