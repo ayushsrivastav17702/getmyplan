@@ -7,9 +7,10 @@ import {
   Lock, Mail, Building2, ChevronRight, AlertCircle,
   Eye, EyeOff, Loader2, UserPlus, LogIn, Rocket
 } from "lucide-react";
+import MFAChallenge from "./MFAChallenge";
 
 const LoginPage = () => {
-  const { login, sessionExpired, clearSessionExpired } = useAuth();
+  const { login, sessionExpired, clearSessionExpired, mfaChallenge, completeMfaLogin, cancelMfa } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,13 +29,30 @@ const LoginPage = () => {
     setLoading(true);
     setError("");
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      // If MFA required, the challenge will appear via mfaChallenge state
+      if (result?.mfa_required) {
+        // No error — MFA challenge component will render
+      }
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
+
+  // Show MFA challenge if needed
+  if (mfaChallenge) {
+    return (
+      <MFAChallenge
+        mfaToken={mfaChallenge.mfa_token}
+        mfaMethods={mfaChallenge.mfa_methods}
+        email={mfaChallenge.email}
+        onVerified={completeMfaLogin}
+        onCancel={cancelMfa}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 flex items-center justify-center p-4" data-testid="login-page">

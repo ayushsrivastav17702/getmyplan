@@ -18,6 +18,8 @@ export const AuthProvider = ({ children }) => {
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState(null); // { mfa_token, mfa_methods, email }
+  const [mfaEnforced, setMfaEnforced] = useState(false);
   const interceptorId = useRef(null);
 
   // Setup 401 response interceptor
@@ -67,6 +69,7 @@ export const AuthProvider = ({ children }) => {
         setPermissions(data.permissions || data.user?.permissions || []);
         setTrialInfo(data.trialInfo || null);
         setPlanInfo(data.planInfo || null);
+        setMfaEnforced(data.mfaEnforced || false);
         axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
         axios.defaults.headers.common["X-Tenant-ID"] = data.tenantId;
       } catch (e) {
@@ -80,11 +83,27 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (email, password) => {
     setSessionExpired(false);
+    setMfaChallenge(null);
     // Clear any stale auth headers before login
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     const resp = await axios.post(`${API}/auth/login`, { email, password });
-    const { access_token, user: userData, trial_info, plan_info, tenant_id: resolvedTenantId, must_change_password } = resp.data;
+
+    // MFA challenge — don't issue token yet
+    if (resp.data.mfa_required) {
+      setMfaChallenge({
+        mfa_token: resp.data.mfa_token,
+        mfa_methods: resp.data.mfa_methods || ["totp", "email_otp"],
+        email,
+      });
+      return { mfa_required: true };
+    }
+
+    return _handleLoginSuccess(resp.data);
+  }, []);
+
+  const _handleLoginSuccess = useCallback((data) => {
+    const { access_token, user: userData, trial_info, plan_info, tenant_id: resolvedTenantId, must_change_password, mfa_enforced } = data;
     const tid = resolvedTenantId || userData.tenant_id;
     const userPerms = userData.permissions || [];
     const trialData = trial_info || null;
@@ -94,45 +113,51 @@ export const AuthProvider = ({ children }) => {
     axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
     axios.defaults.headers.common["X-Tenant-ID"] = tid;
 
-    // Fetch tenant info + branding
-    let tInfo = null;
-    let brandData = null;
-    try {
-      const [tResp, bResp] = await Promise.all([
-        axios.get(`${API}/tenants/${tid}/status`),
-        axios.get(`${API}/tenants/${tid}/branding`).catch(() => ({ data: null })),
-      ]);
-      tInfo = tResp.data;
-      brandData = bResp.data;
-    } catch (e) {
-      tInfo = { tenant_id: tid, company_name: tid };
-    }
-
     const mustChangePw = !!must_change_password;
+    const mfaEnf = !!mfa_enforced;
 
     setUser(userData);
     setToken(access_token);
     setTenantId(tid);
-    setTenantInfo(tInfo);
-    setBranding(brandData);
     setPermissions(userPerms);
     setTrialInfo(trialData);
     setPlanInfo(planData);
     setMustChangePassword(mustChangePw);
+    setMfaEnforced(mfaEnf);
+    setMfaChallenge(null);
 
+    // Fetch tenant info + branding in background
+    Promise.all([
+      axios.get(`${API}/tenants/${tid}/status`).catch(() => ({ data: { tenant_id: tid, company_name: tid } })),
+      axios.get(`${API}/tenants/${tid}/branding`).catch(() => ({ data: null })),
+    ]).then(([tResp, bResp]) => {
+      setTenantInfo(tResp.data);
+      setBranding(bResp.data);
+      localStorage.setItem("merch_auth", JSON.stringify({
+        user: userData, token: access_token, tenantId: tid,
+        tenantInfo: tResp.data, branding: bResp.data,
+        permissions: userPerms, trialInfo: trialData, planInfo: planData,
+        mustChangePassword: mustChangePw, mfaEnforced: mfaEnf,
+      }));
+    });
+
+    // Set initial localStorage immediately so page doesn't flash
     localStorage.setItem("merch_auth", JSON.stringify({
-      user: userData,
-      token: access_token,
-      tenantId: tid,
-      tenantInfo: tInfo,
-      branding: brandData,
-      permissions: userPerms,
-      trialInfo: trialData,
-      planInfo: planData,
-      mustChangePassword: mustChangePw,
+      user: userData, token: access_token, tenantId: tid,
+      tenantInfo: null, branding: null,
+      permissions: userPerms, trialInfo: trialData, planInfo: planData,
+      mustChangePassword: mustChangePw, mfaEnforced: mfaEnf,
     }));
 
     return userData;
+  }, []);
+
+  const completeMfaLogin = useCallback((data) => {
+    return _handleLoginSuccess(data);
+  }, [_handleLoginSuccess]);
+
+  const cancelMfa = useCallback(() => {
+    setMfaChallenge(null);
   }, []);
 
   const logout = useCallback(() => {
@@ -145,6 +170,8 @@ export const AuthProvider = ({ children }) => {
     setTrialInfo(null);
     setPlanInfo(null);
     setMustChangePassword(false);
+    setMfaChallenge(null);
+    setMfaEnforced(false);
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     localStorage.removeItem("merch_auth");
@@ -181,6 +208,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider value={{
       user, token, tenantId, tenantInfo, branding, permissions, trialInfo, planInfo,
       mustChangePassword, loading, isAuthenticated, sessionExpired,
+      mfaChallenge, mfaEnforced, completeMfaLogin, cancelMfa,
       login, logout, hasPermission, hasRole, clearSessionExpired, clearMustChangePassword,
     }}>
       {children}

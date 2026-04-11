@@ -62,6 +62,7 @@ const NAV_GROUPS = [
       { path: "/tenant-admin",  label: "Tenant Admin",         icon: Shield,          permission: "settings.tenant.view" },
       { path: "/plan-upgrade",  label: "Plan & Billing",       icon: Crown,           permission: null },
       { path: "/scheduled-jobs",label: "Scheduled Jobs",       icon: Clock,           permission: null },
+      { path: "/security",      label: "Security (MFA)",       icon: Shield,          permission: null },
     ],
   },
   {

@@ -43,6 +43,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const PlanUpgrade = lazy(() => import("./pages/PlanUpgrade"));
 const ScheduledJobs = lazy(() => import("./pages/ScheduledJobs"));
+const MFASettings = lazy(() => import("./pages/MFASettings"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -192,6 +193,7 @@ const AuthenticatedApp = () => {
             <Route path="/tenant-admin"  element={<ProtectedRoute permission="settings.tenant.view"><TenantAdminPanel /></ProtectedRoute>} />
             <Route path="/plan-upgrade"  element={<PlanUpgrade />} />
             <Route path="/scheduled-jobs" element={<ScheduledJobs />} />
+            <Route path="/security" element={<MFASettings />} />
 
             {/* 404 — proper Not Found page */}
             <Route path="*" element={<NotFound />} />
