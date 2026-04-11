@@ -184,4 +184,95 @@
     </news:news>
   </url>
 
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-vision-2030-retail-demand-planning</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Saudi Vision 2030 Retail — Demand Planning for the New Saudi Consumer</news:title>
+      <news:keywords>Saudi Vision 2030, retail demand planning, Ramadan forecasting, modest fashion, Riyadh Jeddah</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-ecommerce-amazon-noon-namshi</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>E-Commerce in Saudi Arabia — Amazon.sa, Noon, and Namshi Planning</news:title>
+      <news:keywords>Saudi e-commerce, Amazon.sa, Noon, Namshi, FBA planning, multi-channel retail</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-ramadan-planning-fashion</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Ramadan Planning for Saudi Fashion Brands — 90-Day Countdown</news:title>
+      <news:keywords>Ramadan planning, Saudi fashion, modest fashion, Eid gifting, capsule collection, kaftan</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-logistics-port-delays-transportation</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Saudi Logistics — Planning Around Port Delays and Inland Transportation</news:title>
+      <news:keywords>Saudi logistics, Jeddah port, Dammam port, SASO compliance, lead time, inland transport</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-consumer-behavior-modest-fashion</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Saudi Consumer Behavior — The Rise of Modest Fashion and Local Brands</news:title>
+      <news:keywords>Saudi consumer, modest fashion, local brands, Vision 2030, digital-first, youth demographics</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-multi-city-retail-planning</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Multi-City Retail Planning — Managing Inventory Across KSA's Growing Mall Landscape</news:title>
+      <news:keywords>Saudi multi-city retail, mall inventory, store allocation, Riyadh Jeddah Dammam, IST optimization</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/saudi-ai-forecasting-vision-2030</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Vision 2030 Retail — How AI Forecasting Supports Saudi's Economic Transformation</news:title>
+      <news:keywords>Vision 2030, AI forecasting, Saudi retail transformation, economic diversification, retail technology</news:keywords>
+    </news:news>
+  </url>
+
 </urlset>

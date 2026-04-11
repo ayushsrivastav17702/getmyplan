@@ -108,6 +108,13 @@
   Keywords: Shopify demand planning, Prediko vs GetMyPlan, inventory planner
 
 - https://getmyplan.in/blog/improve-forecast-accuracy-methods
+- https://getmyplan.in/blog/saudi-vision-2030-retail-demand-planning
+- https://getmyplan.in/blog/saudi-ecommerce-amazon-noon-namshi
+- https://getmyplan.in/blog/saudi-ramadan-planning-fashion
+- https://getmyplan.in/blog/saudi-logistics-port-delays-transportation
+- https://getmyplan.in/blog/saudi-consumer-behavior-modest-fashion
+- https://getmyplan.in/blog/saudi-multi-city-retail-planning
+- https://getmyplan.in/blog/saudi-ai-forecasting-vision-2030
   Title: How to Improve Forecast Accuracy - 7 Proven Methods
   Keywords: improve forecast accuracy, ensemble models, demand sensing, data cleaning
 
