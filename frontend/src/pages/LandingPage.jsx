@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { Helmet } from "react-helmet-async";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
 import TrustBar from "../components/landing/TrustBar";
@@ -26,6 +27,13 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <link rel="canonical" href="https://getmyplan.in" />
+        <meta property="og:title" content="GetMyPlan — AI-Powered Demand Planning for Fashion Retail" />
+        <meta property="og:description" content="AI demand planning platform for fashion retailers. 91% forecast accuracy, 40% stockout reduction, 15-min setup." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://getmyplan.in" />
+      </Helmet>
       <Navbar />
       <Hero onWatchDemo={openTour} onRequestDemo={openDemo} />
       <TrustBar />

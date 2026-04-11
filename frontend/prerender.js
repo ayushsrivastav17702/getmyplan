@@ -129,11 +129,28 @@ async function prerender() {
 
       // Wait for React to finish rendering
       await page.waitForSelector('#root', { timeout: 10000 });
-      await page.evaluate(() => new Promise(r => setTimeout(r, 500)));
+      await page.evaluate(() => new Promise(r => setTimeout(r, 1500)));
 
-      // Remove scripts that shouldn't be in pre-rendered HTML (like setInterval badge hider)
-      // but keep React bundle scripts for hydration
-      const html = await page.content();
+      // Get the final page HTML after React has fully rendered (including Helmet updates)
+      let html = await page.content();
+      
+      // Helmet updates document.title via JS but the <title> in <head> may be stale.
+      // Replace ALL title tags with a single correct one.
+      const actualTitle = await page.title();
+      if (actualTitle) {
+        html = html.replace(/<title[^>]*>[^<]*<\/title>/g, '');
+        html = html.replace('</head>', `<title>${actualTitle}</title></head>`);
+      }
+      
+      // Deduplicate meta descriptions — keep only the last (page-specific) one.
+      const descMatches = html.match(/<meta name="description"[^>]*>/g);
+      if (descMatches && descMatches.length > 1) {
+        const lastDesc = descMatches[descMatches.length - 1];
+        // Remove all description metas
+        html = html.replace(/<meta name="description"[^>]*>/g, '');
+        // Re-insert only the page-specific one
+        html = html.replace('</head>', `${lastDesc}</head>`);
+      }
 
       // Determine output path
       const outputDir = path.join(BUILD_DIR, route === '/' ? '' : route);

@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import PlanGuard from "./components/PlanGuard";
 import NotificationBell from "./components/NotificationBell";
 import Sidebar from "./components/Sidebar";
+import { Helmet } from "react-helmet-async";
 import CookieConsent from "./components/CookieConsent";
 
 // Eagerly loaded (critical path)
@@ -249,6 +250,11 @@ const AppRouter = () => {
   // Public routes available regardless of auth state
   return (
     <Suspense fallback={<PageLoader />}>
+    <>
+    <Helmet>
+      <title>GetMyPlan — AI-Powered Demand Planning for Fashion Retail</title>
+      <meta name="description" content="AI demand planning platform for fashion retailers. 91% forecast accuracy, 40% stockout reduction, 15-min setup. Trusted by brands across India, Saudi Arabia, and UAE." />
+    </Helmet>
     <Routes>
       <Route path="/signup" element={isAuthenticated ? <Navigate to="/" replace /> : <Signup />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
@@ -274,6 +280,7 @@ const AppRouter = () => {
         </>
       )}
     </Routes>
+    </>
     </Suspense>
   );
 };

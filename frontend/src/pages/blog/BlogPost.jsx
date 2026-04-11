@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { ArrowLeft, Clock, Calendar, Tag, ChevronRight } from "lucide-react";
 import { getBlogBySlug, getRelatedBlogs } from "../../data/blogData";
 
@@ -13,13 +14,9 @@ export default function BlogPost() {
     window.scrollTo(0, 0);
   }, [slug]);
 
+  // Inject JSON-LD via useEffect (Helmet doesn't handle script children well)
   useEffect(() => {
     if (!blog) return;
-    document.title = `${blog.title} | GetMyPlan Blog`;
-    const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.setAttribute("content", blog.metaDescription);
-
-    // JSON-LD Article Schema
     let script = document.getElementById("blog-jsonld");
     if (!script) {
       script = document.createElement("script");
@@ -33,23 +30,12 @@ export default function BlogPost() {
       headline: blog.title,
       description: blog.metaDescription,
       author: { "@type": "Person", name: "Founder & CEO, GetMyPlan" },
-      publisher: {
-        "@type": "Organization",
-        name: "GetMyPlan",
-        url: "https://getmyplan.in",
-      },
+      publisher: { "@type": "Organization", name: "GetMyPlan", url: "https://getmyplan.in" },
       datePublished: "2026-04-11",
       dateModified: "2026-04-11",
-      mainEntityOfPage: {
-        "@type": "WebPage",
-        "@id": `https://getmyplan.in/blog/${blog.slug}`,
-      },
+      mainEntityOfPage: { "@type": "WebPage", "@id": `https://getmyplan.in/blog/${blog.slug}` },
     });
-
-    return () => {
-      const el = document.getElementById("blog-jsonld");
-      if (el) el.remove();
-    };
+    return () => { const el = document.getElementById("blog-jsonld"); if (el) el.remove(); };
   }, [blog, slug]);
 
   if (!blog) {
@@ -64,8 +50,19 @@ export default function BlogPost() {
     );
   }
 
+  const pageTitle = `${blog.title} | GetMyPlan Blog`;
+
   return (
     <div className="min-h-screen bg-white" data-testid="blog-post-page">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={blog.metaDescription} />
+        <link rel="canonical" href={`https://getmyplan.in/blog/${blog.slug}`} />
+        <meta property="og:title" content={blog.title} />
+        <meta property="og:description" content={blog.metaDescription} />
+        <meta property="og:type" content="article" />
+        <meta property="og:url" content={`https://getmyplan.in/blog/${blog.slug}`} />
+      </Helmet>
       {/* Nav */}
       <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">

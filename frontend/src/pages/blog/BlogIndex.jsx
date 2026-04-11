@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { Search, Clock, ChevronRight, ArrowRight, Tag } from "lucide-react";
 import { blogs, blogCategories } from "../../data/blogData";
 
@@ -9,9 +10,6 @@ export default function BlogIndex() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    document.title = "Blog | GetMyPlan - AI Demand Planning Insights";
-    const meta = document.querySelector('meta[name="description"]');
-    if (meta) meta.setAttribute("content", "Expert articles on demand planning, inventory optimization, AI forecasting, and retail analytics for fashion brands. Free guides, formulas, and benchmarks.");
   }, []);
 
   const filtered = useMemo(() => {
@@ -26,6 +24,11 @@ export default function BlogIndex() {
 
   return (
     <div className="min-h-screen bg-white" data-testid="blog-index-page">
+      <Helmet>
+        <title>Blog | GetMyPlan - AI Demand Planning Insights</title>
+        <meta name="description" content="Expert articles on demand planning, inventory optimization, AI forecasting, and retail analytics for fashion brands. Free guides, formulas, and benchmarks." />
+        <link rel="canonical" href="https://getmyplan.in/blog" />
+      </Helmet>
       {/* Nav */}
       <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
