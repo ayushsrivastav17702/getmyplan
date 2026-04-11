@@ -3,7 +3,7 @@
 ## Product Requirements Document
 
 ### Original Problem Statement
-Multi-tenant demand planning system with comprehensive V2 data pipelines, UI dashboards, ML forecasting, scalable sample data onboarding, Redis caching, email alerts, contextual data upload guidance, guided onboarding wizard, and Technical SEO optimizations.
+Multi-tenant demand planning system with comprehensive V2 data pipelines, UI dashboards, ML forecasting, scalable sample data onboarding, Redis caching, email alerts, contextual data upload guidance, guided onboarding wizard, Technical SEO optimizations, and SEO-optimized blog content.
 
 ### Tech Stack
 - **Frontend**: React 18, Chart.js (react-chartjs-2), Shadcn/UI, TailwindCSS
@@ -19,13 +19,15 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 ```
 /app
 ├── backend/
-│   ├── routes/ (ai_demand.py, bi_dashboard.py, doh_analysis.py, gap_analysis.py, stock_out.py, replenishment.py, upload.py, signup.py, warehouse.py, core_logic.py, planogram.py, onboarding.py)
+│   ├── routes/ (ai_demand.py, bi_dashboard.py, doh_analysis.py, gap_analysis.py, stock_out.py, replenishment.py, upload.py, signup.py, warehouse.py, core_logic.py, planogram.py, onboarding.py, demo.py)
 │   ├── services/ (cache_service.py, smtp_email_service.py, upload_service.py, tenant_data_provider.py)
 │   ├── multi_tenant/ (tenant_db.py, rbac.py)
 │   └── server.py (main FastAPI app, analytics endpoints)
 ├── frontend/
-│   ├── src/pages/ (DataUploadPage.jsx, GapAnalysis.js, AIDemandPlanning.jsx, OnboardingWizard.js, NotFound.jsx, etc.)
-│   ├── src/components/ (Sidebar.jsx, ReturnUserBanner.jsx, upload/DataRequirementsPanel.jsx, upload/FileDropzone.jsx, etc.)
+│   ├── src/pages/ (DataUploadPage.jsx, GapAnalysis.js, AIDemandPlanning.jsx, OnboardingWizard.js, NotFound.jsx, PrivacyPolicy.jsx, TermsOfService.jsx, etc.)
+│   ├── src/pages/blog/ (BlogIndex.jsx, BlogPost.jsx)
+│   ├── src/data/ (blogData.js — 14 blog posts with structured content)
+│   ├── src/components/ (Sidebar.jsx, ReturnUserBanner.jsx, landing/Navbar.jsx, landing/Footer.jsx, etc.)
 │   └── src/context/ (AuthContext.js)
 ```
 
@@ -69,49 +71,67 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 - Footer links to all SEO pages
 
 #### SEO Fixes 3, 4, 5 (P0)
-- **Fix 3**: Created proper `NotFound.jsx` 404 page with SEO meta (noindex), helpful links, and internal site navigation. Wired to catch-all routes for both authenticated and unauthenticated users.
-- **Fix 4**: Ensured exactly 1 H1 per page. Fixed: OnboardingWizard (2 H1s -> 1 H1 + 1 H2), PlanUpgrade (missing H1 added), VerifyEmail (sr-only H1 added).
-- **Fix 5**: Reduced main JS bundle from **2.3MB to 340KB** (85% reduction) via React.lazy code splitting for all 30+ route-level components with Suspense fallback.
+- Created proper `NotFound.jsx` 404 page with SEO meta
+- Fixed H1 tags (1 per page)
+- Reduced main JS bundle from 2.3MB to 340KB (85% reduction) via React.lazy
 - **Test Report**: iteration_70.json -- 11/11 PASS
 
 #### Brand Logo Integration
-- Added Getmyplan logo to all 5 locations: Landing navbar, Sidebar, Login/Signup/ForgotPassword/ResetPassword/VerifyEmail, Favicon, SEO pages
-- Logo optimized: 3.8MB original -> 46KB web version, 3.6KB favicon, 13KB apple-touch-icon
+- Added Getmyplan logo to 5 locations: Navbar, Sidebar, Auth pages, Favicon, SEO pages
 - **Test Report**: iteration_71.json -- 9/9 PASS
 
-#### SEO Crawlability & Legal Pages (Phase 2)
-- **SSR Shell**: Static HTML content injected into `public/index.html` inside `#root` — nav, H1 hero, 8 feature cards, skeleton loader. Crawlers see real content in raw HTML before JS loads.
-- **Request a Demo CTA**: Prominent button added to both Navbar and Hero section. Opens ContactModal form (name, email, company, source, goals) with proper autocomplete attrs.
-- **Legal Pages**: Created `/privacy` (9-section Privacy Policy) and `/terms` (13-section Terms of Service). Linked from footer with React Router.
-- **Loading State**: Enhanced `<noscript>` message for JS-disabled users + CSS `ssr-pulse` skeleton animation.
+#### SEO Crawlability & Legal Pages
+- SSR Shell in index.html, Request a Demo CTA, Privacy/Terms pages
 - **Test Report**: iteration_72.json -- 13/13 PASS
 
-#### Demo Request Backend Wiring
-- Created `POST /api/demo/request` endpoint — validates input (Pydantic), stores lead in `demo_requests` MongoDB collection, sends HTML notification email to admin via Hostinger SMTP.
-- Created `GET /api/demo/requests` endpoint — lists all demo leads (newest first, max 100).
-- Updated `ContactModal.jsx` — calls real API instead of setTimeout mock. Shows error state on failure.
-- **Verified**: Form submission stores in DB + email notification sent + success UI shown.
-
-#### Landing Page Global Positioning (Step 2)
-- **Hero Rewrite**: H1 "Stop losing revenue to stockouts." + subheadline "AI demand planning for fashion retail."
-- **Real Dashboard Screenshot**: Replaced animated Mini* mockups with actual `dashboard-screenshot.webp` (106KB)
-- **Video Walkthrough**: Click-to-play section with placeholder (VIDEO_ID = null, YouTube embed ready)
-- **91% Footnote**: Added methodology backtest footnote to StatsSection
-- **India References Removed**: All public pages — marketplaces, cities, currency, schema.org JSON-LD
+#### Demo Request Backend + Landing Page Updates
+- `POST /api/demo/request` with SMTP email + MongoDB storage
+- Hero rewrite, real dashboard screenshot, video walkthrough placeholder
+- India references removed globally
 - **Test Report**: iteration_73.json -- 19/19 PASS
+
+### Session: Apr 11, 2026
+
+#### Blog Section — 14 SEO-Optimized Articles
+- 14 long-form blog posts at `/blog` and `/blog/:slug` — publicly accessible
+- **BlogIndex.jsx**: Search, 6 category filters, featured card, 3-column responsive grid
+- **BlogPost.jsx**: Dynamic title, JSON-LD Article schema, H1, TL;DR, tables, FAQs, CTA, related articles
+- Internal cross-linking between all 14 articles for SEO backlink structure
+- All 14 URLs in sitemap.xml and llms.txt
+- Blog links added to landing Navbar + Footer
+- Author: "Founder & CEO, GetMyPlan" (no personal names)
+- **Test Report**: iteration_74.json -- 20/20 PASS
+
+Blog Slugs:
+1. best-demand-planning-software-india-2026
+2. reduce-stockouts-myntra-flipkart
+3. what-is-demand-forecasting-guide
+4. ai-demand-planning-vs-excel
+5. demand-planning-kpis-fashion-retail
+6. build-buy-plan-fashion-brand
+7. big-billion-days-bfcm-planning
+8. what-is-demand-sensing
+9. safety-stock-formula-calculate-optimize
+10. what-is-mape-forecast-accuracy
+11. ai-agents-supply-chain-2026
+12. generative-ai-demand-planning
+13. shopify-demand-planning-tools-2026
+14. improve-forecast-accuracy-methods
 
 ---
 
 ## Pending / Backlog
 
-### P1 -- Next Up
+### P0 -- Next Up
 - Executive Dashboard & Configuration Page UX Fixes:
   - KPI labels, unique keys, compact INR formatting, filter dropdown wiring
   - Configuration page: typos, save button, numeric inputs
 
-### P2 -- Future
+### P1
 - USER-18: Multi-factor authentication (MFA)
 - TENANT-10: Tenant backup/restore
+
+### P2 -- Future
 - TENANT-31: Invoice generation
 - User Funnel Analytics Dashboard
 
@@ -119,6 +139,7 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 - Auto-scheduled SFTP uploads for Data Upload V2
 - Chunked uploads & async processing
 - MongoDB pipeline migration (replace in-memory Pandas aggregation)
+- Blog RSS feed for Google News submission
 
 ---
 
