@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import PlanGuard from "./components/PlanGuard";
 import NotificationBell from "./components/NotificationBell";
 import Sidebar from "./components/Sidebar";
+import CookieConsent from "./components/CookieConsent";
 
 // Eagerly loaded (critical path)
 import Unauthorized from "./pages/Unauthorized";
@@ -297,6 +298,7 @@ function App() {
       <AuthProvider>
         <OfflineBanner />
         <AppRouter />
+        <CookieConsent />
       </AuthProvider>
     </BrowserRouter>
   );
