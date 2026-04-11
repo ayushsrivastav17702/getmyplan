@@ -1139,145 +1139,20 @@ async def get_executive_kpis(
     channels: str = None,
     regions: str = None,
 ):
-    """Revenue, Margin, WoW, and YoY KPIs for the executive dashboard."""
+    """Revenue, Margin, WoW, and YoY KPIs for the executive dashboard (MongoDB aggregation)."""
     _tid = _cache_tenant_id()
     _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
     _hit, _data = cache_get("executive_kpis", _tid, _ex)
     if _hit:
         return _data
-    sales_df = await get_cached_data('daily_sales')
-    sku_df = await get_cached_data('sku_ean_master')
-    cogs_df = await get_cached_data('cogs')
 
-    if sales_df is None or len(sales_df) == 0:
-        return {
-            "revenue": 0, "units_sold": 0, "margin_pct": None,
-            "mrp_realisation_pct": None, "total_cogs": 0,
-            "wow": {"revenue_change": 0, "units_change": 0,
-                    "current_revenue": 0, "previous_revenue": 0,
-                    "current_units": 0, "previous_units": 0},
-            "yoy": {"revenue_change": 0, "current_revenue": 0, "previous_revenue": 0},
-            "has_data": False,
-        }
+    from core.mongo_aggregations import agg_executive_kpis
+    tdb = get_db()
+    cat_list = [c.strip() for c in categories.split(',')] if categories else None
+    ch_list = [c.strip() for c in channels.split(',')] if channels else None
+    rg_list = [r.strip() for r in regions.split(',')] if regions else None
 
-    sales_df['day'] = pd.to_datetime(sales_df['day'], errors='coerce')
-    sales_df['revenue'] = pd.to_numeric(sales_df['revenue'], errors='coerce').fillna(0)
-    sales_df['quantity'] = pd.to_numeric(sales_df['quantity'], errors='coerce').fillna(0)
-
-    # Apply filters
-    if start_date:
-        sales_df = sales_df[sales_df['day'] >= pd.to_datetime(start_date)]
-    if end_date:
-        sales_df = sales_df[sales_df['day'] <= pd.to_datetime(end_date)]
-    if categories and sku_df is not None:
-        cat_list = [c.strip() for c in categories.split(',')]
-        style_df = await get_cached_data('style_master')
-        if style_df is not None and 'category' in style_df.columns:
-            valid_styles = style_df[style_df['category'].isin(cat_list)]['style_code'].unique()
-            if 'sku' in sales_df.columns and 'style' in sku_df.columns and 'ean' in sku_df.columns:
-                valid_skus = sku_df[sku_df['style'].isin(valid_styles)]['ean'].unique()
-                sales_df = sales_df[sales_df['sku'].isin(valid_skus)]
-    if channels:
-        ch_list = [c.strip() for c in channels.split(',')]
-        if 'channel' in sales_df.columns:
-            sales_df = sales_df[sales_df['channel'].isin(ch_list)]
-    if regions:
-        rg_list = [r.strip() for r in regions.split(',')]
-        store_df = await get_cached_data('store_master')
-        if store_df is not None and 'region' in store_df.columns and 'store_code' in store_df.columns:
-            valid_stores = store_df[store_df['region'].isin(rg_list)]['store_code'].unique()
-            if 'store_code' in sales_df.columns:
-                sales_df = sales_df[sales_df['store_code'].isin(valid_stores)]
-
-    total_revenue = float(sales_df['revenue'].sum())
-    total_units = int(sales_df['quantity'].sum())
-
-    # True margin from COGS data (if available)
-    true_margin_pct = None
-    total_cogs = 0
-    if cogs_df is not None and len(cogs_df) > 0:
-        cogs = cogs_df.copy()
-        cogs['cogs'] = pd.to_numeric(cogs.get('cogs', pd.Series(dtype=float)), errors='coerce').fillna(0)
-        if 'transaction_date' in cogs.columns:
-            cogs['transaction_date'] = pd.to_datetime(cogs['transaction_date'], errors='coerce')
-            if start_date:
-                cogs = cogs[cogs['transaction_date'] >= pd.to_datetime(start_date)]
-            if end_date:
-                cogs = cogs[cogs['transaction_date'] <= pd.to_datetime(end_date)]
-        total_cogs = float(cogs['cogs'].sum())
-        if total_revenue > 0 and total_cogs > 0:
-            true_margin_pct = round((total_revenue - total_cogs) / total_revenue * 100, 1)
-
-    # MRP Realisation % (fallback proxy when no COGS)
-    mrp_realisation = None
-    if sku_df is not None and 'mrp' in sku_df.columns and 'ean' in sku_df.columns:
-        sku_df['mrp'] = pd.to_numeric(sku_df['mrp'], errors='coerce').fillna(0)
-        merged = sales_df.merge(sku_df[['ean', 'mrp']].drop_duplicates('ean'),
-                                left_on='sku', right_on='ean', how='left')
-        merged['mrp_value'] = merged['quantity'] * merged['mrp']
-        total_mrp = merged['mrp_value'].sum()
-        if total_mrp > 0:
-            mrp_realisation = round(float(total_revenue / total_mrp * 100), 1)
-
-    # Use true margin if COGS available, otherwise fall back to MRP realisation
-    margin_pct = true_margin_pct if true_margin_pct is not None else mrp_realisation
-
-    # WoW: split by midpoint of date range
-    max_date = sales_df['day'].max()
-    min_date = sales_df['day'].min()
-    date_range_days = (max_date - min_date).days if pd.notna(max_date) and pd.notna(min_date) else 0
-
-    if date_range_days >= 7:
-        cutoff = max_date - pd.Timedelta(days=7)
-        current_week = sales_df[sales_df['day'] > cutoff]
-        prev_week = sales_df[(sales_df['day'] > cutoff - pd.Timedelta(days=7)) & (sales_df['day'] <= cutoff)]
-        cur_rev = float(current_week['revenue'].sum())
-        prev_rev = float(prev_week['revenue'].sum())
-        cur_units = int(current_week['quantity'].sum())
-        prev_units = int(prev_week['quantity'].sum())
-        wow = {
-            "revenue_change": round(((cur_rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else 0, 1),
-            "units_change": round(((cur_units - prev_units) / prev_units * 100) if prev_units > 0 else 0, 1),
-            "current_revenue": cur_rev,
-            "previous_revenue": prev_rev,
-            "current_units": cur_units,
-            "previous_units": prev_units,
-        }
-    else:
-        wow = {"revenue_change": 0, "units_change": 0,
-               "current_revenue": total_revenue, "previous_revenue": 0,
-               "current_units": total_units, "previous_units": 0}
-
-    # YoY: compare same date range one year prior (if data exists)
-    yoy = {"revenue_change": 0, "current_revenue": total_revenue, "previous_revenue": 0}
-    if date_range_days >= 1 and pd.notna(min_date):
-        yoy_start = min_date - pd.DateOffset(years=1)
-        yoy_end = max_date - pd.DateOffset(years=1)
-        # Reload unfiltered sales for yoy lookup
-        all_sales = await get_cached_data('daily_sales')
-        if all_sales is not None:
-            all_sales['day'] = pd.to_datetime(all_sales['day'], errors='coerce')
-            all_sales['revenue'] = pd.to_numeric(all_sales['revenue'], errors='coerce').fillna(0)
-            prev_year = all_sales[(all_sales['day'] >= yoy_start) & (all_sales['day'] <= yoy_end)]
-            prev_year_rev = float(prev_year['revenue'].sum())
-            if prev_year_rev > 0:
-                yoy = {
-                    "revenue_change": round((total_revenue - prev_year_rev) / prev_year_rev * 100, 1),
-                    "current_revenue": total_revenue,
-                    "previous_revenue": prev_year_rev,
-                }
-
-    _result = {
-        "revenue": total_revenue,
-        "units_sold": total_units,
-        "margin_pct": margin_pct,
-        "mrp_realisation_pct": mrp_realisation,
-        "total_cogs": total_cogs,
-        "margin_source": "cogs" if true_margin_pct is not None else "mrp_realisation",
-        "wow": wow,
-        "yoy": yoy,
-        "has_data": True,
-    }
+    _result = await agg_executive_kpis(tdb, _tid, start_date, end_date, cat_list, ch_list, rg_list)
     cache_set("executive_kpis", _tid, _result, _ex)
     return _result
 
@@ -1301,7 +1176,12 @@ async def get_executive_dashboard(
 
     # --- ROS Gap ---
     try:
-        ros_resp = await _ros_gap_analysis(start_date, end_date, categories, channels, regions)
+        from core.mongo_aggregations import agg_ros_gap_analysis
+        tdb = get_db()
+        cat_list = [c.strip() for c in categories.split(',')] if categories else None
+        ch_list = [c.strip() for c in channels.split(',')] if channels else None
+        rg_list = [r.strip() for r in regions.split(',')] if regions else None
+        ros_resp = await agg_ros_gap_analysis(tdb, _tid, start_date, end_date, cat_list, ch_list, rg_list)
         if not ros_resp.get('error'):
             s = ros_resp.get('summary', {})
             modules['ros_gap'] = {
@@ -1505,61 +1385,20 @@ async def get_executive_revenue_trend(
     channels: str = None,
     regions: str = None,
 ):
-    """Daily revenue & units timeseries for the Executive Dashboard trend chart."""
+    """Daily revenue & units timeseries for the Executive Dashboard trend chart (MongoDB aggregation)."""
     _tid = _cache_tenant_id()
     _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions)
     _hit, _data = cache_get("bi_revenue_trend", _tid, _ex)
     if _hit:
         return _data
-    sales_df = await get_cached_data('daily_sales')
-    sku_df = await get_cached_data('sku_ean_master')
 
-    if sales_df is None or len(sales_df) == 0:
-        return {"labels": [], "revenue": [], "units": []}
+    from core.mongo_aggregations import agg_revenue_trend
+    tdb = get_db()
+    cat_list = [c.strip() for c in categories.split(',')] if categories else None
+    ch_list = [c.strip() for c in channels.split(',')] if channels else None
+    rg_list = [r.strip() for r in regions.split(',')] if regions else None
 
-    sales_df = sales_df.copy()
-    sales_df['day'] = pd.to_datetime(sales_df['day'], errors='coerce')
-    sales_df['revenue'] = pd.to_numeric(sales_df['revenue'], errors='coerce').fillna(0)
-    sales_df['quantity'] = pd.to_numeric(sales_df['quantity'], errors='coerce').fillna(0)
-
-    # Apply filters
-    if start_date:
-        sales_df = sales_df[sales_df['day'] >= pd.to_datetime(start_date)]
-    if end_date:
-        sales_df = sales_df[sales_df['day'] <= pd.to_datetime(end_date)]
-    if categories and sku_df is not None:
-        cat_list = [c.strip() for c in categories.split(',')]
-        style_df = await get_cached_data('style_master')
-        if style_df is not None and 'category' in style_df.columns:
-            valid_styles = style_df[style_df['category'].isin(cat_list)]['style_code'].unique()
-            if 'sku' in sales_df.columns and 'style' in sku_df.columns and 'ean' in sku_df.columns:
-                valid_skus = sku_df[sku_df['style'].isin(valid_styles)]['ean'].unique()
-                sales_df = sales_df[sales_df['sku'].isin(valid_skus)]
-    if channels:
-        ch_list = [c.strip() for c in channels.split(',')]
-        if 'channel' in sales_df.columns:
-            sales_df = sales_df[sales_df['channel'].isin(ch_list)]
-    if regions:
-        rg_list = [r.strip() for r in regions.split(',')]
-        store_df = await get_cached_data('store_master')
-        if store_df is not None and 'region' in store_df.columns and 'store_code' in store_df.columns:
-            valid_stores = store_df[store_df['region'].isin(rg_list)]['store_code'].unique()
-            if 'store_code' in sales_df.columns:
-                sales_df = sales_df[sales_df['store_code'].isin(valid_stores)]
-
-    if len(sales_df) == 0:
-        return {"labels": [], "revenue": [], "units": []}
-
-    daily = sales_df.groupby(sales_df['day'].dt.date).agg(
-        revenue=('revenue', 'sum'),
-        units=('quantity', 'sum'),
-    ).sort_index()
-
-    labels = [d.strftime('%Y-%m-%d') for d in daily.index]
-    revenue = [round(float(v), 2) for v in daily['revenue']]
-    units = [int(v) for v in daily['units']]
-
-    _result = {"labels": labels, "revenue": revenue, "units": units}
+    _result = await agg_revenue_trend(tdb, _tid, start_date, end_date, cat_list, ch_list, rg_list)
     cache_set("bi_revenue_trend", _tid, _result, _ex)
     return _result
 
