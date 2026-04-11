@@ -1,0 +1,129 @@
+{
+  "summary": "Iteration 80: User Funnel Analytics Dashboard - All 20 backend tests passed (100%), all 15 frontend UI components verified. Complete funnel tracking: Signup → Email Verified → Onboarding Complete → First Upload → Active User. Platform-wide view for super admins, tenant-scoped view for tenant admins.",
+
+  "test_case_matrix": {
+    "BACKEND_TESTS": {
+      "TEST_01_unauthenticated_access_denied": {"status": "PASS", "notes": "Returns 401 without auth"},
+      "TEST_02_authenticated_access_allowed": {"status": "PASS", "notes": "Returns 200 with valid token"},
+      "TEST_03_response_structure": {"status": "PASS", "notes": "Contains funnel, time_series, users, total_users, is_platform_wide, date_range"},
+      "TEST_04_funnel_stages_structure": {"status": "PASS", "notes": "All 5 stages present with integer counts"},
+      "TEST_05_funnel_conversions_structure": {"status": "PASS", "notes": "4 conversion steps with from/to/rate/drop_off"},
+      "TEST_06_overall_conversion_rate": {"status": "PASS", "notes": "Numeric value 0-100"},
+      "TEST_07_time_series_structure": {"status": "PASS", "notes": "Array with date and signups per day"},
+      "TEST_08_users_list_structure": {"status": "PASS", "notes": "Users have email, current_stage, signed_up_at, last_login"},
+      "TEST_09_filter_by_days_7": {"status": "PASS", "notes": "7-day filter sets date_range.start"},
+      "TEST_10_filter_by_days_30": {"status": "PASS", "notes": "30-day filter works"},
+      "TEST_11_filter_by_days_90": {"status": "PASS", "notes": "90-day filter works"},
+      "TEST_12_all_time_no_days_filter": {"status": "PASS", "notes": "No filter = date_range.start is null"},
+      "TEST_13_custom_date_range": {"status": "PASS", "notes": "start_date and end_date params work"},
+      "TEST_14_super_admin_platform_wide": {"status": "PASS", "notes": "demo tenant sees is_platform_wide=true"},
+      "TEST_15_tenant_admin_scoped": {"status": "PASS", "notes": "increff tenant sees is_platform_wide=false"},
+      "TEST_16_tenant_admin_users_belong_to_tenant": {"status": "PASS", "notes": "All users in response belong to tenant"},
+      "TEST_17_conversion_rates_valid": {"status": "PASS", "notes": "Rates calculated correctly (to/from*100)"},
+      "TEST_18_drop_off_calculated": {"status": "PASS", "notes": "drop_off = from_count - to_count"},
+      "TEST_19_funnel_is_monotonically_decreasing": {"status": "PASS", "notes": "Each stage <= previous stage"},
+      "TEST_20_user_has_stage_info": {"status": "PASS", "notes": "All users have valid current_stage"}
+    },
+    "FRONTEND_TESTS": {
+      "TEST_F01_page_loads": {"status": "PASS", "notes": "data-testid='funnel-dashboard' found"},
+      "TEST_F02_title": {"status": "PASS", "notes": "'User Funnel Analytics' title displayed"},
+      "TEST_F03_kpi_cards_5_stages": {"status": "PASS", "notes": "All 5 KPI cards present (signed_up, email_verified, onboarding_complete, first_upload, active_user)"},
+      "TEST_F04_overall_conversion_bar": {"status": "PASS", "notes": "Blue gradient bar with percentage"},
+      "TEST_F05_funnel_breakdown_chart": {"status": "PASS", "notes": "Horizontal bar chart present"},
+      "TEST_F06_signup_trend_chart": {"status": "PASS", "notes": "Line chart with daily signups"},
+      "TEST_F07_stage_to_stage_conversion": {"status": "PASS", "notes": "Shows arrows and % between stages"},
+      "TEST_F08_user_details_table": {"status": "PASS", "notes": "Table with email, company, role, stage, dates"},
+      "TEST_F09_time_preset_7_days": {"status": "PASS", "notes": "Button clickable, filters data"},
+      "TEST_F10_time_preset_30_days": {"status": "PASS", "notes": "Button clickable, filters data"},
+      "TEST_F11_time_preset_90_days": {"status": "PASS", "notes": "Button clickable, filters data"},
+      "TEST_F12_time_preset_all_time": {"status": "PASS", "notes": "Button clickable, shows all data"},
+      "TEST_F13_custom_date_range": {"status": "PASS", "notes": "Date pickers and Apply button work"},
+      "TEST_F14_stage_filter_dropdown": {"status": "PASS", "notes": "Filters user table by stage"},
+      "TEST_F15_sidebar_nav_item": {"status": "PASS", "notes": "'User Funnel' link in ADMIN section"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "20/20 PASS",
+    "FRONTEND_TESTS": "15/15 PASS",
+    "TOTAL": "35/35 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "UserFunnelDashboard", "issues": ["Minor: Console warning about <span> inside <option> in stage filter dropdown - cosmetic only, doesn't affect functionality"]}
+    ]
+  },
+
+  "verified_features": {
+    "backend_endpoints": [
+      "GET /api/analytics/funnel - Returns funnel stages, conversions, time_series, users list",
+      "GET /api/analytics/funnel?days=7|30|90 - Filters by last N days",
+      "GET /api/analytics/funnel?start_date=X&end_date=Y - Custom date range",
+      "Platform-wide view for super admins (demo tenant) - is_platform_wide=true",
+      "Tenant-scoped view for tenant admins - is_platform_wide=false, shows only their users"
+    ],
+    "frontend_components": [
+      "UserFunnelDashboard.jsx - Full funnel analytics page",
+      "5 KPI cards with stage counts and conversion percentages",
+      "Overall conversion bar (blue gradient)",
+      "Funnel Breakdown horizontal bar chart (Chart.js)",
+      "Signup Trend line chart (Chart.js)",
+      "Stage-to-Stage conversion with arrows and % between each step",
+      "User Details table with email, company, role, current stage, signup date, last login",
+      "Stage filter dropdown filters the user table",
+      "Time range preset buttons (7/30/90 days/All time/Custom)",
+      "Custom date range picker with Apply button",
+      "Sidebar 'User Funnel' link in ADMIN section"
+    ],
+    "funnel_stages": [
+      "Signed Up - All users who created an account",
+      "Email Verified - Users with email_verified=true OR active tenant status",
+      "Onboarding Complete - Users whose tenant has is_onboarded=true",
+      "First Upload - Users who have uploaded data (via upload_history or data collections)",
+      "Active User - Users with last_login within 30 days"
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_funnel_analytics.py",
+    "/app/test_reports/pytest/pytest_results_iter80.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_funnel_analytics.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (15/15 tests passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (demo tenant - platform-wide access)",
+    "tenant_admin": "ayush.srivastav@increff.com / Ayush@114988 (increff tenant - scoped access)"
+  },
+
+  "seed_data_creation": "None - tested with existing users in database",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 80 verified complete User Funnel Analytics implementation. Backend endpoint GET /api/analytics/funnel returns funnel stages (cumulative counts), stage-to-stage conversions with rates and drop-off, time_series (daily signups), and detailed user list. Super admins (demo tenant) see platform-wide data, tenant admins see only their tenant's users. Frontend UserFunnelDashboard.jsx has 5 KPI cards, overall conversion bar, two Chart.js charts (funnel breakdown + signup trend), stage-to-stage conversion visualization, and filterable user table. Time filtering supports presets (7/30/90 days/all time) and custom date ranges.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

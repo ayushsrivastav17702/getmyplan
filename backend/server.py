@@ -49,6 +49,7 @@ from routes.debug import router as debug_router
 from routes.upload import router as upload_v2_router
 from routes.demo import router as demo_router
 from routes.backup import router as backup_router
+from routes.funnel_analytics import router as funnel_router
 from services.tenant_data_provider import init_tenant_provider
 from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tenant_id, invalidate_for_upload as _invalidate_cache
 
@@ -3332,6 +3333,7 @@ app.include_router(tenant_router)
 app.include_router(user_router)
 app.include_router(signup_router)
 app.include_router(backup_router)
+app.include_router(funnel_router)
 
 # ==================== MIDDLEWARE STACK (Starlette LIFO: last added = first to run) ====================
 
