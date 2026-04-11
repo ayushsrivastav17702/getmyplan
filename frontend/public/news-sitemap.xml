@@ -275,4 +275,95 @@
     </news:news>
   </url>
 
+  <url>
+    <loc>https://getmyplan.in/blog/uae-demand-planning-fashion-ramadan-dss</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Demand Planning for UAE Fashion Retailers 2026 — Ramadan &amp; DSS Edition</news:title>
+      <news:keywords>UAE demand planning, Ramadan fashion, DSS retail, multi-emirate inventory, free zone warehouse</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/uae-multi-brand-namshi-ounass-retail</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Multi-Brand Retail in UAE — Planning Across Namshi, Ounass, and Physical Stores</news:title>
+      <news:keywords>UAE multi-channel, Namshi, Ounass, Amazon.ae, channel-specific forecasting, unified inventory</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/uae-luxury-fashion-dubai-mall-planning</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Luxury Fashion Demand Planning — Dubai Mall vs Mall of the Emirates</news:title>
+      <news:keywords>Dubai Mall, Mall of Emirates, luxury fashion, tourist demand, VIP clienteling, inventory allocation</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/uae-tourist-season-november-march-planning</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Tourist Season Planning — November to March Peak Season Strategy</news:title>
+      <news:keywords>UAE tourist season, Chinese New Year, Russian tourism, phased inventory, nationality forecasting</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/uae-vat-compliant-inventory-planning</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>VAT-Compliant Inventory Planning for UAE Retailers (5% VAT)</news:title>
+      <news:keywords>UAE VAT, 5% VAT compliance, free zone VAT, inventory valuation, import VAT deferred</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/uae-supply-chain-jebel-ali-port-delays</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>Supply Chain Resilience — Jebel Ali Port Delays and Buffer Stock</news:title>
+      <news:keywords>Jebel Ali Port, UAE supply chain, Red Sea risk, dynamic safety stock, port diversification</news:keywords>
+    </news:news>
+  </url>
+
+  <url>
+    <loc>https://getmyplan.in/blog/uae-fashion-consumer-behavior-modest-fashion</loc>
+    <news:news>
+      <news:publication>
+        <news:name>GetMyPlan</news:name>
+        <news:language>en</news:language>
+      </news:publication>
+      <news:publication_date>2026-04-11</news:publication_date>
+      <news:title>UAE Fashion Consumer Behavior — Modest Fashion, Abayas, and Regional Preferences</news:title>
+      <news:keywords>UAE consumer behavior, modest fashion, abaya market, Dubai Abu Dhabi preferences, sustainability</news:keywords>
+    </news:news>
+  </url>
+
 </urlset>

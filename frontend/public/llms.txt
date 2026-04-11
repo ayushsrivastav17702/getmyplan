@@ -115,6 +115,13 @@
 - https://getmyplan.in/blog/saudi-consumer-behavior-modest-fashion
 - https://getmyplan.in/blog/saudi-multi-city-retail-planning
 - https://getmyplan.in/blog/saudi-ai-forecasting-vision-2030
+- https://getmyplan.in/blog/uae-demand-planning-fashion-ramadan-dss
+- https://getmyplan.in/blog/uae-multi-brand-namshi-ounass-retail
+- https://getmyplan.in/blog/uae-luxury-fashion-dubai-mall-planning
+- https://getmyplan.in/blog/uae-tourist-season-november-march-planning
+- https://getmyplan.in/blog/uae-vat-compliant-inventory-planning
+- https://getmyplan.in/blog/uae-supply-chain-jebel-ali-port-delays
+- https://getmyplan.in/blog/uae-fashion-consumer-behavior-modest-fashion
   Title: How to Improve Forecast Accuracy - 7 Proven Methods
   Keywords: improve forecast accuracy, ensemble models, demand sensing, data cleaning
 
