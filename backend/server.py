@@ -50,6 +50,7 @@ from routes.upload import router as upload_v2_router
 from routes.demo import router as demo_router
 from routes.backup import router as backup_router
 from routes.funnel_analytics import router as funnel_router
+from routes.drip_campaigns import router as drip_router
 from services.tenant_data_provider import init_tenant_provider
 from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tenant_id, invalidate_for_upload as _invalidate_cache
 
@@ -3334,6 +3335,7 @@ app.include_router(user_router)
 app.include_router(signup_router)
 app.include_router(backup_router)
 app.include_router(funnel_router)
+app.include_router(drip_router)
 
 # ==================== MIDDLEWARE STACK (Starlette LIFO: last added = first to run) ====================
 
@@ -3537,12 +3539,31 @@ async def startup():
     init_onboarding(client, get_db, get_current_user)
     init_tenant_provider(get_cached_data, get_db)
 
+    # Start daily drip campaign background task
+    asyncio.create_task(_drip_scheduler())
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
 
-    init_tenant_provider(get_cached_data, get_db)
+async def _drip_scheduler():
+    """Run drip campaign check once daily."""
+    from multi_tenant.tenant_db import get_shared_db as _get_shared
+    from services.smtp_email_service import email_service
+    from services.drip_engine import run_drip_check
+    await asyncio.sleep(60)  # Wait 1 min after startup
+    while True:
+        try:
+            shared = _get_shared()
+            result = await run_drip_check(shared, email_service)
+            logger.info(f"Daily drip check: {result.get('message', '')}")
+            await shared.drip_runs.insert_one({
+                "triggered_by": "auto_scheduler",
+                "run_at": result.get("run_at", ""),
+                "sent": result.get("sent", 0),
+                "skipped": result.get("skipped", 0),
+                "errors": result.get("errors", 0),
+            })
+        except Exception as e:
+            logger.error(f"Drip scheduler error: {e}")
+        await asyncio.sleep(86400)  # 24 hours
 
 
 @app.on_event("shutdown")

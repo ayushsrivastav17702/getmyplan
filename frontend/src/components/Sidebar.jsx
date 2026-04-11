@@ -7,7 +7,7 @@ import {
   Check, AlertCircle, Warehouse, Server, Award, XCircle,
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
-  Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity
+  Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -65,6 +65,7 @@ const NAV_GROUPS = [
       { path: "/security",      label: "Security (MFA)",       icon: Shield,          permission: null },
       { path: "/backups",       label: "Backup & Restore",     icon: Database,        permission: null },
       { path: "/funnel-analytics", label: "User Funnel",       icon: Activity,        permission: null },
+      { path: "/drip-campaigns", label: "Drip Campaigns",     icon: Mail,            permission: null },
     ],
   },
   {
