@@ -1,7 +1,7 @@
 # GetMyPlan PRD — AI-Powered Demand Planning Platform
 
 ## Original Problem Statement
-Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting, Redis caching, FTUE guided onboarding, comprehensive Technical SEO (SSG Pre-rendering, Sitemaps, JSON-LD, Blog Engine, RSS Feeds, Dynamic Meta), MFA, tenant backup/restore, and enterprise features.
+Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting, Redis caching, FTUE guided onboarding, comprehensive Technical SEO (SSG Pre-rendering, Sitemaps, JSON-LD, Blog Engine, RSS Feeds, Dynamic Meta), MFA, tenant backup/restore, user funnel analytics, and enterprise features.
 
 ## Core Architecture
 - **Frontend:** React 19 + Tailwind CSS + Shadcn/UI + Chart.js (react-chartjs-2)
@@ -16,7 +16,7 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 ### Core Platform
 - Multi-tenant architecture with RBAC (8 roles, 21 permissions)
 - JWT auth with email verification, password reset, forced password change
-- **MFA: TOTP (Authenticator App) + Email OTP** (Feb 2026)
+- MFA: TOTP (Authenticator App) + Email OTP (Feb 2026)
 - Redis-powered caching layer
 - Onboarding wizard with FTUE flow
 - Data upload V2 with validation pipelines
@@ -31,23 +31,19 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 - Downloadable ZIP export (JSON per collection + metadata)
 - Restore modes: Overwrite (replace all) or Merge (add alongside)
 - Auto-cleanup: retains last 5 backups per tenant
-- Includes: all tenant-filtered data, users, shared config collections
-- **Endpoints:**
-  - `POST /api/backup/create`
-  - `GET /api/backup/list`
-  - `GET /api/backup/{id}/download`
-  - `POST /api/backup/{id}/restore`
-  - `DELETE /api/backup/{id}`
 
-### MFA Endpoints (Feb 2026)
-- `GET /api/auth/mfa/status`
-- `POST /api/auth/mfa/setup-totp`
-- `POST /api/auth/mfa/verify-setup`
-- `POST /api/auth/mfa/verify-totp`
-- `POST /api/auth/mfa/send-email-otp`
-- `POST /api/auth/mfa/verify-email-otp`
-- `POST /api/auth/mfa/disable`
-- `POST /api/auth/mfa/tenant-enforce`
+### User Funnel Analytics Dashboard (Feb 2026)
+- **Funnel stages:** Signup → Email Verified → Onboarding Complete → First Upload → Active User
+- 5 KPI cards with stage counts and conversion percentages
+- Overall conversion rate bar (blue gradient)
+- Funnel Breakdown horizontal bar chart (Chart.js)
+- Signup Trend line chart (Chart.js)
+- Stage-to-Stage conversion visualization with arrows and drop-off
+- User details table with email, company, role, current stage, dates
+- Stage filter dropdown for table filtering
+- Time range: Preset buttons (7/30/90 days/All time) + Custom date range
+- Access: Super admins see platform-wide, tenant admins see their tenant
+- **Endpoint:** `GET /api/analytics/funnel?days=N&start_date=X&end_date=Y`
 
 ### Technical SEO (Complete)
 - 28 SEO-optimized blog posts (Original + Saudi + UAE)
@@ -64,7 +60,6 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 
 ### P2 — Next
 - TENANT-31: Invoice generation
-- Build User Funnel Analytics Dashboard
 
 ### P3
 - Auto-scheduled SFTP uploads for Data Upload V2
@@ -74,9 +69,11 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 - Migrate Pandas in-memory aggregations to MongoDB aggregation pipelines
 
 ## Key Files
+- `/app/backend/routes/funnel_analytics.py` — Funnel analytics API
 - `/app/backend/routes/backup.py` — Backup & Restore endpoints
 - `/app/backend/multi_tenant/auth.py` — Auth + MFA endpoints
 - `/app/backend/services/mfa_service.py` — TOTP/OTP helper service
+- `/app/frontend/src/pages/UserFunnelDashboard.jsx` — Funnel analytics dashboard
 - `/app/frontend/src/pages/BackupRestore.jsx` — Backup management page
 - `/app/frontend/src/pages/MFAChallenge.jsx` — Login MFA challenge UI
 - `/app/frontend/src/pages/MFASettings.jsx` — MFA settings page
