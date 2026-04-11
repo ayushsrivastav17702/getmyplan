@@ -63,9 +63,15 @@ const Configuration = () => {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">Configuration</h1>
           <p className="text-slate-500">Manage analysis parameters, modules, store classes, and categories</p>
         </div>
-        <button onClick={saveConfig} disabled={saving} data-testid="save-config-btn" className="btn-primary flex items-center gap-2">
-          {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Changes
-        </button>
+        <div className="flex items-center gap-3">
+          {activeTab === "params" || activeTab === "modules" ? (
+            <button onClick={saveConfig} disabled={saving} data-testid="save-config-btn" className="btn-primary flex items-center gap-2">
+              {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />} Save Parameters & Modules
+            </button>
+          ) : (
+            <span className="text-xs text-slate-400 italic">Changes to {activeTab === "stores" ? "Store Classes" : "Categories"} are saved individually</span>
+          )}
+        </div>
       </div>
 
       {msg && (
@@ -95,7 +101,8 @@ const PF = ({ testId, label, desc, value, onChange, min, max, step, unit, intege
   const handleChange = (raw) => {
     const num = parseFloat(raw);
     if (isNaN(num)) return;
-    onChange(integer ? Math.round(num) : num);
+    const clamped = Math.min(max, Math.max(min, num));
+    onChange(integer ? Math.round(clamped) : clamped);
   };
   const err = (() => {
     if (value < min) return `Min ${min}`;
@@ -129,14 +136,14 @@ const ParamsTab = ({ config, up }) => (
       <p className="text-xs text-slate-500 mt-1">These values drive all analytics calculations</p>
     </div>
     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-      <PF testId="param-psa-benchmark" label="PSA Benchmark (%)" desc="Pivotal Size Availability threshold" value={config.pivotal_size_threshold} onChange={v => up("pivotal_size_threshold", v)} min={0} max={100} step={1} unit="%" integer />
-      <PF testId="param-cover-days" label="Cover Days" desc="Days of cover for replenishment safety stock" value={config.cover_days} onChange={v => up("cover_days", v)} min={1} max={90} step={1} unit="days" integer />
-      <PF testId="param-ros-period" label="ROS Period" desc="Days used for Rate of Sale calculation" value={config.ros_period} onChange={v => up("ros_period", v)} min={7} max={365} step={1} unit="days" integer />
-      <PF testId="param-ideal-doh" label="Ideal DOH" desc="Ideal Days on Hand threshold" value={config.ideal_doh} onChange={v => up("ideal_doh", v)} min={1} max={90} step={1} unit="days" integer />
-      <PF testId="param-topseller-x" label="Topseller X Factor" desc="Revenue multiplier to classify topsellers" value={config.topseller_x_factor} onChange={v => up("topseller_x_factor", v)} min={0.5} max={10} step={0.1} unit="x" />
-      <PF testId="param-lead-time" label="Lead Time Days" desc="Supplier lead time for replenishment" value={config.lead_time_days} onChange={v => up("lead_time_days", v)} min={1} max={90} step={1} unit="days" integer />
-      <PF testId="param-safety-days" label="Safety Stock Days" desc="Extra buffer days for safety stock" value={config.safety_days} onChange={v => up("safety_days", v)} min={0} max={30} step={1} unit="days" integer />
-      <PF testId="param-shelf-life" label="Min Shelf Life Days" desc="Minimum shelf life for NOOS classification" value={config.min_shelf_life_days} onChange={v => up("min_shelf_life_days", v)} min={1} max={365} step={1} unit="days" integer />
+      <PF testId="param-psa-benchmark" label="PSA Benchmark (%)" desc="Minimum size availability % to mark a style as healthy" value={config.pivotal_size_threshold} onChange={v => up("pivotal_size_threshold", v)} min={0} max={100} step={1} unit="%" integer />
+      <PF testId="param-cover-days" label="Cover Days" desc="Number of days of stock cover for replenishment safety buffer" value={config.cover_days} onChange={v => up("cover_days", v)} min={1} max={90} step={1} unit="days" integer />
+      <PF testId="param-ros-period" label="ROS Period" desc="Lookback window (in days) for calculating Rate of Sale" value={config.ros_period} onChange={v => up("ros_period", v)} min={7} max={365} step={1} unit="days" integer />
+      <PF testId="param-ideal-doh" label="Ideal DOH" desc="Target Days on Hand — optimal inventory holding period" value={config.ideal_doh} onChange={v => up("ideal_doh", v)} min={1} max={90} step={1} unit="days" integer />
+      <PF testId="param-topseller-x" label="Topseller X Factor" desc="Revenue multiplier threshold to classify top-selling SKUs" value={config.topseller_x_factor} onChange={v => up("topseller_x_factor", v)} min={0.5} max={10} step={0.1} unit="x" />
+      <PF testId="param-lead-time" label="Lead Time Days" desc="Average supplier lead time for replenishment orders" value={config.lead_time_days} onChange={v => up("lead_time_days", v)} min={1} max={90} step={1} unit="days" integer />
+      <PF testId="param-safety-days" label="Safety Stock Days" desc="Additional buffer days added on top of lead time" value={config.safety_days} onChange={v => up("safety_days", v)} min={0} max={30} step={1} unit="days" integer />
+      <PF testId="param-shelf-life" label="Min Shelf Life Days" desc="Minimum days on shelf to qualify as Never-Out-of-Stock" value={config.min_shelf_life_days} onChange={v => up("min_shelf_life_days", v)} min={1} max={365} step={1} unit="days" integer />
     </div>
   </div>
 );
@@ -158,11 +165,11 @@ const ModulesTab = ({ config, up }) => (
       <p className="text-xs text-slate-500 mt-1">Enable or disable analytics modules</p>
     </div>
     <div className="divide-y divide-slate-100">
-      <ToggleBtn testId="toggle-noos" label="NOOS Analysis" desc="Never Out of Stock" on={config.noos_enabled} toggle={v => up("noos_enabled", v)} />
-      <ToggleBtn testId="toggle-ros" label="ROS Gap Analysis" desc="Rate of Sale gap detection" on={config.ros_enabled} toggle={v => up("ros_enabled", v)} />
-      <ToggleBtn testId="toggle-size-gap" label="Size Set Gap" desc="Size availability analysis" on={config.size_gap_enabled} toggle={v => up("size_gap_enabled", v)} />
-      <ToggleBtn testId="toggle-lifecycle" label="Lifecycle Analysis" desc="Product lifecycle tracking" on={config.lifecycle_enabled} toggle={v => up("lifecycle_enabled", v)} />
-      <ToggleBtn testId="toggle-replenishment" label="Replenishment Planner" desc="Automated reorder suggestions" on={config.replenishment_enabled} toggle={v => up("replenishment_enabled", v)} />
+      <ToggleBtn testId="toggle-noos" label="NOOS Analysis" desc="Never Out of Stock — identifies must-have styles" on={config.noos_enabled} toggle={v => up("noos_enabled", v)} />
+      <ToggleBtn testId="toggle-ros" label="ROS Gap Analysis" desc="Rate of Sale gap detection across stores" on={config.ros_enabled} toggle={v => up("ros_enabled", v)} />
+      <ToggleBtn testId="toggle-size-gap" label="Size Set Gap" desc="Identifies missing sizes in store assortments" on={config.size_gap_enabled} toggle={v => up("size_gap_enabled", v)} />
+      <ToggleBtn testId="toggle-lifecycle" label="Lifecycle Analysis" desc="Tracks product performance through intro, growth, and decline phases" on={config.lifecycle_enabled} toggle={v => up("lifecycle_enabled", v)} />
+      <ToggleBtn testId="toggle-replenishment" label="Replenishment Planner" desc="Generates reorder suggestions based on demand and lead time" on={config.replenishment_enabled} toggle={v => up("replenishment_enabled", v)} />
     </div>
   </div>
 );

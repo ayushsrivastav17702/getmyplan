@@ -6,7 +6,7 @@ import {
   RefreshCw, AlertTriangle, TrendingDown, TrendingUp, ShieldCheck,
   XCircle, Clock, Layout, Package, ShoppingCart, ArrowRight,
   ChevronRight, Activity, IndianRupee, Percent, ArrowUpRight, ArrowDownRight,
-  FileDown, Loader2
+  FileDown, Loader2, BarChart3, Upload, Server, MessageCircle, Database
 } from "lucide-react";
 import FilterPanel from "../components/FilterPanel";
 import { DoughnutChart } from "../components/Charts";
@@ -176,7 +176,8 @@ const ExecutiveDashboard = () => {
     return `\u20B9${Math.round(v)}`;
   };
   const fmtNum = (v) => {
-    if (!v) return "0";
+    if (v === null || v === undefined) return "N/A";
+    if (v === 0) return "0";
     if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
     if (v >= 1000) return `${(v / 1000).toFixed(0)}K`;
     return Math.round(v).toString();
@@ -184,11 +185,20 @@ const ExecutiveDashboard = () => {
 
   const healthScore = data?.health_score || 0;
   const m = data?.modules || {};
+  const hasModuleData = Object.values(m).some(v => v !== null && v !== undefined);
 
   const getScoreColor = (s) => {
+    if (!hasModuleData) return 'text-slate-400';
     if (s >= 70) return 'text-green-600';
     if (s >= 40) return 'text-amber-600';
     return 'text-red-600';
+  };
+
+  const getScoreLabel = (s) => {
+    if (!hasModuleData) return 'No module data uploaded yet';
+    if (s >= 70) return 'Healthy — operations running well';
+    if (s >= 40) return 'Needs attention — some modules at risk';
+    return 'Critical — multiple modules need action';
   };
 
   return (
@@ -335,7 +345,7 @@ const ExecutiveDashboard = () => {
                 </div>
                 <p className="text-sm text-slate-500">Health Score</p>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  {healthScore >= 70 ? 'Healthy' : healthScore >= 40 ? 'Needs attention' : 'Critical'}
+                  {!hasModuleData ? 'Upload data to calculate' : (healthScore >= 70 ? 'Healthy' : healthScore >= 40 ? 'Needs attention' : 'Critical')}
                 </p>
               </div>
             </div>
@@ -390,6 +400,14 @@ const ExecutiveDashboard = () => {
                 </div>
                 {kpis.yoy?.previous_revenue === 0 && (
                   <p className="text-xs text-slate-400 italic">No data from same period last year</p>
+                )}
+                {kpis.yoy?.previous_revenue > 0 && (
+                  <div className="pt-3 border-t border-slate-100 flex justify-between text-sm">
+                    <span className="text-slate-500">Units</span>
+                    <span className={kpis.yoy?.units_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {kpis.yoy?.units_change >= 0 ? '+' : ''}{kpis.yoy?.units_change || 0}%
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -517,9 +535,7 @@ const ExecutiveDashboard = () => {
                 </div>
               </div>
               <p className="text-sm text-slate-600">
-                {healthScore >= 70 ? 'Healthy — operations running well' :
-                 healthScore >= 40 ? 'Needs attention — some modules at risk' :
-                 'Critical — multiple modules need action'}
+                {getScoreLabel(healthScore)}
               </p>
             </div>
 
@@ -674,12 +690,12 @@ const ExecutiveDashboard = () => {
                 { label: 'Replenishment', path: '/replenishment', icon: ShoppingCart },
                 { label: 'DOH', path: '/doh', icon: Clock },
                 { label: 'Planogram', path: '/planogram', icon: Layout },
-                { label: 'BI Dashboards', path: '/bi-dashboards', icon: Activity },
+                { label: 'BI Dashboards', path: '/bi-dashboards', icon: BarChart3 },
                 { label: 'Warehouse', path: '/warehouse', icon: Package },
-                { label: 'Data Upload', path: '/upload', icon: Package },
-                { label: 'SFTP Monitor', path: '/sftp-monitor', icon: Activity },
-                { label: 'Data Quality', path: '/data-quality', icon: ShieldCheck },
-                { label: 'FAQ Chatbot', path: '/chatbot', icon: Activity },
+                { label: 'Data Upload', path: '/upload', icon: Upload },
+                { label: 'SFTP Monitor', path: '/sftp-monitor', icon: Server },
+                { label: 'Data Quality', path: '/data-quality', icon: Database },
+                { label: 'FAQ Chatbot', path: '/chatbot', icon: MessageCircle },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
