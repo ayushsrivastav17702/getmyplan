@@ -278,6 +278,16 @@ const AppRouter = () => {
 };
 
 function App() {
+  useEffect(() => {
+    const hide = () => {
+      const b = document.getElementById('emergent-badge');
+      if (b) b.style.cssText = 'display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;top:-9999px!important;left:-9999px!important;pointer-events:none!important;';
+    };
+    hide();
+    const id = setInterval(hide, 200);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
