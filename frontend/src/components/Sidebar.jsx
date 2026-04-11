@@ -7,7 +7,7 @@ import {
   Check, AlertCircle, Warehouse, Server, Award, XCircle,
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
-  Rocket, Lock, Crown, Menu, X, Keyboard
+  Rocket, Lock, Crown, Menu, X, Keyboard, Database
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -63,6 +63,7 @@ const NAV_GROUPS = [
       { path: "/plan-upgrade",  label: "Plan & Billing",       icon: Crown,           permission: null },
       { path: "/scheduled-jobs",label: "Scheduled Jobs",       icon: Clock,           permission: null },
       { path: "/security",      label: "Security (MFA)",       icon: Shield,          permission: null },
+      { path: "/backups",       label: "Backup & Restore",     icon: Database,        permission: null },
     ],
   },
   {

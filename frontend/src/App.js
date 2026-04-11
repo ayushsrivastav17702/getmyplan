@@ -44,6 +44,7 @@ const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const PlanUpgrade = lazy(() => import("./pages/PlanUpgrade"));
 const ScheduledJobs = lazy(() => import("./pages/ScheduledJobs"));
 const MFASettings = lazy(() => import("./pages/MFASettings"));
+const BackupRestore = lazy(() => import("./pages/BackupRestore"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -194,6 +195,7 @@ const AuthenticatedApp = () => {
             <Route path="/plan-upgrade"  element={<PlanUpgrade />} />
             <Route path="/scheduled-jobs" element={<ScheduledJobs />} />
             <Route path="/security" element={<MFASettings />} />
+            <Route path="/backups" element={<BackupRestore />} />
 
             {/* 404 — proper Not Found page */}
             <Route path="*" element={<NotFound />} />
