@@ -125,6 +125,68 @@
   Title: How to Improve Forecast Accuracy - 7 Proven Methods
   Keywords: improve forecast accuracy, ensemble models, demand sensing, data cleaning
 
+# ============================================
+# SOUTH AFRICA BLOGS
+# ============================================
+- https://getmyplan.in/blog/south-africa-demand-planning-fashion-2026
+  Title: Demand Planning for South African Fashion Retailers 2026 — ZAR Focus
+  Keywords: South Africa demand planning, ZAR, load shedding, Durban port, 9 provinces
+
+- https://getmyplan.in/blog/south-africa-black-friday-strategy
+  Title: Black Friday South Africa — The Biggest Trading Day Strategy
+  Keywords: Black Friday South Africa, Takealot, Superbalist, ZAR 25B
+
+- https://getmyplan.in/blog/south-africa-multichannel-planning
+  Title: Multi-Channel South Africa — Physical, E-Commerce, and Social Commerce
+  Keywords: South Africa channels, WhatsApp commerce, Takealot, social commerce
+
+- https://getmyplan.in/blog/south-africa-supply-chain-load-shedding
+  Title: Supply Chain Resilience — Managing Load Shedding and Port Delays
+  Keywords: load shedding, Durban port, safety stock, South Africa supply chain
+
+- https://getmyplan.in/blog/south-africa-consumer-behavior-local-brands
+  Title: South African Consumer Behavior — The Rise of Local Fashion Brands
+  Keywords: local brands, township retail, Black Diamond, South Africa consumers
+
+- https://getmyplan.in/blog/south-africa-festive-season-planning
+  Title: Festive Season Planning — December-January Extended Holiday Strategy
+  Keywords: festive season, coastal migration, December planning, inventory phasing
+
+- https://getmyplan.in/blog/south-africa-value-vs-premium
+  Title: Value vs Premium — Planning for South Africa's Diverse Income Segments
+  Keywords: value vs premium, income segmentation, lay-by, store tier planning
+
+# ============================================
+# USA BLOGS
+# ============================================
+- https://getmyplan.in/blog/usa-demand-planning-fashion-2026
+  Title: Demand Planning for US Fashion Retailers 2026 — USD Focus
+  Keywords: US demand planning, $400B market, regional planning, omnichannel
+
+- https://getmyplan.in/blog/usa-black-friday-cyber-monday-planning
+  Title: Black Friday and Cyber Monday — The Ultimate Planning Guide
+  Keywords: BFCM, Black Friday, Cyber Monday, $175B, channel strategy
+
+- https://getmyplan.in/blog/usa-regional-planning-northeast-southeast-west
+  Title: Regional Planning — Northeast vs Southeast vs West Coast Fashion
+  Keywords: US regions, Northeast, Southeast, West Coast, Midwest, Texas
+
+- https://getmyplan.in/blog/usa-d2c-shopify-planning
+  Title: D2C Fashion Planning — Shopify Brands and Customer Acquisition
+  Keywords: D2C, Shopify, customer acquisition, return rate, inventory planning
+
+- https://getmyplan.in/blog/usa-amazon-fashion-marketplace-planning
+  Title: Amazon Fashion — Marketplace Demand Planning for US Sellers
+  Keywords: Amazon Fashion, FBA, FBM, Prime Day, Lightning Deals
+
+- https://getmyplan.in/blog/usa-consumer-behavior-sustainability
+  Title: US Consumer Behavior — Sustainability, Inclusivity, and Fast Fashion
+  Keywords: sustainability, inclusive sizing, Gen Z, fast fashion, US consumers
+
+- https://getmyplan.in/blog/usa-supply-chain-tariffs-nearshoring
+  Title: Supply Chain USA — Port Delays, Tariffs, and Nearshoring to Mexico
+  Keywords: US supply chain, LA port, China tariffs, Mexico nearshoring, USMCA
+
 - https://getmyplan.in/pricing
   Title: Getmyplan Pricing
   Description: Transparent pricing with no hidden fees

@@ -53,6 +53,22 @@ const ROUTES = [
   '/blog/uae-vat-compliant-inventory-planning',
   '/blog/uae-supply-chain-jebel-ali-port-delays',
   '/blog/uae-fashion-consumer-behavior-modest-fashion',
+  // South Africa
+  '/blog/south-africa-demand-planning-fashion-2026',
+  '/blog/south-africa-black-friday-strategy',
+  '/blog/south-africa-multichannel-planning',
+  '/blog/south-africa-supply-chain-load-shedding',
+  '/blog/south-africa-consumer-behavior-local-brands',
+  '/blog/south-africa-festive-season-planning',
+  '/blog/south-africa-value-vs-premium',
+  // USA
+  '/blog/usa-demand-planning-fashion-2026',
+  '/blog/usa-black-friday-cyber-monday-planning',
+  '/blog/usa-regional-planning-northeast-southeast-west',
+  '/blog/usa-d2c-shopify-planning',
+  '/blog/usa-amazon-fashion-marketplace-planning',
+  '/blog/usa-consumer-behavior-sustainability',
+  '/blog/usa-supply-chain-tariffs-nearshoring',
   '/blog',
 ];
 

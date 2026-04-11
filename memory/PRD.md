@@ -13,44 +13,32 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 
 ## What's Been Implemented (Complete)
 
+### Blog Engine & SEO (42 Total Blogs)
+- **14 Original** blogs (Software Reviews, How-To, Industry, KPIs, AI)
+- **7 Saudi Arabia** blogs (Vision 2030, Ramadan, e-commerce, logistics)
+- **7 UAE** blogs (Ramadan/DSS, multi-brand, luxury, tourist season, VAT)
+- **7 South Africa** blogs (ZAR focus, Black Friday, multichannel, load shedding, local brands, festive season, value vs premium)
+- **7 USA** blogs (USD focus, BFCM, regional planning, D2C/Shopify, Amazon Fashion, sustainability, supply chain/tariffs)
+- Updated: sitemap.xml (51 URLs), news-sitemap.xml (42 articles), RSS feed (42 items), llms.txt, prerender.js (51 routes)
+
 ### Core Platform
 - Multi-tenant architecture with RBAC (8 roles, 21 permissions)
-- JWT auth with email verification, password reset, forced password change
-- MFA: TOTP (Authenticator App) + Email OTP
-- Redis-powered caching layer
-- Onboarding wizard with FTUE flow
-- Data upload V2 with validation pipelines
-- AI demand forecasting module
-- Buy plan generator
-- Executive dashboard with health scores
-- Configuration page with save/edit
+- JWT auth + MFA (TOTP + Email OTP)
+- Redis caching, onboarding wizard, Data upload V2
+- AI demand forecasting, Buy plan generator
+- Executive dashboard, Configuration page
 - 15+ analytics modules
 
 ### Tenant Backup & Restore
-- Server-side compressed snapshots + downloadable ZIP export
-- Restore modes: Overwrite or Merge
-- Auto-cleanup: retains last 5 backups per tenant
+- Compressed snapshots + ZIP export, Overwrite/Merge restore, Auto-cleanup (5 max)
 
 ### User Funnel Analytics Dashboard
-- 5-stage funnel: Signup → Verified → Onboarded → Upload → Active
-- KPI cards, funnel bar chart, signup trend line chart, conversion visualization
-- User details table with stage filter
-- Platform-wide (super admins) vs tenant-scoped views
-- Time range presets + custom date range
+- 5-stage funnel with KPI cards, charts, conversion visualization, user table
+- Platform-wide vs tenant-scoped views, time range filtering
 
-### Email Drip Campaigns (Feb 2026)
-- 4 automated campaigns for funnel drop-offs:
-  - Not Verified, Not Onboarded, No Upload, Inactive User
-- Drip sequence: Day 1, 3, 7 (escalating urgency emails)
-- Toggle on/off per campaign
-- Auto-runs daily via background scheduler
-- Manual trigger via "Run Now" button
-- Dedup: won't re-send same email within 30 days
-- Send history and run logs
-- **Endpoints:** `GET /api/drip/campaigns`, `PUT /api/drip/campaigns/{id}/toggle`, `POST /api/drip/run`, `GET /api/drip/history`, `GET /api/drip/runs`
-
-### Technical SEO
-- 28 SEO-optimized blogs, Puppeteer pre-rendering, dynamic meta, sitemaps, RSS, JSON-LD
+### Email Drip Campaigns
+- 4 campaigns (Not Verified, Not Onboarded, No Upload, Inactive)
+- Day 1/3/7 drip sequence, auto-daily + manual trigger, dedup
 
 ## Prioritized Backlog
 
@@ -61,22 +49,19 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 - Auto-scheduled SFTP uploads
 - Chunked uploads and async processing
 
-### Refactoring (Low Priority)
-- Migrate Pandas in-memory aggregations to MongoDB aggregation pipelines
+### Refactoring
+- Migrate Pandas aggregations to MongoDB pipelines
 
 ## Key Files
-- `/app/backend/services/drip_engine.py` — Drip campaign engine
-- `/app/backend/routes/drip_campaigns.py` — Drip API endpoints
-- `/app/backend/routes/funnel_analytics.py` — Funnel analytics API
-- `/app/backend/routes/backup.py` — Backup & Restore endpoints
-- `/app/backend/multi_tenant/auth.py` — Auth + MFA endpoints
-- `/app/frontend/src/pages/DripCampaigns.jsx` — Campaign management page
-- `/app/frontend/src/pages/UserFunnelDashboard.jsx` — Funnel dashboard
-- `/app/frontend/src/pages/BackupRestore.jsx` — Backup management
-- `/app/frontend/src/pages/MFASettings.jsx` — MFA settings
+- `/app/frontend/src/data/blogData.js` — 42 blog entries
+- `/app/frontend/public/sitemap.xml` — Main sitemap
+- `/app/frontend/public/news-sitemap.xml` — Google News sitemap
+- `/app/frontend/public/blog/rss.xml` — RSS feed
+- `/app/frontend/public/llms.txt` — LLM-readable content index
+- `/app/frontend/prerender.js` — Puppeteer SSG (51 routes)
 
 ## 3rd Party Integrations
 - OpenAI GPT-5.2 (via Emergent LLM Key)
 - Hostinger SMTP (info@getmyplan.in)
 - Redis Cloud
-- pyotp + segno (TOTP/QR code generation)
+- pyotp + segno (TOTP/QR)
