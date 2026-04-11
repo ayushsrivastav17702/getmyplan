@@ -1,7 +1,7 @@
 # GetMyPlan PRD — AI-Powered Demand Planning Platform
 
 ## Original Problem Statement
-Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting, Redis caching, FTUE guided onboarding, comprehensive Technical SEO, MFA, tenant backup/restore, user funnel analytics, email drip campaigns, and enterprise features.
+Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting, Redis caching, FTUE guided onboarding, comprehensive Technical SEO, MFA, tenant backup/restore, user funnel analytics, email drip campaigns, invoice generation, SFTP auto-uploads, chunked uploads, and enterprise features.
 
 ## Core Architecture
 - **Frontend:** React 19 + Tailwind CSS + Shadcn/UI + Chart.js (react-chartjs-2)
@@ -13,14 +13,6 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 
 ## What's Been Implemented (Complete)
 
-### Blog Engine & SEO (42 Total Blogs)
-- **14 Original** blogs (Software Reviews, How-To, Industry, KPIs, AI)
-- **7 Saudi Arabia** blogs (Vision 2030, Ramadan, e-commerce, logistics)
-- **7 UAE** blogs (Ramadan/DSS, multi-brand, luxury, tourist season, VAT)
-- **7 South Africa** blogs (ZAR focus, Black Friday, multichannel, load shedding, local brands, festive season, value vs premium)
-- **7 USA** blogs (USD focus, BFCM, regional planning, D2C/Shopify, Amazon Fashion, sustainability, supply chain/tariffs)
-- Updated: sitemap.xml (51 URLs), news-sitemap.xml (42 articles), RSS feed (42 items), llms.txt, prerender.js (51 routes)
-
 ### Core Platform
 - Multi-tenant architecture with RBAC (8 roles, 21 permissions)
 - JWT auth + MFA (TOTP + Email OTP)
@@ -29,36 +21,54 @@ Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting,
 - Executive dashboard, Configuration page
 - 15+ analytics modules
 
+### Invoice Generation (TENANT-31) — Feb 2026
+- Auto-generates invoices from tenant plan data (trial/starter/pro/enterprise pricing)
+- 18% GST auto-calculated, 8 usage metrics (users, uploads, sales records, storage, etc.)
+- Invoice number format: GMP-YYYYMM-TENANT-NNNN
+- Download as styled HTML (browser print-to-PDF)
+- Status management: unpaid/paid/cancelled/overdue
+- Tenant isolation verified
+- **Endpoints:** generate, list, detail, download, update status, delete
+
+### SFTP Auto-Scheduled Uploads — Feb 2026
+- Configurable schedule (daily/weekly/monthly) with hour, file types, destination path
+- Schedule history tracking
+- **Endpoints:** GET/PUT /api/data/sftp-schedule, GET history
+
+### Chunked Uploads & Async Processing — Feb 2026
+- Initialize upload session, upload chunks individually, finalize and process
+- Progress tracking per upload, missing chunk detection
+- In-memory chunk storage with 5-min auto-cleanup
+- **Endpoints:** init, chunk, complete, status, cancel
+
 ### Tenant Backup & Restore
 - Compressed snapshots + ZIP export, Overwrite/Merge restore, Auto-cleanup (5 max)
 
 ### User Funnel Analytics Dashboard
 - 5-stage funnel with KPI cards, charts, conversion visualization, user table
-- Platform-wide vs tenant-scoped views, time range filtering
 
 ### Email Drip Campaigns
-- 4 campaigns (Not Verified, Not Onboarded, No Upload, Inactive)
-- Day 1/3/7 drip sequence, auto-daily + manual trigger, dedup
+- 4 campaigns, Day 1/3/7 drip sequence, auto-daily + manual trigger
+
+### Blog Engine & SEO (42 Total Blogs)
+- 14 Original + 7 Saudi + 7 UAE + 7 South Africa + 7 USA
+- sitemap.xml (51 URLs), news-sitemap, RSS, llms.txt, prerender.js
 
 ## Prioritized Backlog
 
-### P2 — Next
-- TENANT-31: Invoice generation
-
-### P3
-- Auto-scheduled SFTP uploads
-- Chunked uploads and async processing
-
-### Refactoring
-- Migrate Pandas aggregations to MongoDB pipelines
+### Refactoring (Low Priority)
+- Migrate Pandas in-memory aggregations to MongoDB aggregation pipelines
 
 ## Key Files
-- `/app/frontend/src/data/blogData.js` — 42 blog entries
-- `/app/frontend/public/sitemap.xml` — Main sitemap
-- `/app/frontend/public/news-sitemap.xml` — Google News sitemap
-- `/app/frontend/public/blog/rss.xml` — RSS feed
-- `/app/frontend/public/llms.txt` — LLM-readable content index
-- `/app/frontend/prerender.js` — Puppeteer SSG (51 routes)
+- `/app/backend/routes/invoices.py` — Invoice CRUD + download
+- `/app/backend/routes/data_operations.py` — SFTP schedule + chunked uploads
+- `/app/backend/routes/funnel_analytics.py` — Funnel analytics
+- `/app/backend/routes/drip_campaigns.py` — Drip campaign endpoints
+- `/app/backend/routes/backup.py` — Backup & Restore
+- `/app/frontend/src/pages/InvoiceManagement.jsx` — Invoice page
+- `/app/frontend/src/pages/UserFunnelDashboard.jsx` — Funnel dashboard
+- `/app/frontend/src/pages/DripCampaigns.jsx` — Campaign management
+- `/app/frontend/src/pages/BackupRestore.jsx` — Backup page
 
 ## 3rd Party Integrations
 - OpenAI GPT-5.2 (via Emergent LLM Key)
