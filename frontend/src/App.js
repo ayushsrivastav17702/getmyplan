@@ -280,11 +280,15 @@ const AppRouter = () => {
 function App() {
   useEffect(() => {
     const hide = () => {
-      const b = document.getElementById('emergent-badge');
-      if (b) b.style.cssText = 'display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;top:-9999px!important;left:-9999px!important;pointer-events:none!important;';
+      const selectors = ['#emergent-badge', '[id*="emergent"]', 'a[href*="emergent.sh"]', '[class*="emergent-badge"]'];
+      selectors.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          el.style.cssText = 'display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;overflow:hidden!important;position:absolute!important;top:-9999px!important;left:-9999px!important;pointer-events:none!important;z-index:-1!important;';
+        });
+      });
     };
     hide();
-    const id = setInterval(hide, 200);
+    const id = setInterval(hide, 150);
     return () => clearInterval(id);
   }, []);
 

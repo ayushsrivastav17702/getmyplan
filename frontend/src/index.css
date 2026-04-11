@@ -279,4 +279,20 @@ input[type="range"]:focus::-webkit-slider-thumb {
 }
 
 
-#emergent-badge { display: none !important; }
+#emergent-badge,
+[id*="emergent"],
+a[href*="emergent.sh"],
+[class*="emergent-badge"],
+a[href*="emergent-badge"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  position: fixed !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  z-index: -1 !important;
+}
