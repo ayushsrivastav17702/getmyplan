@@ -1,190 +1,84 @@
-# GetMyPlan - AI-Powered Retail Demand Planning Platform
+# GetMyPlan PRD — AI-Powered Demand Planning Platform
 
-## Product Requirements Document
+## Original Problem Statement
+Multi-tenant SaaS demand planning system with V2 data pipelines, ML forecasting, Redis caching, FTUE guided onboarding, comprehensive Technical SEO (SSG Pre-rendering, Sitemaps, JSON-LD, Blog Engine, RSS Feeds, Dynamic Meta), MFA, and enterprise features.
 
-### Original Problem Statement
-Multi-tenant demand planning system with comprehensive V2 data pipelines, UI dashboards, ML forecasting, scalable sample data onboarding, Redis caching, email alerts, contextual data upload guidance, guided onboarding wizard, Technical SEO optimizations, and SEO-optimized blog content.
+## Core Architecture
+- **Frontend:** React 19 + Tailwind CSS + Shadcn/UI + Chart.js (react-chartjs-2)
+- **Backend:** FastAPI + MongoDB (Motor async) + Redis Cloud
+- **Auth:** JWT (pyjwt) + bcrypt + MFA (TOTP + Email OTP)
+- **SEO:** react-helmet-async + Puppeteer pre-rendering (prerender.js)
+- **AI:** OpenAI GPT-5.2 via Emergent LLM Key
+- **Email:** Hostinger SMTP (smtp.hostinger.com:465)
 
-### Tech Stack
-- **Frontend**: React 18, Chart.js (react-chartjs-2), Shadcn/UI, TailwindCSS
-- **Backend**: FastAPI (Python 3.11), Motor (async MongoDB)
-- **Database**: MongoDB (multi-tenant with shared + tenant-specific DBs)
-- **Cache**: Redis Cloud (non-SSL)
-- **Auth**: JWT-based multi-tenant auth with RBAC
-- **AI/ML**: Holt-Winters, Random Forest, Seasonal Decomposition (3-model ensemble)
-- **Email**: Hostinger SMTP
-- **LLM**: OpenAI GPT-5.2 via Emergent LLM Key (FAQ Chatbot)
+## What's Been Implemented (Complete)
 
-### Architecture
-```
-/app
-├── backend/
-│   ├── routes/ (ai_demand.py, bi_dashboard.py, doh_analysis.py, gap_analysis.py, stock_out.py, replenishment.py, upload.py, signup.py, warehouse.py, core_logic.py, planogram.py, onboarding.py, demo.py)
-│   ├── services/ (cache_service.py, smtp_email_service.py, upload_service.py, tenant_data_provider.py)
-│   ├── multi_tenant/ (tenant_db.py, rbac.py)
-│   └── server.py (main FastAPI app, analytics endpoints)
-├── frontend/
-│   ├── src/pages/ (DataUploadPage.jsx, GapAnalysis.js, AIDemandPlanning.jsx, OnboardingWizard.js, NotFound.jsx, PrivacyPolicy.jsx, TermsOfService.jsx, etc.)
-│   ├── src/pages/blog/ (BlogIndex.jsx, BlogPost.jsx)
-│   ├── src/data/ (blogData.js — 21 blog posts with structured content)
-│   ├── src/components/ (Sidebar.jsx, ReturnUserBanner.jsx, landing/Navbar.jsx, landing/Footer.jsx, etc.)
-│   └── src/context/ (AuthContext.js)
-```
+### Core Platform
+- Multi-tenant architecture with RBAC (8 roles, 21 permissions)
+- JWT auth with email verification, password reset, forced password change
+- **MFA: TOTP (Authenticator App) + Email OTP** (Feb 2026)
+  - Setup TOTP with QR code + manual key
+  - Login MFA challenge with authenticator/email tabs
+  - Tenant admin MFA enforcement
+  - MFA settings page at /security
+- Redis-powered caching layer
+- Onboarding wizard with FTUE flow
+- Data upload V2 with validation pipelines
+- AI demand forecasting module
+- Buy plan generator
+- Executive dashboard with health scores
+- Configuration page with save/edit
+- 15+ analytics modules (Gap Analysis, DOH, Stock-Out, Replenishment, etc.)
 
----
+### Technical SEO (Complete)
+- 28 SEO-optimized blog posts (Original + Saudi + UAE)
+- Puppeteer pre-rendering for 37+ routes (prerender.js on postbuild)
+- Dynamic meta via react-helmet-async
+- XML sitemaps, news-sitemap, RSS feeds, JSON-LD, robots.txt, llms.txt
 
-## Completed Features
+### UX/Branding
+- Cookie consent banner (CookieConsent.jsx)
+- Platform badge suppression (CSS + interval)
+- Health Score states, icons, YoY units fixes
+- Save button and description fixes on Configuration
 
-### Previous Sessions
-- Full multi-tenant platform with auth, RBAC, 10 upload types
-- Executive Dashboard, BI Dashboard, Gap Analysis, DOH Analysis, Stock-Out Analysis
-- Replenishment Planner, Planogram Fill Rate, AI Demand Forecasting
-- Admin signup email notifications (SMTP)
-- Forecast Accuracy Tracking with MAPE calculation
-- Collapsible sidebar with categories and keyboard shortcuts
-- Data Upload Page with preview modals and data summary cards
-- Enterprise-scale sample data generation (~380k rows, 30 stores, 100 SKUs)
+### MFA Endpoints (Feb 2026)
+- `GET /api/auth/mfa/status` - MFA status for authenticated user
+- `POST /api/auth/mfa/setup-totp` - Generate TOTP secret + QR code
+- `POST /api/auth/mfa/verify-setup` - Verify TOTP code to enable MFA
+- `POST /api/auth/mfa/verify-totp` - Verify TOTP during login
+- `POST /api/auth/mfa/send-email-otp` - Send email OTP for login
+- `POST /api/auth/mfa/verify-email-otp` - Verify email OTP during login
+- `POST /api/auth/mfa/disable` - Disable MFA (requires password)
+- `POST /api/auth/mfa/tenant-enforce` - Admin MFA enforcement toggle
 
-### Session: Apr 10, 2026
+## Prioritized Backlog
 
-#### Redis Caching Implementation (P0)
-- `cache_service.py`: cache_get, cache_set, invalidate_for_upload, invalidate_tenant
-- TTLs: 1h (DOH/stockout/replenishment/planogram), 6h (executive/BI/gap), 24h (topseller), 7d (AI forecast)
-- 11 analytics endpoints wrapped with caching
-- Performance: 3-10x speedup (exec dashboard: 3.65s -> 0.35s)
-- **Test Report**: iteration_67.json -- 24/24 PASS
+### P1 — Next
+- TENANT-10: Tenant backup/restore functionality
 
-#### Data Requirements Panel
-- `DataRequirementsPanel.jsx`: Dynamic panel for all 10 upload types
-- Backend `GET /api/upload/v2/data-days` endpoint
-- **Test Report**: iteration_68.json -- 19/19 PASS
-
-#### Guided Onboarding Wizard
-- `OnboardingWizard.js`: 4-step wizard (Sample Data -> Master Data -> Transactional -> Dashboard)
-- Backend `GET /api/onboarding/status` with data-driven step detection
-- **Test Report**: iteration_69.json -- 29/30 PASS
-
-#### SEO Technical Audit (Steps 1-3)
-- SEO static files: `robots.txt`, `llms.txt`, `sitemap.xml`
-- 5 Schema.org JSON-LD blocks hardcoded in `public/index.html`
-- 3 public SEO pages: `/vs/anaplan`, `/vs/blue-yonder`, `/ai-demand-planning`
-- Footer links to all SEO pages
-
-#### SEO Fixes 3, 4, 5 (P0)
-- Created proper `NotFound.jsx` 404 page with SEO meta
-- Fixed H1 tags (1 per page)
-- Reduced main JS bundle from 2.3MB to 340KB (85% reduction) via React.lazy
-- **Test Report**: iteration_70.json -- 11/11 PASS
-
-#### Brand Logo Integration
-- Added Getmyplan logo to 5 locations: Navbar, Sidebar, Auth pages, Favicon, SEO pages
-- **Test Report**: iteration_71.json -- 9/9 PASS
-
-#### SEO Crawlability & Legal Pages
-- SSR Shell in index.html, Request a Demo CTA, Privacy/Terms pages
-- **Test Report**: iteration_72.json -- 13/13 PASS
-
-#### Demo Request Backend + Landing Page Updates
-- `POST /api/demo/request` with SMTP email + MongoDB storage
-- Hero rewrite, real dashboard screenshot, video walkthrough placeholder
-- India references removed globally
-- **Test Report**: iteration_73.json -- 19/19 PASS
-
-### Session: Apr 11, 2026
-
-#### Blog Section — 28 SEO-Optimized Articles (COMPLETED)
-- 14 demand planning blogs + 7 Saudi Arabia-specific + 7 UAE-specific retail blogs
-- `/blog` and `/blog/:slug` — publicly accessible (even when logged in)
-- **BlogIndex.jsx**: Search, 8 category filters (incl. Saudi Arabia, UAE), featured card, 3-column responsive grid
-- **BlogPost.jsx**: Dynamic title, JSON-LD Article schema, H1, TL;DR, tables, FAQs, CTA, related articles
-- Internal cross-linking between all 28 articles for SEO backlink structure
-- All 28 URLs in sitemap.xml, llms.txt, rss.xml, and news-sitemap.xml
-- Blog links added to landing Navbar + Footer
-- Author: "Founder & CEO, GetMyPlan" (no personal names)
-- **Saudi Arabia blogs**: GetMyPlan hyperlinked to https://getmyplan.in across all 7 posts
-- **UAE blogs**: GetMyPlan hyperlinked to https://getmyplan.in across all 7 posts (66 total hyperlinks)
-- **RSS Feed**: `/blog/rss.xml` — RSS 2.0 with Atom namespace, all 28 articles
-- **Google News Sitemap**: `/news-sitemap.xml` — Google News XML schema with keywords per article
-- **Test Report**: iteration_74.json -- 20/20 PASS (first 14 blogs)
-- **Test Report**: iteration_75.json -- 17/17 PASS (Saudi blogs + auth routing)
-- **Test Report**: iteration_76.json -- 16/16 PASS (UAE blogs + full verification)
-
-Blog Slugs (14 Demand Planning):
-1. best-demand-planning-software-india-2026
-2. reduce-stockouts-myntra-flipkart
-3. what-is-demand-forecasting-guide
-4. ai-demand-planning-vs-excel
-5. demand-planning-kpis-fashion-retail
-6. build-buy-plan-fashion-brand
-7. big-billion-days-bfcm-planning
-8. what-is-demand-sensing
-9. safety-stock-formula-calculate-optimize
-10. what-is-mape-forecast-accuracy
-11. ai-agents-supply-chain-2026
-12. generative-ai-demand-planning
-13. shopify-demand-planning-tools-2026
-14. improve-forecast-accuracy-methods
-
-Blog Slugs (7 Saudi Arabia):
-15. saudi-vision-2030-retail-demand-planning
-16. saudi-ecommerce-amazon-noon-namshi
-17. saudi-ramadan-planning-fashion
-18. saudi-logistics-port-delays-transportation
-19. saudi-consumer-behavior-modest-fashion
-20. saudi-multi-city-retail-planning
-21. saudi-ai-forecasting-vision-2030
-
-Blog Slugs (7 UAE):
-22. uae-demand-planning-fashion-ramadan-dss
-23. uae-multi-brand-namshi-ounass-retail
-24. uae-luxury-fashion-dubai-mall-planning
-25. uae-tourist-season-november-march-planning
-26. uae-vat-compliant-inventory-planning
-27. uae-supply-chain-jebel-ali-port-delays
-28. uae-fashion-consumer-behavior-modest-fashion
-
-#### Executive Dashboard & Configuration UX Fixes (COMPLETED)
-- **Executive Dashboard**:
-  - Health Score: Shows "No module data uploaded yet" / "Upload data to calculate" when no modules have data (was previously alarming "Critical" with red styling)
-  - Quick Navigation: All 12 icons now unique (Activity, TrendingDown, XCircle, ShoppingCart, Clock, Layout, BarChart3, Package, Upload, Server, Database, MessageCircle)
-  - fmtNum: Properly returns "N/A" for null/undefined instead of "0"
-  - YoY card: Added units change row for parity with WoW card
-- **Configuration Page**:
-  - Save button: Shows "Save Parameters & Modules" on params/modules tabs; shows "saved individually" hint on Store Classes/Categories tabs
-  - Parameter descriptions: Rewritten to be user-friendly (e.g., "Minimum size availability % to mark a style as healthy" instead of "Pivotal Size Availability threshold")
-  - Module toggle descriptions: Enhanced (e.g., "Never Out of Stock — identifies must-have styles")
-  - Numeric inputs: Now clamp values within min/max range
-- **Test Report**: iteration_77.json -- 17/17 PASS
-- `/blog` and `/blog/:slug` routes placed in public section of `AppRouter` (App.js lines 264-266)
-- Routes render correctly regardless of authentication state
-- Verified via testing agent (iteration_75.json)
-
----
-
-## Pending / Backlog
-
-### P1
-- USER-18: Multi-factor authentication (MFA)
-- TENANT-10: Tenant backup/restore
-
-### P2 -- Future
+### P2
 - TENANT-31: Invoice generation
-- User Funnel Analytics Dashboard
+- Build User Funnel Analytics Dashboard
 
-### P3 -- Backlog
+### P3
 - Auto-scheduled SFTP uploads for Data Upload V2
-- Chunked uploads & async processing
-- MongoDB pipeline migration (replace in-memory Pandas aggregation)
+- Chunked uploads and Async processing
 
----
+### Refactoring (Low Priority)
+- Migrate Pandas in-memory aggregations to MongoDB aggregation pipelines
+
+## Key Files
+- `/app/backend/multi_tenant/auth.py` — Auth + MFA endpoints
+- `/app/backend/services/mfa_service.py` — TOTP/OTP helper service
+- `/app/frontend/src/pages/MFAChallenge.jsx` — Login MFA challenge UI
+- `/app/frontend/src/pages/MFASettings.jsx` — MFA settings page
+- `/app/frontend/src/context/AuthContext.js` — Auth context with MFA state
+- `/app/frontend/src/pages/LoginPage.js` — Login with MFA challenge support
+- `/app/frontend/prerender.js` — Puppeteer SSG script
 
 ## 3rd Party Integrations
-| Service | Status | Key Source |
-|---------|--------|-----------|
-| OpenAI GPT-5.2 | Active | Emergent LLM Key |
-| Hostinger SMTP | Active | .env credentials |
-| Redis Cloud | Active | .env credentials |
-
-## Test Credentials
-- Increff Admin: ayush.srivastav@increff.com / Ayush@114988
-- Demo Admin: admin@demo.com / demo1234
+- OpenAI GPT-5.2 (via Emergent LLM Key)
+- Hostinger SMTP (info@getmyplan.in)
+- Redis Cloud
+- pyotp + segno (TOTP/QR code generation)
