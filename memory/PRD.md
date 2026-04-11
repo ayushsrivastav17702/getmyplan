@@ -26,7 +26,7 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 ├── frontend/
 │   ├── src/pages/ (DataUploadPage.jsx, GapAnalysis.js, AIDemandPlanning.jsx, OnboardingWizard.js, NotFound.jsx, PrivacyPolicy.jsx, TermsOfService.jsx, etc.)
 │   ├── src/pages/blog/ (BlogIndex.jsx, BlogPost.jsx)
-│   ├── src/data/ (blogData.js — 14 blog posts with structured content)
+│   ├── src/data/ (blogData.js — 21 blog posts with structured content)
 │   ├── src/components/ (Sidebar.jsx, ReturnUserBanner.jsx, landing/Navbar.jsx, landing/Footer.jsx, etc.)
 │   └── src/context/ (AuthContext.js)
 ```
@@ -92,21 +92,24 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 
 ### Session: Apr 11, 2026
 
-#### Blog Section — 14 SEO-Optimized Articles
-- 14 long-form blog posts at `/blog` and `/blog/:slug` — publicly accessible
-- **BlogIndex.jsx**: Search, 6 category filters, featured card, 3-column responsive grid
+#### Blog Section — 21 SEO-Optimized Articles (COMPLETED)
+- 14 demand planning blogs + 7 Saudi Arabia-specific retail blogs
+- `/blog` and `/blog/:slug` — publicly accessible (even when logged in)
+- **BlogIndex.jsx**: Search, 7 category filters (incl. Saudi Arabia), featured card, 3-column responsive grid
 - **BlogPost.jsx**: Dynamic title, JSON-LD Article schema, H1, TL;DR, tables, FAQs, CTA, related articles
-- Internal cross-linking between all 14 articles for SEO backlink structure
-- All 14 URLs in sitemap.xml and llms.txt
+- Internal cross-linking between all 21 articles for SEO backlink structure
+- All 21 URLs in sitemap.xml, llms.txt, rss.xml, and news-sitemap.xml
 - Blog links added to landing Navbar + Footer
 - Author: "Founder & CEO, GetMyPlan" (no personal names)
-- **RSS Feed**: `/blog/rss.xml` — RSS 2.0 with Atom namespace, all 14 articles, autodiscovery link in `<head>`
+- **Saudi Arabia blogs**: GetMyPlan hyperlinked to https://getmyplan.in across all 7 posts (31 hyperlinks total)
+- **RSS Feed**: `/blog/rss.xml` — RSS 2.0 with Atom namespace, all 21 articles, autodiscovery link in `<head>`
 - **Google News Sitemap**: `/news-sitemap.xml` — Google News XML schema with keywords per article
 - Both sitemaps referenced in `robots.txt`
 - RSS icon visible in BlogIndex nav and BlogPost nav
-- **Test Report**: iteration_74.json -- 20/20 PASS
+- **Test Report**: iteration_74.json -- 20/20 PASS (first 14 blogs)
+- **Test Report**: iteration_75.json -- 17/17 PASS (all 21 blogs, auth access, RSS/sitemaps)
 
-Blog Slugs:
+Blog Slugs (14 Demand Planning):
 1. best-demand-planning-software-india-2026
 2. reduce-stockouts-myntra-flipkart
 3. what-is-demand-forecasting-guide
@@ -122,16 +125,26 @@ Blog Slugs:
 13. shopify-demand-planning-tools-2026
 14. improve-forecast-accuracy-methods
 
+Blog Slugs (7 Saudi Arabia):
+15. saudi-vision-2030-retail-demand-planning
+16. saudi-ecommerce-amazon-noon-namshi
+17. saudi-ramadan-planning-fashion
+18. saudi-logistics-port-delays-transportation
+19. saudi-consumer-behavior-modest-fashion
+20. saudi-multi-city-retail-planning
+21. saudi-ai-forecasting-vision-2030
+
+#### Blog Route Fix for Authenticated Users (COMPLETED)
+- `/blog` and `/blog/:slug` routes placed in public section of `AppRouter` (App.js lines 264-266)
+- Routes render correctly regardless of authentication state
+- Verified via testing agent (iteration_75.json)
+
 ---
 
 ## Pending / Backlog
 
-### P0 -- Next Up
-- Executive Dashboard & Configuration Page UX Fixes:
-  - KPI labels, unique keys, compact INR formatting, filter dropdown wiring
-  - Configuration page: typos, save button, numeric inputs
-
 ### P1
+- Executive Dashboard & Configuration Page UX improvements (cosmetic — both pages functional)
 - USER-18: Multi-factor authentication (MFA)
 - TENANT-10: Tenant backup/restore
 
@@ -143,7 +156,6 @@ Blog Slugs:
 - Auto-scheduled SFTP uploads for Data Upload V2
 - Chunked uploads & async processing
 - MongoDB pipeline migration (replace in-memory Pandas aggregation)
-- Blog RSS feed for Google News submission
 
 ---
 
