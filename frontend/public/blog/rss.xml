@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+  <title>GetMyPlan Blog — Demand Planning Insights</title>
+  <link>https://getmyplan.in/blog</link>
+  <description>Expert articles on AI demand forecasting, inventory optimization, KPI tracking, and retail analytics for fashion brands.</description>
+  <language>en</language>
+  <lastBuildDate>Fri, 11 Apr 2026 00:00:00 +0530</lastBuildDate>
+  <atom:link href="https://getmyplan.in/blog/rss.xml" rel="self" type="application/rss+xml"/>
+  <image>
+    <url>https://getmyplan.in/getmyplan-logo-sm.png</url>
+    <title>GetMyPlan Blog</title>
+    <link>https://getmyplan.in/blog</link>
+  </image>
+  <copyright>2026 GetMyPlan. All rights reserved.</copyright>
+  <managingEditor>info@getmyplan.in (GetMyPlan Editorial)</managingEditor>
+  <webMaster>info@getmyplan.in (GetMyPlan Tech)</webMaster>
+  <category>Demand Planning</category>
+  <category>Inventory Management</category>
+  <category>AI Forecasting</category>
+  <category>Fashion Retail</category>
+  <ttl>1440</ttl>
+
+  <item>
+    <title>Best Demand Planning Software for Indian Fashion Brands 2026</title>
+    <link>https://getmyplan.in/blog/best-demand-planning-software-india-2026</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/best-demand-planning-software-india-2026</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>Software Reviews</category>
+    <description>GetMyPlan, Prediko, and Onebeat are the top demand planning tools for Indian fashion brands in 2026. GetMyPlan is the only platform with native planogram compliance and size curve analysis. Pricing ranges from &#x20B9;29,000 to &#x20B9;5,00,000 monthly.</description>
+  </item>
+
+  <item>
+    <title>How to Reduce Stockouts on Myntra and Flipkart — Step-by-Step Guide</title>
+    <link>https://getmyplan.in/blog/reduce-stockouts-myntra-flipkart</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/reduce-stockouts-myntra-flipkart</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>How-To Guides</category>
+    <description>Myntra and Flipkart stockouts cost Indian fashion brands &#x20B9;5–50 lakhs monthly. The 5-step fix: track channel-specific ROS, set higher safety stock, monitor FBA fill rates daily, use IST for rebalancing, and forecast marketplace promotions separately.</description>
+  </item>
+
+  <item>
+    <title>What Is Demand Forecasting? A Complete Guide for D2C Retailers</title>
+    <link>https://getmyplan.in/blog/what-is-demand-forecasting-guide</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/what-is-demand-forecasting-guide</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>Industry Concepts</category>
+    <description>Demand forecasting predicts future product demand using historical sales, seasonality, and trend analysis. AI-powered forecasting achieves 85–92% accuracy vs 60–70% for Excel. GetMyPlan delivers 92.7% accuracy with a 3-model ensemble.</description>
+  </item>
+
+  <item>
+    <title>AI Demand Planning vs Excel — Comparison with Real Data</title>
+    <link>https://getmyplan.in/blog/ai-demand-planning-vs-excel</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/ai-demand-planning-vs-excel</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>Data &amp; Research</category>
+    <description>90-day test: AI reduced forecast error by 74% (8.3% vs 32% MAPE), cut stockouts by 67%, reduced dead stock by 54%, and saved planners 10 hours per week. Full ROI analysis showing 670% monthly return.</description>
+  </item>
+
+  <item>
+    <title>12 Demand Planning KPIs Every Fashion Retailer Must Track</title>
+    <link>https://getmyplan.in/blog/demand-planning-kpis-fashion-retail</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/demand-planning-kpis-fashion-retail</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>KPIs &amp; Metrics</category>
+    <description>12 essential KPIs: MAPE, Bias, Stockout Rate, DOH, Sell-Through, Gross Margin, Inventory Turn, Lost Sales, Fill Rate, Safety Stock Coverage, Lead Time Variability, Order Cycle Time. Formulas, targets, and fixes for each.</description>
+  </item>
+
+  <item>
+    <title>How to Build a Buy Plan for an Indian Fashion Brand</title>
+    <link>https://getmyplan.in/blog/build-buy-plan-fashion-brand</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/build-buy-plan-fashion-brand</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>How-To Guides</category>
+    <description>6-step buy plan: set category revenue targets, forecast demand per SKU with AI, calculate opening inventory, determine buy quantity, apply MOQ and budget constraints, phase deliveries by month.</description>
+  </item>
+
+  <item>
+    <title>How Fashion Brands Should Plan for Big Billion Days &amp; BFCM 2026</title>
+    <link>https://getmyplan.in/blog/big-billion-days-bfcm-planning</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/big-billion-days-bfcm-planning</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>How-To Guides</category>
+    <description>90-day preparation guide for BBD and BFCM 2026. Historical lift analysis, SKU-specific promotion forecasting, peak season safety stock formula, marketplace-specific deadlines, and real-time event monitoring.</description>
+  </item>
+
+  <item>
+    <title>What Is Demand Sensing? Real-Time Forecasting Explained</title>
+    <link>https://getmyplan.in/blog/what-is-demand-sensing</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/what-is-demand-sensing</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>Industry Concepts</category>
+    <description>Demand sensing uses daily POS data to adjust forecasts in real-time, improving short-horizon accuracy by 15–30%. True ROS formula: (0.7 x Recent ROS) + (0.3 x Historical ROS). Comparison with traditional forecasting.</description>
+  </item>
+
+  <item>
+    <title>Safety Stock Formula — How to Calculate and Optimize</title>
+    <link>https://getmyplan.in/blog/safety-stock-formula-calculate-optimize</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/safety-stock-formula-calculate-optimize</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>KPIs &amp; Metrics</category>
+    <description>Safety Stock = Z x sigma x sqrt(Lead Time). Z-score table for 90–99.9% service levels. 5 common mistakes. Advanced formula for variable lead times. Worked examples with Indian fashion retail context.</description>
+  </item>
+
+  <item>
+    <title>What Is MAPE? Forecast Accuracy Metric Explained</title>
+    <link>https://getmyplan.in/blog/what-is-mape-forecast-accuracy</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/what-is-mape-forecast-accuracy</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>KPIs &amp; Metrics</category>
+    <description>MAPE formula, calculation example, industry benchmarks (fashion 25–35% Excel vs 10–15% AI). Comparison with MAE, RMSE, WAPE, sMAPE. Why MAPE fails for slow movers and how to fix it.</description>
+  </item>
+
+  <item>
+    <title>AI Agents in Supply Chain — 2026 Guide</title>
+    <link>https://getmyplan.in/blog/ai-agents-supply-chain-2026</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/ai-agents-supply-chain-2026</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>AI &amp; Technology</category>
+    <description>AI agents autonomously handle demand sensing, replenishment, IST, and exception handling. 6 agent types explained. Human-in-the-loop model: agents handle 80% routine, humans focus on 20% strategic.</description>
+  </item>
+
+  <item>
+    <title>Generative AI Demand Planning — Hype vs Reality 2026</title>
+    <link>https://getmyplan.in/blog/generative-ai-demand-planning</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/generative-ai-demand-planning</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>AI &amp; Technology</category>
+    <description>GenAI in demand planning: what works (NL querying, report summaries) vs hype (forecast generation, optimization). Real ML stack explained. 5 red flags to spot vendor hype in demos.</description>
+  </item>
+
+  <item>
+    <title>Shopify Demand Planning — Best Tools 2026</title>
+    <link>https://getmyplan.in/blog/shopify-demand-planning-tools-2026</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/shopify-demand-planning-tools-2026</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>Software Reviews</category>
+    <description>Top 4 Shopify demand planning tools compared: Prediko, GetMyPlan, Inventory Planner, Cogsy. When to upgrade from Prediko. How to integrate GetMyPlan with Shopify via CSV or API.</description>
+  </item>
+
+  <item>
+    <title>How to Improve Forecast Accuracy — 7 Proven Methods</title>
+    <link>https://getmyplan.in/blog/improve-forecast-accuracy-methods</link>
+    <guid isPermaLink="true">https://getmyplan.in/blog/improve-forecast-accuracy-methods</guid>
+    <pubDate>Fri, 11 Apr 2026 00:00:00 +0530</pubDate>
+    <author>info@getmyplan.in (Founder &amp; CEO, GetMyPlan)</author>
+    <category>How-To Guides</category>
+    <description>7 methods: switch to AI (50–60% error reduction), demand sensing, SKU segmentation, data cleaning, MAPE tracking, ensemble models, external data. Full implementation guide with ROI data.</description>
+  </item>
+
+</channel>
+</rss>

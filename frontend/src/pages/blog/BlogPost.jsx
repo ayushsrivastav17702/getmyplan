@@ -77,6 +77,16 @@ export default function BlogPost() {
             <ArrowLeft size={16} /> All Articles
           </button>
           <div className="flex items-center gap-3">
+            <a
+              href="/blog/rss.xml"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-400 hover:text-orange-500 transition"
+              title="RSS Feed"
+              data-testid="blog-post-rss-link"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="6.18" cy="17.82" r="2.18"/><path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z"/></svg>
+            </a>
             <Link to="/signup" className="text-sm font-medium text-blue-600 hover:text-blue-700">
               Start Free Trial
             </Link>

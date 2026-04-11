@@ -11,3 +11,4 @@ Disallow: /onboarding
 Disallow: /unauthorized
 
 Sitemap: https://getmyplan.in/sitemap.xml
+Sitemap: https://getmyplan.in/news-sitemap.xml

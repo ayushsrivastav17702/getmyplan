@@ -33,6 +33,17 @@ export default function BlogIndex() {
             <img src="/getmyplan-logo-sm.png" alt="GetMyPlan" className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-3">
+            <a
+              href="/blog/rss.xml"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-slate-400 hover:text-orange-500 transition flex items-center gap-1"
+              data-testid="blog-rss-link"
+              title="Subscribe via RSS"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="6.18" cy="17.82" r="2.18"/><path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z"/></svg>
+              RSS
+            </a>
             <Link to="/login" className="text-sm text-slate-600 hover:text-slate-900 transition">Log in</Link>
             <Link to="/signup" className="text-sm font-medium px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
               Start Free Trial

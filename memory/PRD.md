@@ -100,6 +100,10 @@ Multi-tenant demand planning system with comprehensive V2 data pipelines, UI das
 - All 14 URLs in sitemap.xml and llms.txt
 - Blog links added to landing Navbar + Footer
 - Author: "Founder & CEO, GetMyPlan" (no personal names)
+- **RSS Feed**: `/blog/rss.xml` — RSS 2.0 with Atom namespace, all 14 articles, autodiscovery link in `<head>`
+- **Google News Sitemap**: `/news-sitemap.xml` — Google News XML schema with keywords per article
+- Both sitemaps referenced in `robots.txt`
+- RSS icon visible in BlogIndex nav and BlogPost nav
 - **Test Report**: iteration_74.json -- 20/20 PASS
 
 Blog Slugs:
