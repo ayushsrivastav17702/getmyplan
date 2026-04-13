@@ -21,8 +21,13 @@ Multi-tenant SaaS demand planning platform.
 | `/api/analytics/executive-dashboard` | ~1GB RAM | ~15MB RAM |
 | `/api/config` | N/A (no Pandas) | N/A |
 
+### P0 Bug Fix: Stock-Out ₹0 Lost Sales (Apr 13 2026)
+**Root Cause:** `agg_stock_out` in `mongo_aggregations.py` returned simplified response shape after migration (flat `data[]` + `daily_revenue_loss` in summary), but the frontend expected `total_lost_sales`, `top_skus[]`, `top_stores[]`, `category_impact[]`, `store_heatmap[]`, `high_risk_skus[]`, `reorder_recommendations[]`, `alternative_suggestions[]`.
+**Fix:** Enhanced `agg_stock_out` to compute all aggregated views server-side from stockout data, including SKU→style and style→category lookups.
+**Verification:** 31/31 tests passed (16 backend + 15 frontend). KPI shows ₹1.6L (was ₹0).
+
 ### Key Technical Decisions
-- `_has_tenant_id()` — auto-detects whether collection uses tenant_id field (handles both shared DB and tenant-specific DBs)
+- `_has_tenant_id()` — auto-detects whether collection uses tenant_id field
 - `_tenant_match()` — conditional match builder, empty dict for tenant DBs without tenant_id
 - `_tid_cache` — per-db:collection caching of tenant_id detection
 - Cache flush endpoint: `POST /api/admin/cache/flush` — clears stale Redis entries after migration
@@ -42,3 +47,5 @@ Multi-tenant SaaS demand planning platform.
 
 ## Remaining Backlog
 - Phase 4: Warehouse, Planogram aggregation migration (low priority — less traffic)
+- Stock-Out daily_trend data (currently returns empty arrays — needs historical inventory snapshots)
+- Monitor production for remaining OOM patterns
