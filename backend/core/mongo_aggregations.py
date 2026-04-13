@@ -726,7 +726,7 @@ async def agg_stock_out(
     channels: List[str] = None,
     regions: List[str] = None,
 ) -> dict:
-    """Stock-out analysis via MongoDB aggregation."""
+    """Stock-out analysis via MongoDB aggregation — full response for frontend."""
     _has_tid = await _has_tenant_id(tdb, "daily_sales")
 
     extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
@@ -738,7 +738,7 @@ async def agg_stock_out(
         match.setdefault("day", {})["$lte"] = end_date
     match.update(extra)
 
-    # 1. ROS per store-SKU (last 30 days)
+    # 1. ROS per store-SKU
     ros_pipeline = [
         {"$match": match},
         {"$addFields": {"qty": {"$toDouble": {"$ifNull": ["$quantity", 0]}},
@@ -761,7 +761,7 @@ async def agg_stock_out(
             "total_qty": doc["total_qty"],
         }
 
-    # 2. Latest SOH — find zero-stock items
+    # 2. Latest SOH — ALL items (for stockout + high-risk detection)
     _inv_has_tid = await _has_tenant_id(tdb, "store_inventory")
     inv_dates = await tdb.store_inventory.aggregate([
         {"$match": _tenant_match(_inv_has_tid, tenant_id)},
@@ -769,6 +769,7 @@ async def agg_stock_out(
     ]).to_list(1)
     latest_day = inv_dates[0]["max_day"] if inv_dates else None
 
+    all_soh = {}
     zero_stock = set()
     if latest_day:
         async for doc in tdb.store_inventory.find(
@@ -781,10 +782,30 @@ async def agg_stock_out(
             except (ValueError, TypeError):
                 qty = 0
             sku_val = doc.get("ean", doc.get("sku", ""))
+            store_val = doc.get("store_code", "")
+            all_soh[(store_val, sku_val)] = qty
             if qty == 0:
-                zero_stock.add((doc.get("store_code", ""), sku_val))
+                zero_stock.add((store_val, sku_val))
 
-    # 3. Stock-outs = zero stock AND positive ROS
+    # 3. SKU -> style mapping
+    _sk_tid = await _has_tenant_id(tdb, "sku_master")
+    sku_style = {}
+    async for doc in tdb.sku_master.find(
+        _tenant_match(_sk_tid, tenant_id), {"_id": 0, "ean": 1, "style": 1}
+    ):
+        if doc.get("ean"):
+            sku_style[doc["ean"]] = doc.get("style", "")
+
+    # 4. Style -> category mapping
+    _sm_tid = await _has_tenant_id(tdb, "style_master")
+    style_cat = {}
+    async for doc in tdb.style_master.find(
+        _tenant_match(_sm_tid, tenant_id), {"_id": 0, "style_code": 1, "category": 1}
+    ):
+        if doc.get("style_code"):
+            style_cat[doc["style_code"]] = doc.get("category", "Unknown")
+
+    # 5. Stock-outs = zero stock AND positive ROS
     stockout_items = []
     total_daily_loss = 0
     for key in zero_stock:
@@ -793,29 +814,207 @@ async def agg_stock_out(
             daily_loss = round(info["ros"] * info["asp"], 2)
             total_daily_loss += daily_loss
             stockout_items.append({
-                "store_code": key[0],
-                "sku": key[1],
-                "ros": info["ros"],
-                "asp": info["asp"],
+                "store_code": key[0], "sku": key[1],
+                "ros": info["ros"], "asp": info["asp"],
                 "daily_sales_loss": daily_loss,
                 "severity": "HIGH" if daily_loss > 1000 else "MEDIUM" if daily_loss > 100 else "LOW",
             })
-
     stockout_items.sort(key=lambda x: x["daily_sales_loss"], reverse=True)
+
     total_skus_tracked = len(ros_map)
     stockout_rate = round(len(stockout_items) / max(total_skus_tracked, 1) * 100, 1)
+    stores_impacted = len(set(item["store_code"] for item in stockout_items))
+
+    # ── Aggregated views ──
+
+    # top_skus: group by sku
+    _sku_agg = {}
+    for item in stockout_items:
+        sk = item["sku"]
+        if sk not in _sku_agg:
+            _sku_agg[sk] = {"cnt": 0, "ros_s": 0, "asp_s": 0, "loss_s": 0}
+        _sku_agg[sk]["cnt"] += 1
+        _sku_agg[sk]["ros_s"] += item["ros"]
+        _sku_agg[sk]["asp_s"] += item["asp"]
+        _sku_agg[sk]["loss_s"] += item["daily_sales_loss"]
+
+    top_skus = []
+    for sk, v in _sku_agg.items():
+        c = v["cnt"]
+        top_skus.append({
+            "sku": sk, "style": sku_style.get(sk, ""),
+            "stockout_count": c,
+            "avg_ros": round(v["ros_s"] / c, 1),
+            "avg_asp": round(v["asp_s"] / c, 2),
+            "total_daily_loss": round(v["loss_s"], 2),
+        })
+    top_skus.sort(key=lambda x: x["total_daily_loss"], reverse=True)
+
+    # top_stores: group by store_code
+    _store_agg = {}
+    for item in stockout_items:
+        st = item["store_code"]
+        if st not in _store_agg:
+            _store_agg[st] = {"cnt": 0, "loss": 0}
+        _store_agg[st]["cnt"] += 1
+        _store_agg[st]["loss"] += item["daily_sales_loss"]
+
+    top_stores = []
+    for st, v in _store_agg.items():
+        top_stores.append({
+            "store_code": st, "stockout_count": v["cnt"],
+            "avg_duration": 1, "total_daily_loss": round(v["loss"], 2),
+            "total_severity": round(v["loss"], 2),
+        })
+    top_stores.sort(key=lambda x: x["total_severity"], reverse=True)
+
+    # category_impact: group by category
+    _cat_agg = {}
+    for item in stockout_items:
+        style = sku_style.get(item["sku"], "")
+        cat = style_cat.get(style, "Unknown")
+        if cat not in _cat_agg:
+            _cat_agg[cat] = {"loss": 0, "cnt": 0}
+        _cat_agg[cat]["loss"] += item["daily_sales_loss"]
+        _cat_agg[cat]["cnt"] += 1
+    category_impact = sorted(
+        [{"category": k, "total_daily_loss": round(v["loss"], 2), "count": v["cnt"]} for k, v in _cat_agg.items()],
+        key=lambda x: x["total_daily_loss"], reverse=True,
+    )
+
+    # store_heatmap: total skus per store vs stockout skus
+    _store_total = {}
+    for (st, _sk) in ros_map:
+        _store_total[st] = _store_total.get(st, 0) + 1
+    _store_so = {}
+    _store_loss = {}
+    for item in stockout_items:
+        st = item["store_code"]
+        _store_so[st] = _store_so.get(st, 0) + 1
+        _store_loss[st] = _store_loss.get(st, 0) + item["daily_sales_loss"]
+
+    store_heatmap = []
+    for st in set(list(_store_total.keys()) + list(_store_so.keys())):
+        total = _store_total.get(st, 0)
+        sos = _store_so.get(st, 0)
+        pct = round(sos / max(total, 1) * 100, 1)
+        loss = round(_store_loss.get(st, 0), 2)
+        sev = "critical" if pct >= 50 else "high" if pct >= 25 else "medium" if pct >= 10 else "low"
+        store_heatmap.append({"store_code": st, "total": total, "stockouts": sos,
+                              "stockout_pct": pct, "total_loss": loss, "severity": sev})
+    store_heatmap.sort(key=lambda x: x["stockout_pct"], reverse=True)
+
+    # category_heatmap
+    _cat_total = {}
+    _cat_so = {}
+    _cat_loss2 = {}
+    for (st, sk) in ros_map:
+        style = sku_style.get(sk, "")
+        cat = style_cat.get(style, "Unknown")
+        _cat_total[cat] = _cat_total.get(cat, 0) + 1
+    for item in stockout_items:
+        style = sku_style.get(item["sku"], "")
+        cat = style_cat.get(style, "Unknown")
+        _cat_so[cat] = _cat_so.get(cat, 0) + 1
+        _cat_loss2[cat] = _cat_loss2.get(cat, 0) + item["daily_sales_loss"]
+
+    category_heatmap = []
+    for cat in set(list(_cat_total.keys()) + list(_cat_so.keys())):
+        total = _cat_total.get(cat, 0)
+        sos = _cat_so.get(cat, 0)
+        pct = round(sos / max(total, 1) * 100, 1)
+        loss = round(_cat_loss2.get(cat, 0), 2)
+        sev = "critical" if pct >= 50 else "high" if pct >= 25 else "medium" if pct >= 10 else "low"
+        category_heatmap.append({"category": cat, "total": total, "stockouts": sos,
+                                 "stockout_pct": pct, "total_loss": loss, "severity": sev})
+    category_heatmap.sort(key=lambda x: x["stockout_pct"], reverse=True)
+
+    # high_risk_skus: SOH > 0 but days_to_stockout <= 7
+    high_risk = []
+    for key, info in ros_map.items():
+        soh = all_soh.get(key, 0)
+        if soh > 0 and info["ros"] > 0:
+            dts = round(soh / info["ros"], 1)
+            if dts <= 7:
+                risk = "critical" if dts <= 2 else "high" if dts <= 4 else "medium"
+                high_risk.append({
+                    "sku": key[1], "style": sku_style.get(key[1], ""),
+                    "store_code": key[0], "ros": info["ros"],
+                    "soh": soh, "asp": info["asp"],
+                    "days_to_stockout": dts, "risk": risk,
+                })
+    high_risk.sort(key=lambda x: x["days_to_stockout"])
+
+    # reorder_recommendations
+    lead_time, safety_days = 14, 7
+    reorder_recs = []
+    for item in stockout_items[:50]:
+        qty = round(item["ros"] * (lead_time + safety_days), 0)
+        reorder_recs.append({
+            "sku": item["sku"], "style": sku_style.get(item["sku"], ""),
+            "store_code": item["store_code"], "ros": item["ros"],
+            "soh": 0, "days_to_stockout": 0, "reorder_qty": qty,
+        })
+    for item in high_risk[:50]:
+        qty = max(0, round(item["ros"] * (lead_time + safety_days) - item["soh"], 0))
+        if qty > 0:
+            reorder_recs.append({
+                "sku": item["sku"], "style": item["style"],
+                "store_code": item["store_code"], "ros": item["ros"],
+                "soh": item["soh"], "days_to_stockout": item["days_to_stockout"],
+                "reorder_qty": qty,
+            })
+    reorder_recs.sort(key=lambda x: x["days_to_stockout"])
+
+    # alternative_suggestions: same-style SKUs with stock at same store
+    _store_style_inv = {}
+    for (st, sk), soh in all_soh.items():
+        if soh > 0:
+            style = sku_style.get(sk, "")
+            if style:
+                _store_style_inv.setdefault((st, style), []).append(
+                    {"sku": sk, "soh": soh, "ros": ros_map.get((st, sk), {}).get("ros", 0)})
+
+    alternatives = []
+    for item in stockout_items[:20]:
+        style = sku_style.get(item["sku"], "")
+        if not style:
+            continue
+        alts = [a for a in _store_style_inv.get((item["store_code"], style), [])
+                if a["sku"] != item["sku"]]
+        if alts:
+            alternatives.append({
+                "stockout_sku": item["sku"], "store_code": item["store_code"],
+                "alternatives": sorted(alts, key=lambda x: x["soh"], reverse=True)[:5],
+            })
 
     return {
         "summary": {
             "total_stockouts": len(stockout_items),
             "stockout_rate": stockout_rate,
-            "daily_revenue_loss": round(total_daily_loss, 0),
-            "total_skus_tracked": total_skus_tracked,
+            "total_lost_sales": round(total_daily_loss, 0),
+            "total_store_skus": total_skus_tracked,
+            "stores_impacted": stores_impacted,
             "snapshot_date": str(latest_day)[:10] if latest_day else None,
             "high_severity": sum(1 for s in stockout_items if s["severity"] == "HIGH"),
             "medium_severity": sum(1 for s in stockout_items if s["severity"] == "MEDIUM"),
             "low_severity": sum(1 for s in stockout_items if s["severity"] == "LOW"),
         },
+        "top_skus": top_skus[:20],
+        "top_stores": top_stores[:20],
+        "category_impact": category_impact,
+        "store_heatmap": store_heatmap[:100],
+        "category_heatmap": category_heatmap[:50],
+        "high_risk_skus": high_risk[:50],
+        "reorder_recommendations": reorder_recs[:50],
+        "alternative_suggestions": alternatives[:20],
+        "daily_trend": [],
+        "weekly_trend": [],
+        "monthly_trend": [],
+        "period_trends": {},
+        "moving_avg": [],
+        "projected_trend": [],
+        "prev_period_trend": [],
         "data": stockout_items[:200],
         "data_source": "mongodb_aggregation",
     }

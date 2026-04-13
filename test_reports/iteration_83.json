@@ -1,0 +1,141 @@
+{
+  "summary": "Iteration 83: P0 Bug Fix Verified - Stock-Out Lost Sales was showing ₹0, now shows ₹1.6L. All 16 backend tests passed (100%), all 15 frontend tests passed (100%). The MongoDB aggregation migration fix in agg_stock_out function now returns the complete response shape the frontend expects.",
+
+  "test_case_matrix": {
+    "BACKEND_TESTS": {
+      "TEST_01_stock_out_api_returns_200": {"status": "PASS", "notes": "API returns 200 OK"},
+      "TEST_02_response_has_summary": {"status": "PASS", "notes": "Summary has total_stockouts=13, total_lost_sales=160000+, stores_impacted=5"},
+      "TEST_03_total_lost_sales_is_not_zero": {"status": "PASS", "notes": "P0 BUG FIX VERIFIED - total_lost_sales > 0"},
+      "TEST_04_stores_impacted_is_not_zero": {"status": "PASS", "notes": "stores_impacted = 5"},
+      "TEST_05_response_has_top_skus": {"status": "PASS", "notes": "top_skus array with sku, style, stockout_count, avg_ros, avg_asp, total_daily_loss"},
+      "TEST_06_response_has_top_stores": {"status": "PASS", "notes": "top_stores array with store_code, stockout_count, total_daily_loss, total_severity"},
+      "TEST_07_response_has_category_impact": {"status": "PASS", "notes": "category_impact array with category, total_daily_loss, count"},
+      "TEST_08_response_has_store_heatmap": {"status": "PASS", "notes": "store_heatmap array with store_code, total, stockouts, stockout_pct, total_loss, severity"},
+      "TEST_09_response_has_category_heatmap": {"status": "PASS", "notes": "category_heatmap array present"},
+      "TEST_10_response_has_high_risk_skus": {"status": "PASS", "notes": "high_risk_skus array with sku, style, store_code, ros, soh, asp, days_to_stockout, risk"},
+      "TEST_11_response_has_reorder_recommendations": {"status": "PASS", "notes": "reorder_recommendations array with sku, style, store_code, ros, soh, days_to_stockout, reorder_qty"},
+      "TEST_12_response_has_alternative_suggestions": {"status": "PASS", "notes": "alternative_suggestions array present"},
+      "TEST_13_summary_field_names_correct": {"status": "PASS", "notes": "Uses total_lost_sales (NOT daily_revenue_loss)"},
+      "TEST_14_data_array_present": {"status": "PASS", "notes": "data array with raw stockout items"},
+      "TEST_15_no_error_in_response": {"status": "PASS", "notes": "No error field in response"},
+      "TEST_16_stock_out_api_accessible": {"status": "PASS", "notes": "API returns 200 (session auth)"}
+    },
+    "FRONTEND_TESTS": {
+      "TEST_F01_page_loads": {"status": "PASS", "notes": "Stock-Out Analysis page loads with data-testid='stock-out-page'"},
+      "TEST_F02_total_stockouts_kpi": {"status": "PASS", "notes": "Shows '13 of 50 store-SKUs'"},
+      "TEST_F03_stockout_rate_kpi": {"status": "PASS", "notes": "Shows '26% store-SKU combinations'"},
+      "TEST_F04_lost_sales_kpi": {"status": "PASS", "notes": "P0 BUG FIX VERIFIED - Shows '₹1.6L revenue at risk per day' (NOT ₹0)"},
+      "TEST_F05_stores_impacted_kpi": {"status": "PASS", "notes": "Shows '5 snapshot: 2026-04-13'"},
+      "TEST_F06_top_skus_table": {"status": "PASS", "notes": "Table renders with SKU, Style, Stores Affected, Avg ROS, Avg ASP, Daily Loss columns"},
+      "TEST_F07_top_stores_chart": {"status": "PASS", "notes": "Bar chart renders with NORTH-04, EAST-05, SOUTH-02, etc."},
+      "TEST_F08_category_impact_chart": {"status": "PASS", "notes": "Doughnut chart renders with Topwear, Bottomwear, Dresses categories"},
+      "TEST_F09_store_wise_table": {"status": "PASS", "notes": "Store-wise Stock-Out Impact table renders"},
+      "TEST_F10_store_heatmap_grid": {"status": "PASS", "notes": "Heatmap grid with EAST-05 40%, NORTH-04 40%, WEST-03 20%, etc."},
+      "TEST_F11_heatmap_detail_table": {"status": "PASS", "notes": "Detail table with Store, Total SKUs, Stock-Outs, Rate %, Daily Loss, Severity"},
+      "TEST_F12_heatmap_drill_down": {"status": "PASS", "notes": "Clicking store cell shows drill-down detail"},
+      "TEST_F13_high_risk_skus_table": {"status": "PASS", "notes": "Table with SKU, Style, Store, ROS, SOH, ASP, Days to SO, Risk, Action columns"},
+      "TEST_F14_reorder_recommendations_table": {"status": "PASS", "notes": "Table renders with reorder quantities"},
+      "TEST_F15_sku_detail_modal": {"status": "PASS", "notes": "Clicking Details button opens modal with PRD calculation"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "16/16 PASS",
+    "FRONTEND_TESTS": "15/15 PASS",
+    "TOTAL": "31/31 PASS"
+  },
+
+  "p0_bug_fix_verification": {
+    "bug_description": "Stock-Out Lost Sales was showing ₹0 on the frontend despite backend returning correct data",
+    "root_cause": "MongoDB aggregation migration changed backend response shape (field names and missing aggregated views), but frontend wasn't updated",
+    "fix_applied": "Enhanced agg_stock_out in /app/backend/core/mongo_aggregations.py to return complete response shape",
+    "verification": {
+      "before_fix": "Est. Daily Sales Loss showed ₹0",
+      "after_fix": "Est. Daily Sales Loss shows ₹1.6L (₹160,000+)",
+      "status": "VERIFIED FIXED"
+    }
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/analytics/stock-out", "issue": "API accessible without explicit auth token (uses session/cookie auth)", "priority": "LOW"}
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "verified_features": {
+    "KPI_CARDS": [
+      "Total Stock-Outs: 13 of 50 store-SKUs",
+      "Stock-Out Rate: 26%",
+      "Est. Daily Sales Loss: ₹1.6L (P0 BUG FIX VERIFIED)",
+      "Stores Impacted: 5"
+    ],
+    "OVERVIEW_TAB": [
+      "Top Stock-Out SKUs table with columns: SKU, Style, Stores Affected, Avg ROS, Avg ASP, Daily Loss",
+      "Top Impacted Stores bar chart",
+      "Category Impact doughnut chart (Topwear, Bottomwear, Dresses)",
+      "Store-wise Stock-Out Impact table"
+    ],
+    "HEATMAPS_TAB": [
+      "Store heatmap grid with percentage cells (EAST-05: 40%, NORTH-04: 40%, etc.)",
+      "Clicking store cell shows drill-down detail with Total SKUs, Stock-Outs, Rate, Daily Loss",
+      "Detail table with Store, Total SKUs, Stock-Outs, Rate %, Daily Loss, Severity columns"
+    ],
+    "PREDICTIVE_TAB": [
+      "High-Risk SKUs (Next 7 Days) table with SKU, Style, Store, ROS, SOH, ASP, Days to SO, Risk, Action",
+      "Reorder Recommendations table with calculated quantities",
+      "Details button opens SKU detail modal with PRD calculation formula"
+    ],
+    "BACKEND_API_RESPONSE_SHAPE": [
+      "summary: total_stockouts, stockout_rate, total_lost_sales, total_store_skus, stores_impacted, snapshot_date, severity counts",
+      "top_skus[]: sku, style, stockout_count, avg_ros, avg_asp, total_daily_loss",
+      "top_stores[]: store_code, stockout_count, avg_duration, total_daily_loss, total_severity",
+      "category_impact[]: category, total_daily_loss, count",
+      "store_heatmap[]: store_code, total, stockouts, stockout_pct, total_loss, severity",
+      "category_heatmap[]: category, total, stockouts, stockout_pct, total_loss, severity",
+      "high_risk_skus[]: sku, style, store_code, ros, soh, asp, days_to_stockout, risk",
+      "reorder_recommendations[]: sku, style, store_code, ros, soh, days_to_stockout, reorder_qty",
+      "alternative_suggestions[]: stockout_sku, store_code, alternatives[]"
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_stock_out_iter83.py",
+    "/app/test_reports/pytest/pytest_results_iter83.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_stock_out_iter83.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (15/15 tests passed)"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 (demo tenant with stock-out data)"
+  },
+
+  "seed_data_creation": "Test data was pre-seeded: 10 SKUs across 5 stores, 30 days of sales, ~30% zero-stock items creating 13 stockouts",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 83 verified P0 bug fix for Stock-Out Lost Sales showing ₹0. The fix was in agg_stock_out function in /app/backend/core/mongo_aggregations.py. The API now returns complete response shape with summary.total_lost_sales (NOT daily_revenue_loss), top_skus[], top_stores[], category_impact[], store_heatmap[], category_heatmap[], high_risk_skus[], reorder_recommendations[], alternative_suggestions[]. Demo tenant (admin@demo.com) has 13 stockouts across 5 stores with ₹1.6L daily lost sales.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
