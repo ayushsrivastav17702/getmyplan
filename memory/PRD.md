@@ -20,29 +20,30 @@ Multi-tenant SaaS demand planning platform.
 | `/api/analytics/replenishment` | ~700MB RAM | ~10MB RAM |
 | `/api/analytics/executive-dashboard` | ~1GB RAM | ~15MB RAM |
 
-### P0 Bug Fix: Stock-Out ₹0 Lost Sales (Apr 13 2026)
-**Root Cause:** `agg_stock_out` returned simplified response shape after migration, but frontend expected complete aggregated views.
-**Fix:** Enhanced `agg_stock_out` to compute top_skus, top_stores, category_impact, store_heatmap, category_heatmap, high_risk_skus, reorder_recommendations, alternative_suggestions server-side.
-**Verification:** 31/31 tests passed. KPI shows ₹1.6L (was ₹0).
+### P0 Bug Fix: Stock-Out Lost Sales = 0 (Apr 13 2026)
+Enhanced `agg_stock_out` to return complete response shape with all aggregated views.
+**Verification:** 31/31 tests passed. KPI shows correct values.
 
 ### 503/520 Resilience Layer (Apr 13 2026)
-- **Axios Retry Interceptor** (`/app/frontend/src/utils/axiosRetry.js`): Auto-retries GET requests on 503/520 with exponential backoff (2s→4s→8s, max 3 retries). Shows "Reconnecting..." toast via sonner.
-- **Health Check Endpoints** (`/app/backend/routes/health.py`):
-  - `GET /api/health` — Existing enterprise health (DB + uptime)
-  - `GET /api/health/memory` — Memory usage monitoring (psutil)
-  - `GET /api/health/ready` — Kubernetes readiness probe (MongoDB ping)
-  - `GET /api/health/live` — Kubernetes liveness probe
+- **Axios Retry Interceptor** (`axiosRetry.js`): Auto-retries GET on 503/520 with exponential backoff + sonner toast
+- **Health Endpoints** (`health.py`): `/api/health/memory`, `/api/health/ready`, `/api/health/live`
+
+### Resilience Fixes I-03, I-04, I-05 (Apr 13 2026)
+- **I-03**: Upload status localStorage cache fallback — sidebar shows last known count when backend down
+- **I-04**: Sidebar counts `s.uploaded` (not `s.uploaded && s.valid`) — COGS no longer shows false negative
+- **I-05**: AI onboarding banner (red/amber/green) when no plan exists — guides users based on data availability
 
 ### Key Technical Decisions
 - `_has_tenant_id()` — auto-detects whether collection uses tenant_id field
 - `_tenant_match()` — conditional match builder
-- Cache flush endpoint: `POST /api/admin/cache/flush` — clears stale Redis entries
-- Retry interceptor only retries GET requests (safe idempotent operations)
+- Cache flush: `POST /api/admin/cache/flush`
+- Retry interceptor only retries GET requests (safe idempotent)
 
 ### Key Files
 - `/app/backend/core/mongo_aggregations.py` — All aggregation pipelines
-- `/app/backend/routes/health.py` — Health/readiness/liveness endpoints
-- `/app/frontend/src/utils/axiosRetry.js` — Axios retry interceptor with toast
+- `/app/backend/routes/health.py` — Health endpoints
+- `/app/frontend/src/utils/axiosRetry.js` — Retry interceptor
+- `/app/frontend/src/pages/AIDemandPlanning.js` — AI onboarding banner
 
 ## All Implemented Features
 - Multi-tenant RBAC, JWT + MFA (TOTP + Email OTP)
@@ -52,8 +53,10 @@ Multi-tenant SaaS demand planning platform.
 - Puppeteer pre-rendering, dynamic meta, sitemaps, RSS
 - Axios retry interceptor for 503/520 resilience
 - Health check endpoints for Kubernetes probes
+- Upload status localStorage cache fallback
+- AI onboarding banner for data readiness guidance
 
 ## Remaining Backlog
-- Phase 4: Warehouse, Planogram aggregation migration (low priority — less traffic)
-- Stock-Out daily_trend data (currently empty arrays — needs historical inventory snapshots)
-- Monitor production for remaining OOM patterns
+- Phase 4: Warehouse, Planogram aggregation migration (low priority)
+- Stock-Out daily_trend data (needs historical inventory snapshots)
+- Monitor production for OOM patterns

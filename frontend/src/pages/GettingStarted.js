@@ -26,7 +26,7 @@ const GettingStarted = ({ uploadStatus }) => {
 
   const getUploadProgress = () => {
     if (!uploadStatus) return { uploaded: 0, total: 7 };
-    const uploaded = Object.values(uploadStatus).filter(s => s.uploaded && s.valid).length;
+    const uploaded = Object.values(uploadStatus).filter(s => s.uploaded).length;
     return { uploaded, total: 7 };
   };
 
