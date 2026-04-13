@@ -388,6 +388,7 @@ async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
 
     V2 collections store one document per row (scalable).
     V1 uploaded_files stores the entire CSV as a JSON array inside one document.
+    Memory-safe: uses projections and batch streaming.
     """
     tdb = get_db()
 
@@ -407,13 +408,17 @@ async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
     }
 
     # When V2 field names differ from V1, rename for backward compatibility.
-    # Only renames if the V1 name is absent — preserves columns uploaded with V1-style names.
     _V2_COMPAT = {
         'store_inventory': {'closing_stock': 'quantity', 'sku': 'ean'},
         'warehouse_inventory': {'on_hand_qty': 'quantity'},
     }
-    # For sku_ean_master lookups against V2 sku_master
     _SKU_COMPAT = {'sku': 'ean'}
+
+    # Columns to exclude from loading — reduces memory by ~40%
+    _EXCLUDE_FIELDS = {'_id': 0, 'tenant_id': 0, 'uploaded_at': 0, 'uploaded_by': 0}
+
+    # Max documents to load per collection (safety valve)
+    _MAX_DOCS = 300_000
 
     v2_coll = _V2_MAP.get(file_type)
 
@@ -421,12 +426,23 @@ async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
         try:
             v2_count = await tdb[v2_coll].estimated_document_count()
             if v2_count > 0:
-                cursor = tdb[v2_coll].find(
-                    {}, {'_id': 0, 'tenant_id': 0, 'uploaded_at': 0, 'uploaded_by': 0}
-                )
-                docs = await cursor.to_list(200_000)
+                # Stream in batches to avoid memory spike
+                docs = []
+                batch_size = 10_000
+                cursor = tdb[v2_coll].find({}, _EXCLUDE_FIELDS).batch_size(batch_size)
+                count = 0
+                async for doc in cursor:
+                    docs.append(doc)
+                    count += 1
+                    if count >= _MAX_DOCS:
+                        logger.warning("get_cached_data(%s): Capped at %d docs (total: %d)",
+                                       file_type, _MAX_DOCS, v2_count)
+                        break
+
                 if docs:
                     df = pd.DataFrame(docs)
+                    # Free the raw docs list immediately
+                    del docs
                     # Apply field renames for backward compatibility
                     compat = _V2_COMPAT.get(v2_coll, {})
                     if file_type == 'sku_ean_master':
@@ -440,10 +456,13 @@ async def get_cached_data(file_type: str) -> Optional[pd.DataFrame]:
             logger.warning("V2 read failed for %s: %s", v2_coll, e)
 
     # V1 fallback — entire CSV stored as JSON array in one document
-    doc = await tdb.uploaded_files.find_one({"file_type": file_type}, {"_id": 0, "data": 1})
-    if doc and 'data' in doc:
-        logger.info("get_cached_data(%s): V1 uploaded_files (%d rows)", file_type, len(doc['data']))
-        return pd.DataFrame(doc['data'])
+    try:
+        doc = await tdb.uploaded_files.find_one({"file_type": file_type}, {"_id": 0, "data": 1})
+        if doc and 'data' in doc:
+            logger.info("get_cached_data(%s): V1 uploaded_files (%d rows)", file_type, len(doc['data']))
+            return pd.DataFrame(doc['data'])
+    except Exception as e:
+        logger.warning("V1 read failed for %s: %s", file_type, e)
 
     return None
 
@@ -473,6 +492,22 @@ async def cache_data(file_type: str, df: pd.DataFrame, validation: Dict):
 @api_router.get("/")
 async def root():
     return {"message": "GetMyPlan - AI Retail Analytics API"}
+
+
+@api_router.post("/admin/cache/flush")
+async def flush_cache():
+    """Flush all Redis cache entries. Admin utility."""
+    from services.cache_service import get_redis
+    r = get_redis()
+    if not r:
+        return {"success": False, "message": "Redis not connected"}
+    try:
+        keys = r.keys("*")
+        if keys:
+            r.delete(*keys)
+        return {"success": True, "flushed": len(keys)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @api_router.get("/health")
@@ -1681,285 +1716,24 @@ async def get_doh_analysis(
     regions: str = None,
     ideal_doh: int = None
 ):
-    """
-    DOH (Days on Hand) Analysis using PRD formulas.
-    DOH(store,sku) = Inventory(store,sku) / Daily Raw ROS(store,sku)
-    Overall Channel DOH = Sum(DOH x Inventory) / Sum(Inventory)
-    Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
-    """
+    """DOH analysis using MongoDB aggregation pipelines (memory-safe)."""
     _tid = _cache_tenant_id()
     _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, idoh=ideal_doh)
     _hit, _data = cache_get("doh_heatmap", _tid, _ex)
     if _hit:
         return _data
-    # Read ideal_doh from config if not passed as query param
     if ideal_doh is None:
         cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
         ideal_doh = (cfg or {}).get("ideal_doh", 9)
-    sales_df = await get_cached_data('daily_sales')
-    inventory_df = await get_cached_data('store_inventory')
-    sku_df = await get_cached_data('sku_ean_master')
-    style_df = await get_cached_data('style_master')
-    store_df = await get_cached_data('store_master')
 
-    if sales_df is None or inventory_df is None or sku_df is None:
-        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+    from core.mongo_aggregations import agg_doh_analysis
+    tdb = get_db()
+    cat_list = [c.strip() for c in categories.split(',')] if categories else None
+    ch_list = [c.strip() for c in channels.split(',')] if channels else None
+    rg_list = [r.strip() for r in regions.split(',')] if regions else None
 
     try:
-        sales_filtered = apply_date_filter(sales_df.copy(), start_date, end_date, 'day')
-        inventory_filtered = apply_date_filter(inventory_df.copy(), start_date, end_date, 'day')
-
-        if channels:
-            channel_list = channels.split(',')
-            sales_filtered = apply_channel_filter(sales_filtered, channel_list)
-            inventory_filtered = apply_channel_filter(inventory_filtered, channel_list)
-        if regions and store_df is not None:
-            region_list = regions.split(',')
-            sales_filtered = apply_region_filter(sales_filtered, region_list, store_df)
-            inventory_filtered = apply_region_filter(inventory_filtered, region_list, store_df)
-
-        sales_filtered['day'] = pd.to_datetime(sales_filtered['day'])
-        inventory_filtered['day'] = pd.to_datetime(inventory_filtered['day'])
-
-        # Merge sales with SKU master for style
-        sku_cols = ['ean']
-        if 'style' in sku_df.columns:
-            sku_cols.append('style')
-        sales_sku = sales_filtered.merge(sku_df[sku_cols], left_on='sku', right_on='ean', how='left')
-
-        if categories and style_df is not None:
-            category_list = categories.split(',')
-            sales_sku = apply_category_filter(sales_sku, category_list, style_df)
-
-        if len(sales_sku) == 0:
-            return {"error": "No data matches the selected filters", "data": {}}
-
-        # ================================================
-        # 1. ROS per store-SKU
-        # ================================================
-        ros_calc = sales_sku.groupby(['store_code', 'sku']).agg(
-            total_qty=('quantity', 'sum'),
-            total_revenue=('revenue', 'sum'),
-            live_days=('day', 'nunique')
-        ).reset_index()
-        ros_calc['ros'] = (ros_calc['total_qty'] / ros_calc['live_days'].clip(lower=1)).round(4)
-
-        # ================================================
-        # 2. Latest SOH per store-SKU
-        # ================================================
-        latest_date = inventory_filtered['day'].max()
-        latest_inv = inventory_filtered[inventory_filtered['day'] == latest_date].copy()
-        soh_df = latest_inv.groupby(['store_code', 'ean'])['quantity'].sum().reset_index()
-        soh_df.columns = ['store_code', 'sku', 'soh']
-
-        # ================================================
-        # 3. DOH = SOH / ROS per store-SKU
-        # ================================================
-        doh_df = ros_calc.merge(soh_df, on=['store_code', 'sku'], how='outer')
-        doh_df['soh'] = doh_df['soh'].fillna(0)
-        doh_df['ros'] = doh_df['ros'].fillna(0)
-        doh_df['total_qty'] = doh_df['total_qty'].fillna(0)
-        doh_df['total_revenue'] = doh_df['total_revenue'].fillna(0)
-
-        doh_df['doh'] = np.where(
-            doh_df['ros'] > 0,
-            (doh_df['soh'] / doh_df['ros']).round(1),
-            np.where(doh_df['soh'] > 0, 9999, 0)
-        )
-
-        # Classification: Optimal ±20%, Overstocked >120%, Understocked <80%
-        upper = ideal_doh * 1.2
-        lower = ideal_doh * 0.8
-
-        def classify(row):
-            if row['soh'] == 0 and row['ros'] > 0:
-                return 'STOCKED_OUT'
-            if row['ros'] == 0 and row['soh'] > 0:
-                return 'NO_SALES'
-            if row['ros'] == 0 and row['soh'] == 0:
-                return 'STOCKED_OUT'
-            if row['doh'] > upper:
-                return 'OVERSTOCKED'
-            if row['doh'] < lower:
-                return 'UNDERSTOCKED'
-            return 'OPTIMAL'
-
-        doh_df['status'] = doh_df.apply(classify, axis=1)
-
-        # Add style info
-        if 'style' in sku_df.columns:
-            sku_style_map = sku_df.groupby('ean')['style'].first()
-            doh_df['style'] = doh_df['sku'].map(sku_style_map).fillna('Unknown')
-        else:
-            doh_df['style'] = 'Unknown'
-
-        # ================================================
-        # 4. Store-wise aggregation (weighted DOH)
-        # ================================================
-        valid = doh_df[(doh_df['ros'] > 0) & (doh_df['soh'] > 0)].copy()
-        valid['weighted_doh'] = valid['doh'] * valid['soh']
-
-        store_agg = valid.groupby('store_code').agg(
-            total_inventory=('soh', 'sum'),
-            weighted_doh_sum=('weighted_doh', 'sum'),
-            sku_count=('sku', 'nunique'),
-            total_revenue=('total_revenue', 'sum')
-        ).reset_index()
-        store_agg['doh'] = (store_agg['weighted_doh_sum'] / store_agg['total_inventory'].clip(lower=1)).round(1)
-
-        # Status counts per store
-        store_status = doh_df.groupby(['store_code', 'status']).size().unstack(fill_value=0).reset_index()
-        for col in ['OPTIMAL', 'OVERSTOCKED', 'UNDERSTOCKED', 'STOCKED_OUT', 'NO_SALES']:
-            if col not in store_status.columns:
-                store_status[col] = 0
-
-        store_agg = store_agg.merge(store_status, on='store_code', how='left')
-
-        def store_overall(row):
-            if row.get('STOCKED_OUT', 0) > row.get('OPTIMAL', 0):
-                return 'STOCKED_OUT'
-            if row.get('UNDERSTOCKED', 0) > row.get('OPTIMAL', 0):
-                return 'UNDERSTOCKED'
-            if row.get('OVERSTOCKED', 0) > row.get('OPTIMAL', 0):
-                return 'OVERSTOCKED'
-            return 'OPTIMAL'
-
-        store_agg['status'] = store_agg.apply(store_overall, axis=1)
-        store_data = store_agg.sort_values('doh')[
-            ['store_code', 'total_inventory', 'doh', 'sku_count', 'status',
-             'OPTIMAL', 'OVERSTOCKED', 'UNDERSTOCKED', 'STOCKED_OUT']
-        ].fillna(0).to_dict('records')
-        for s in store_data:
-            s['ideal_doh'] = ideal_doh
-
-        # ================================================
-        # 5. Category-wise aggregation
-        # ================================================
-        category_data = []
-        if style_df is not None and 'category' in style_df.columns and 'style' in doh_df.columns:
-            if 'style_code' in style_df.columns:
-                style_cat = style_df[['style_code', 'category']].drop_duplicates()
-                doh_cat = doh_df.merge(style_cat, left_on='style', right_on='style_code', how='left')
-            else:
-                doh_cat = doh_df.copy()
-                doh_cat['category'] = 'Unknown'
-
-            valid_cat = doh_cat[(doh_cat['ros'] > 0) & (doh_cat['soh'] > 0)].copy()
-            valid_cat['weighted_doh'] = valid_cat['doh'] * valid_cat['soh']
-
-            cat_agg = valid_cat.groupby('category').agg(
-                total_inventory=('soh', 'sum'),
-                weighted_doh_sum=('weighted_doh', 'sum'),
-                sku_count=('sku', 'nunique')
-            ).reset_index()
-            cat_agg['doh'] = (cat_agg['weighted_doh_sum'] / cat_agg['total_inventory'].clip(lower=1)).round(1)
-
-            def cat_classify(row):
-                if row['doh'] > upper:
-                    return 'OVERSTOCKED'
-                if row['doh'] < lower:
-                    return 'UNDERSTOCKED'
-                return 'OPTIMAL'
-
-            cat_agg['status'] = cat_agg.apply(cat_classify, axis=1)
-            cat_agg['ideal_doh'] = ideal_doh
-            category_data = cat_agg[['category', 'total_inventory', 'doh', 'sku_count', 'status', 'ideal_doh']].fillna(0).to_dict('records')
-
-        # ================================================
-        # 6. DOH trend over time (weekly buckets)
-        # ================================================
-        inv_daily = inventory_filtered.groupby('day')['quantity'].sum().reset_index()
-        inv_daily.columns = ['day', 'total_inv']
-        sales_daily = sales_filtered.groupby('day')['quantity'].sum().reset_index()
-        sales_daily.columns = ['day', 'total_sales']
-
-        daily_merged = inv_daily.merge(sales_daily, on='day', how='outer').sort_values('day').fillna(0)
-        daily_merged['ros_7d'] = daily_merged['total_sales'].rolling(7, min_periods=1).mean()
-        daily_merged['doh'] = np.where(
-            daily_merged['ros_7d'] > 0,
-            (daily_merged['total_inv'] / daily_merged['ros_7d']).round(1),
-            0
-        )
-        # Stockout count per day
-        daily_stockouts = inventory_filtered[inventory_filtered['quantity'] == 0].groupby('day').size().reset_index()
-        daily_stockouts.columns = ['day', 'stockout_count']
-        daily_merged = daily_merged.merge(daily_stockouts, on='day', how='left')
-        daily_merged['stockout_count'] = daily_merged['stockout_count'].fillna(0).astype(int)
-
-        # Resample to weekly
-        daily_merged = daily_merged.set_index('day')
-        weekly = daily_merged.resample('W').agg({
-            'doh': 'mean',
-            'stockout_count': 'sum',
-            'total_inv': 'last'
-        }).reset_index()
-        weekly['doh'] = weekly['doh'].round(1)
-        weekly['week_label'] = weekly['day'].dt.strftime('%b %d')
-
-        trend_data = weekly[['week_label', 'doh', 'stockout_count']].tail(8).fillna(0).to_dict('records')
-
-        # ================================================
-        # 7. Detail table (store-SKU level, top 200)
-        # ================================================
-        detail_df = doh_df[doh_df['ros'] > 0][
-            ['store_code', 'sku', 'style', 'soh', 'ros', 'doh', 'status']
-        ].sort_values('doh').head(200)
-        detail_df['ideal_doh'] = ideal_doh
-        detail_data = detail_df.round(2).fillna(0).to_dict('records')
-
-        # ================================================
-        # 8. Summary KPIs
-        # ================================================
-        status_counts = doh_df['status'].value_counts().to_dict()
-        total_items = len(doh_df)
-        overall_doh = 0
-        if len(valid) > 0:
-            overall_doh = round(float(valid['weighted_doh'].sum() / valid['soh'].sum()), 1)
-
-        # Recommendations
-        recommendations = []
-        understocked_stores = len([s for s in store_data if s['status'] == 'UNDERSTOCKED'])
-        overstocked_stores = len([s for s in store_data if s['status'] == 'OVERSTOCKED'])
-        stockedout_stores = len([s for s in store_data if s['status'] == 'STOCKED_OUT'])
-
-        if stockedout_stores > 0:
-            recommendations.append({
-                "priority": "high",
-                "title": "Stock-out detected across stores",
-                "description": f"{stockedout_stores} stores have critical stock-outs with active demand. Immediate replenishment needed."
-            })
-        if understocked_stores > 0:
-            recommendations.append({
-                "priority": "high",
-                "title": f"DOH below {lower:.0f} days in {understocked_stores} stores",
-                "description": f"These stores have DOH below 80% of ideal ({ideal_doh} days). Increase replenishment frequency."
-            })
-        if overstocked_stores > 0:
-            recommendations.append({
-                "priority": "medium",
-                "title": f"DOH above {upper:.0f} days in {overstocked_stores} stores",
-                "description": "These stores have DOH above 120% of ideal. Consider reducing order quantities or inter-store transfers."
-            })
-
-        _result = {
-            "summary": {
-                "overall_doh": overall_doh,
-                "ideal_doh": ideal_doh,
-                "total_store_skus": total_items,
-                "optimal_count": int(status_counts.get('OPTIMAL', 0)),
-                "overstocked_count": int(status_counts.get('OVERSTOCKED', 0)),
-                "understocked_count": int(status_counts.get('UNDERSTOCKED', 0)),
-                "stockedout_count": int(status_counts.get('STOCKED_OUT', 0)),
-                "no_sales_count": int(status_counts.get('NO_SALES', 0)),
-                "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
-            },
-            "store_data": store_data,
-            "category_data": category_data,
-            "trend_data": trend_data,
-            "detail": detail_data,
-            "recommendations": recommendations,
-            "data_source": "uploaded",
-        }
+        _result = await agg_doh_analysis(tdb, _tid, start_date, end_date, cat_list, ch_list, rg_list, ideal_doh)
         cache_set("doh_heatmap", _tid, _result, _ex)
         return _result
     except Exception as e:
@@ -1978,201 +1752,27 @@ async def get_replenishment_plan(
     safety_days: int = None,
     min_ros: float = 0.1
 ):
-    """
-    Replenishment Planner using PRD formulas.
-    Reorder Qty = (ROS x Lead Time Days) + Safety Stock - Current SOH
-    Safety Stock = ROS x Safety Days
-    Projected Stock-Out Date = Current SOH / ROS
-    PO Value = Reorder Qty x ASP
-    """
+    """Replenishment plan using MongoDB aggregation (memory-safe)."""
     _tid = _cache_tenant_id()
     _ex = cache_extra(sd=start_date, ed=end_date, cat=categories, ch=channels, rg=regions, lt=lead_time_days, sd2=safety_days, mr=min_ros)
     _hit, _data = cache_get("replenishment", _tid, _ex)
     if _hit:
         return _data
-    # Read from config if not passed as query params
     cfg = await get_db().analysis_config.find_one({"_id": "main"}, {"_id": 0})
     cfg = cfg or {}
     if lead_time_days is None:
         lead_time_days = cfg.get("lead_time_days", 14)
     if safety_days is None:
         safety_days = cfg.get("safety_days", cfg.get("cover_days", 7))
-    sales_df = await get_cached_data('daily_sales')
-    inventory_df = await get_cached_data('store_inventory')
-    sku_df = await get_cached_data('sku_ean_master')
-    style_df = await get_cached_data('style_master')
-    store_df = await get_cached_data('store_master')
 
-    if sales_df is None or inventory_df is None or sku_df is None:
-        return {"error": "Required data not uploaded (need daily_sales, store_inventory, sku_ean_master)", "data": {}}
+    from core.mongo_aggregations import agg_replenishment
+    tdb = get_db()
+    cat_list = [c.strip() for c in categories.split(',')] if categories else None
+    ch_list = [c.strip() for c in channels.split(',')] if channels else None
+    rg_list = [r.strip() for r in regions.split(',')] if regions else None
 
     try:
-        # Apply filters
-        sales_filtered = apply_date_filter(sales_df.copy(), start_date, end_date, 'day')
-        inventory_filtered = apply_date_filter(inventory_df.copy(), start_date, end_date, 'day')
-
-        if channels:
-            channel_list = channels.split(',')
-            sales_filtered = apply_channel_filter(sales_filtered, channel_list)
-            inventory_filtered = apply_channel_filter(inventory_filtered, channel_list)
-        if regions and store_df is not None:
-            region_list = regions.split(',')
-            sales_filtered = apply_region_filter(sales_filtered, region_list, store_df)
-            inventory_filtered = apply_region_filter(inventory_filtered, region_list, store_df)
-
-        sales_filtered['day'] = pd.to_datetime(sales_filtered['day'])
-        inventory_filtered['day'] = pd.to_datetime(inventory_filtered['day'])
-
-        # ================================================
-        # 1. ROS per store-SKU
-        # ================================================
-        ros_calc = sales_filtered.groupby(['store_code', 'sku']).agg(
-            total_qty=('quantity', 'sum'),
-            total_revenue=('revenue', 'sum'),
-            live_days=('day', 'nunique')
-        ).reset_index()
-        ros_calc['ros'] = (ros_calc['total_qty'] / ros_calc['live_days'].clip(lower=1)).round(3)
-
-        # Get ASP per SKU
-        if 'mrp' in sku_df.columns:
-            asp_map = sku_df.groupby('ean')['mrp'].first()
-            ros_calc['asp'] = ros_calc['sku'].map(asp_map).fillna(0)
-        else:
-            ros_calc['asp'] = np.where(
-                ros_calc['total_qty'] > 0,
-                (ros_calc['total_revenue'] / ros_calc['total_qty']).round(2),
-                0
-            )
-
-        # Filter to items with meaningful demand
-        ros_calc = ros_calc[ros_calc['ros'] >= min_ros]
-
-        if len(ros_calc) == 0:
-            return {"error": "No items with sufficient demand found for the selected filters", "data": {}}
-
-        # ================================================
-        # 2. Current SOH per store-SKU
-        # ================================================
-        latest_date = inventory_filtered['day'].max()
-        latest_inv = inventory_filtered[inventory_filtered['day'] == latest_date].copy()
-        soh_calc = latest_inv.groupby(['store_code', 'ean'])['quantity'].sum().reset_index()
-        soh_calc.columns = ['store_code', 'sku', 'current_soh']
-
-        # ================================================
-        # 3. Merge and compute replenishment
-        # ================================================
-        plan = ros_calc.merge(soh_calc, on=['store_code', 'sku'], how='left')
-        plan['current_soh'] = plan['current_soh'].fillna(0).clip(lower=0)
-
-        # PRD Formulas
-        plan['safety_stock'] = (plan['ros'] * safety_days).round(0)
-        plan['demand_during_lead'] = (plan['ros'] * lead_time_days).round(0)
-        plan['reorder_qty'] = (plan['demand_during_lead'] + plan['safety_stock'] - plan['current_soh']).clip(lower=0).round(0)
-        plan['po_value'] = (plan['reorder_qty'] * plan['asp']).round(2)
-        plan['days_to_stockout'] = np.where(
-            plan['ros'] > 0,
-            (plan['current_soh'] / plan['ros']).round(1),
-            999
-        )
-
-        # Priority classification
-        plan['priority'] = pd.cut(
-            plan['days_to_stockout'].astype(float),
-            bins=[-1, 0, 3, 7, 14, float('inf')],
-            labels=['Stock-Out', 'Critical', 'High', 'Medium', 'Low']
-        ).astype(str)
-
-        # Add style info
-        if 'style' in sku_df.columns:
-            sku_style_map = sku_df.groupby('ean')['style'].first()
-            plan['style'] = plan['sku'].map(sku_style_map).fillna('Unknown')
-        else:
-            plan['style'] = 'Unknown'
-
-        # Add size info
-        if 'size' in sku_df.columns:
-            sku_size_map = sku_df.groupby('ean')['size'].first()
-            plan['size'] = plan['sku'].map(sku_size_map).fillna('-')
-        else:
-            plan['size'] = '-'
-
-        # Apply category filter
-        if categories and style_df is not None:
-            category_list = categories.split(',')
-            if 'style_code' in style_df.columns and 'style' in plan.columns:
-                filtered_styles = style_df[style_df['category'].isin(category_list)]['style_code'].tolist()
-                plan = plan[plan['style'].isin(filtered_styles)]
-
-        # Only include items that need reorder
-        needs_reorder = plan[plan['reorder_qty'] > 0].copy()
-        needs_reorder = needs_reorder.sort_values('days_to_stockout')
-
-        # ================================================
-        # 4. Summary KPIs
-        # ================================================
-        total_po_value = float(needs_reorder['po_value'].sum())
-        total_reorder_units = int(needs_reorder['reorder_qty'].sum())
-        skus_needing_reorder = int(needs_reorder['sku'].nunique())
-        stores_needing_reorder = int(needs_reorder['store_code'].nunique())
-        stockout_count = int((needs_reorder['priority'] == 'Stock-Out').sum())
-        critical_count = int((needs_reorder['priority'] == 'Critical').sum())
-        high_count = int((needs_reorder['priority'] == 'High').sum())
-
-        # ================================================
-        # 5. Aggregated views
-        # ================================================
-        # By priority
-        by_priority = needs_reorder.groupby('priority').agg(
-            count=('sku', 'count'),
-            total_units=('reorder_qty', 'sum'),
-            total_value=('po_value', 'sum')
-        ).reset_index()
-        priority_order = {'Stock-Out': 0, 'Critical': 1, 'High': 2, 'Medium': 3, 'Low': 4}
-        by_priority['sort_key'] = by_priority['priority'].map(priority_order)
-        by_priority = by_priority.sort_values('sort_key').drop(columns=['sort_key'])
-
-        # By store
-        by_store = needs_reorder.groupby('store_code').agg(
-            sku_count=('sku', 'nunique'),
-            total_units=('reorder_qty', 'sum'),
-            total_value=('po_value', 'sum'),
-            urgent_count=('priority', lambda x: ((x == 'Stock-Out') | (x == 'Critical')).sum())
-        ).reset_index().sort_values('total_value', ascending=False)
-
-        # By style
-        by_style = needs_reorder.groupby('style').agg(
-            sku_count=('sku', 'nunique'),
-            total_units=('reorder_qty', 'sum'),
-            total_value=('po_value', 'sum'),
-            avg_days=('days_to_stockout', 'mean')
-        ).reset_index().sort_values('total_value', ascending=False).head(20)
-        by_style['avg_days'] = by_style['avg_days'].round(1)
-
-        # Detail rows for table (cap at 200)
-        detail_cols = ['sku', 'style', 'size', 'store_code', 'current_soh', 'ros',
-                       'days_to_stockout', 'safety_stock', 'demand_during_lead',
-                       'reorder_qty', 'asp', 'po_value', 'priority']
-        detail = needs_reorder[detail_cols].head(200)
-
-        _result = {
-            "summary": {
-                "total_po_value": round(total_po_value, 2),
-                "total_reorder_units": total_reorder_units,
-                "skus_needing_reorder": skus_needing_reorder,
-                "stores_needing_reorder": stores_needing_reorder,
-                "stockout_count": stockout_count,
-                "critical_count": critical_count,
-                "high_count": high_count,
-                "lead_time_days": lead_time_days,
-                "safety_days": safety_days,
-                "snapshot_date": str(latest_date.date()) if pd.notna(latest_date) else None,
-            },
-            "by_priority": by_priority.round(2).fillna(0).to_dict('records'),
-            "by_store": by_store.round(2).fillna(0).to_dict('records'),
-            "by_style": by_style.round(2).fillna(0).to_dict('records'),
-            "detail": detail.round(2).fillna(0).to_dict('records'),
-            "data_source": "uploaded",
-        }
+        _result = await agg_replenishment(tdb, _tid, start_date, end_date, cat_list, ch_list, rg_list, lead_time_days, safety_days, min_ros)
         cache_set("replenishment", _tid, _result, _ex)
         return _result
     except Exception as e:

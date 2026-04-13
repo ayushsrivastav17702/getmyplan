@@ -1,6 +1,7 @@
 """
-MongoDB Aggregation Pipelines for Executive Dashboard and Gap Analysis.
+MongoDB Aggregation Pipelines for Analytics.
 Replaces in-memory Pandas operations with server-side aggregation for scalability.
+Handles both shared DB (with tenant_id) and tenant-specific DBs (no tenant_id).
 """
 import logging
 from datetime import datetime, timedelta
@@ -10,26 +11,42 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 logger = logging.getLogger(__name__)
 
 
-def _build_match_stage(
-    tenant_id: str,
-    start_date: str = None,
-    end_date: str = None,
-    date_field: str = "day",
-    extra_match: dict = None,
-) -> dict:
-    """Build a $match stage with optional date range and extra filters."""
-    match = {"tenant_id": tenant_id}
+_tid_cache = {}
+
+async def _has_tenant_id(tdb: AsyncIOMotorDatabase, collection: str) -> bool:
+    """Check if a collection uses tenant_id field. Cached per db+collection."""
+    cache_key = f"{tdb.name}:{collection}"
+    if cache_key in _tid_cache:
+        return _tid_cache[cache_key]
+    doc = await tdb[collection].find_one({"tenant_id": {"$exists": True}}, {"tenant_id": 1})
+    result = doc is not None and doc.get("tenant_id") is not None
+    _tid_cache[cache_key] = result
+    return result
+
+
+async def _build_match(tdb: AsyncIOMotorDatabase, collection: str, tenant_id: str,
+                       start_date: str = None, end_date: str = None,
+                       date_field: str = "day", extra: dict = None) -> dict:
+    """Build $match with optional tenant_id (skipped if collection doesn't use it)."""
+    match = {}
+    if await _has_tenant_id(tdb, collection):
+        match["tenant_id"] = tenant_id
     if start_date or end_date:
-        date_filter = {}
+        df = {}
         if start_date:
-            date_filter["$gte"] = start_date
+            df["$gte"] = start_date
         if end_date:
-            date_filter["$lte"] = end_date
-        if date_filter:
-            match[date_field] = date_filter
-    if extra_match:
-        match.update(extra_match)
-    return {"$match": match}
+            df["$lte"] = end_date
+        if df:
+            match[date_field] = df
+    if extra:
+        match.update(extra)
+    return match
+
+
+def _tenant_match(has_tid: bool, tenant_id: str) -> dict:
+    """Quick inline tenant match — use when _build_match is too heavy."""
+    return {"tenant_id": tenant_id} if has_tid else {}
 
 
 async def _resolve_filter_skus(
@@ -43,21 +60,23 @@ async def _resolve_filter_skus(
     Pre-resolve category/region filters into lists of valid SKUs/store_codes.
     Returns extra $match conditions for daily_sales.
     """
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
     extra = {}
 
     if categories:
-        # style_master → get style_codes → sku_master → get eans
+        _sm_tid = await _has_tenant_id(tdb, "style_master")
         style_codes = set()
         async for doc in tdb.style_master.find(
-            {"tenant_id": tenant_id, "category": {"$in": categories}},
+            {**_tenant_match(_sm_tid, tenant_id), "category": {"$in": categories}},
             {"_id": 0, "style_code": 1},
         ):
             if doc.get("style_code"):
                 style_codes.add(doc["style_code"])
         if style_codes:
+            _sk_tid = await _has_tenant_id(tdb, "sku_master")
             eans = set()
             async for doc in tdb.sku_master.find(
-                {"tenant_id": tenant_id, "style": {"$in": list(style_codes)}},
+                {**_tenant_match(_sk_tid, tenant_id), "style": {"$in": list(style_codes)}},
                 {"_id": 0, "ean": 1},
             ):
                 if doc.get("ean"):
@@ -69,9 +88,10 @@ async def _resolve_filter_skus(
         extra["channel"] = {"$in": channels}
 
     if regions:
+        _st_tid = await _has_tenant_id(tdb, "store_master")
         store_codes = set()
         async for doc in tdb.store_master.find(
-            {"tenant_id": tenant_id, "region": {"$in": regions}},
+            {**_tenant_match(_st_tid, tenant_id), "region": {"$in": regions}},
             {"_id": 0, "store_code": 1},
         ):
             if doc.get("store_code"):
@@ -96,11 +116,12 @@ async def agg_executive_kpis(
     regions: List[str] = None,
 ) -> dict:
     """Compute revenue, units, margin, WoW, YoY via MongoDB aggregation."""
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
 
     extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
 
     # ── Total revenue & units ──
-    match = {"tenant_id": tenant_id}
+    match = _tenant_match(_has_tid, tenant_id)
     if start_date:
         match["day"] = match.get("day", {})
         match["day"]["$gte"] = start_date
@@ -144,7 +165,7 @@ async def agg_executive_kpis(
     # ── COGS margin ──
     true_margin_pct = None
     total_cogs = 0
-    cogs_match = {"tenant_id": tenant_id}
+    cogs_match = _tenant_match(_has_tid, tenant_id)
     if start_date:
         cogs_match["transaction_date"] = cogs_match.get("transaction_date", {})
         cogs_match["transaction_date"]["$gte"] = start_date
@@ -250,7 +271,7 @@ async def agg_executive_kpis(
             yoy_start = (min_dt.replace(year=min_dt.year - 1)).isoformat()
             yoy_end = (max_dt.replace(year=max_dt.year - 1)).isoformat()
 
-            yoy_match = {"tenant_id": tenant_id, "day": {"$gte": yoy_start, "$lte": yoy_end}}
+            yoy_match = {**_tenant_match(_has_tid, tenant_id), "day": {"$gte": yoy_start, "$lte": yoy_end}}
             yoy_match.update(extra)
             yoy_pipeline = [
                 {"$match": yoy_match},
@@ -296,10 +317,11 @@ async def agg_revenue_trend(
     regions: List[str] = None,
 ) -> dict:
     """Daily revenue & units timeseries via MongoDB aggregation."""
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
 
     extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
 
-    match = {"tenant_id": tenant_id}
+    match = _tenant_match(_has_tid, tenant_id)
     if start_date:
         match["day"] = match.get("day", {})
         match["day"]["$gte"] = start_date
@@ -351,10 +373,11 @@ async def agg_ros_gap_analysis(
     ROS Gap Analysis via MongoDB aggregation.
     Computes per-style, per-size ROS and identifies broken size sets.
     """
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
     extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
 
     # Step 1: Aggregate sales by SKU
-    match = {"tenant_id": tenant_id}
+    match = _tenant_match(_has_tid, tenant_id)
     if start_date:
         match["day"] = match.get("day", {})
         match["day"]["$gte"] = start_date
@@ -394,14 +417,14 @@ async def agg_ros_gap_analysis(
     # Step 2: Get SKU→style/size mapping
     sku_map = {}
     async for doc in tdb.sku_master.find(
-        {"tenant_id": tenant_id}, {"_id": 0, "ean": 1, "style": 1, "size": 1}
+        _tenant_match(_has_tid, tenant_id), {"_id": 0, "ean": 1, "style": 1, "size": 1}
     ):
         sku_map[doc.get("ean")] = {"style": doc.get("style"), "size": doc.get("size")}
 
     # Step 3: Get style→category mapping
     style_cats = {}
     async for doc in tdb.style_master.find(
-        {"tenant_id": tenant_id}, {"_id": 0, "style_code": 1, "category": 1}
+        _tenant_match(_has_tid, tenant_id), {"_id": 0, "style_code": 1, "category": 1}
     ):
         style_cats[doc.get("style_code")] = doc.get("category", "Unknown")
 
@@ -499,4 +522,495 @@ async def agg_ros_gap_analysis(
             "total_sales_loss": round(total_sales_loss, 0),
             "healthy_coverage_pct": healthy_pct,
         },
+    }
+
+
+
+# ═══════════════════════════════════════════════════════════
+# DOH (Days on Hand) — MongoDB Aggregation
+# ═══════════════════════════════════════════════════════════
+
+async def agg_doh_analysis(
+    tdb: AsyncIOMotorDatabase,
+    tenant_id: str,
+    start_date: str = None,
+    end_date: str = None,
+    categories: List[str] = None,
+    channels: List[str] = None,
+    regions: List[str] = None,
+    ideal_doh: int = 9,
+) -> dict:
+    """DOH analysis via MongoDB aggregation."""
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
+
+    extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
+
+    # Build match for sales
+    sales_match = _tenant_match(_has_tid, tenant_id)
+    if start_date:
+        sales_match["day"] = sales_match.get("day", {})
+        sales_match["day"]["$gte"] = start_date
+    if end_date:
+        sales_match.setdefault("day", {})["$lte"] = end_date
+    sales_match.update(extra)
+
+    # Inventory match — separate (no SKU/channel filters, only tenant + date)
+    _inv_has_tid = await _has_tenant_id(tdb, "store_inventory")
+    inv_base_match = _tenant_match(_inv_has_tid, tenant_id)
+
+    # 1. ROS per store-SKU
+    ros_pipeline = [        {"$match": sales_match},
+        {"$addFields": {"qty": {"$toDouble": {"$ifNull": ["$quantity", 0]}},
+                        "rev": {"$toDouble": {"$ifNull": ["$revenue", 0]}}}},
+        {"$group": {
+            "_id": {"store": "$store_code", "sku": "$sku"},
+            "total_qty": {"$sum": "$qty"},
+            "total_revenue": {"$sum": "$rev"},
+            "days": {"$addToSet": {"$substr": ["$day", 0, 10]}},
+        }},
+        {"$addFields": {"live_days": {"$size": "$days"}}},
+        {"$project": {"days": 0}},
+    ]
+    ros_data = {}
+    async for doc in tdb.daily_sales.aggregate(ros_pipeline):
+        key = (doc["_id"]["store"], doc["_id"]["sku"])
+        live = max(doc["live_days"], 1)
+        ros_data[key] = {
+            "qty": doc["total_qty"], "rev": doc["total_revenue"],
+            "live_days": live, "ros": round(doc["total_qty"] / live, 4),
+        }
+
+    # 2. Latest SOH — find max date in inventory then aggregate
+    inv_dates_pipeline = [
+        {"$match": inv_base_match},
+        {"$group": {"_id": None, "max_day": {"$max": "$day"}}},
+    ]
+    date_result = await tdb.store_inventory.aggregate(inv_dates_pipeline).to_list(1)
+    latest_day = date_result[0]["max_day"] if date_result else None
+
+    soh_data = {}
+    if latest_day:
+        soh_match = {**inv_base_match, "day": latest_day}
+        soh_pipeline = [
+            {"$match": soh_match},
+            {"$addFields": {"qty": {"$toDouble": {"$ifNull": ["$quantity", {"$ifNull": ["$closing_stock", 0]}]}}}},
+            {"$group": {"_id": {"store": "$store_code", "sku": {"$ifNull": ["$ean", "$sku"]}}, "soh": {"$sum": "$qty"}}},
+        ]
+        async for doc in tdb.store_inventory.aggregate(soh_pipeline):
+            soh_data[(doc["_id"]["store"], doc["_id"]["sku"])] = doc["soh"]
+
+    if not ros_data and not soh_data:
+        return {"error": "No sales or inventory data", "data": {}}
+
+    # 3. Compute DOH per store-SKU
+    all_keys = set(ros_data.keys()) | set(soh_data.keys())
+    upper = ideal_doh * 1.2
+    lower = ideal_doh * 0.8
+
+    status_counts = {"OPTIMAL": 0, "OVERSTOCKED": 0, "UNDERSTOCKED": 0, "STOCKED_OUT": 0, "NO_SALES": 0}
+    store_metrics = {}  # store -> {weighted_doh, soh, skus, statuses}
+    detail_items = []
+
+    for (store, sku) in all_keys:
+        ros_info = ros_data.get((store, sku), {"qty": 0, "rev": 0, "ros": 0, "live_days": 0})
+        soh = soh_data.get((store, sku), 0)
+        ros = ros_info["ros"]
+
+        if ros > 0:
+            doh = round(soh / ros, 1)
+        elif soh > 0:
+            doh = 9999
+        else:
+            doh = 0
+
+        # Classify
+        if soh == 0 and ros > 0:
+            status = "STOCKED_OUT"
+        elif ros == 0 and soh > 0:
+            status = "NO_SALES"
+        elif ros == 0 and soh == 0:
+            status = "STOCKED_OUT"
+        elif doh > upper:
+            status = "OVERSTOCKED"
+        elif doh < lower:
+            status = "UNDERSTOCKED"
+        else:
+            status = "OPTIMAL"
+
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+        # Aggregate per store
+        if store not in store_metrics:
+            store_metrics[store] = {"soh": 0, "weighted_doh": 0, "skus": set(), "statuses": {}}
+        if ros > 0 and soh > 0:
+            store_metrics[store]["soh"] += soh
+            store_metrics[store]["weighted_doh"] += doh * soh
+        store_metrics[store]["skus"].add(sku)
+        store_metrics[store]["statuses"][status] = store_metrics[store]["statuses"].get(status, 0) + 1
+
+        if ros > 0:
+            detail_items.append({
+                "store_code": store, "sku": sku, "style": "Unknown",
+                "soh": soh, "ros": ros, "doh": doh, "status": status, "ideal_doh": ideal_doh,
+            })
+
+    # 4. Store-level aggregation
+    store_data = []
+    for store, m in store_metrics.items():
+        store_doh = round(m["weighted_doh"] / max(m["soh"], 1), 1) if m["soh"] > 0 else 0
+        dominant = max(m["statuses"], key=m["statuses"].get) if m["statuses"] else "OPTIMAL"
+        store_data.append({
+            "store_code": store, "total_inventory": m["soh"],
+            "doh": store_doh, "sku_count": len(m["skus"]), "status": dominant,
+            "OPTIMAL": m["statuses"].get("OPTIMAL", 0),
+            "OVERSTOCKED": m["statuses"].get("OVERSTOCKED", 0),
+            "UNDERSTOCKED": m["statuses"].get("UNDERSTOCKED", 0),
+            "STOCKED_OUT": m["statuses"].get("STOCKED_OUT", 0),
+            "ideal_doh": ideal_doh,
+        })
+    store_data.sort(key=lambda x: x["doh"])
+
+    # 5. Overall metrics
+    total_items = len(all_keys)
+    total_soh = sum(soh_data.values())
+    total_weighted = sum(m["weighted_doh"] for m in store_metrics.values())
+    overall_doh = round(total_weighted / max(total_soh, 1), 1)
+
+    # 6. Recommendations
+    recs = []
+    so_stores = sum(1 for s in store_data if s["status"] == "STOCKED_OUT")
+    us_stores = sum(1 for s in store_data if s["status"] == "UNDERSTOCKED")
+    os_stores = sum(1 for s in store_data if s["status"] == "OVERSTOCKED")
+    if so_stores > 0:
+        recs.append({"priority": "high", "title": "Stock-out detected",
+                      "description": f"{so_stores} stores have critical stock-outs."})
+    if us_stores > 0:
+        recs.append({"priority": "high", "title": f"DOH below {lower:.0f} days",
+                      "description": f"{us_stores} stores understocked."})
+    if os_stores > 0:
+        recs.append({"priority": "medium", "title": f"DOH above {upper:.0f} days",
+                      "description": f"{os_stores} stores overstocked."})
+
+    detail_items.sort(key=lambda x: x["doh"])
+
+    return {
+        "summary": {
+            "overall_doh": overall_doh, "ideal_doh": ideal_doh,
+            "total_store_skus": total_items,
+            "optimal_count": status_counts.get("OPTIMAL", 0),
+            "overstocked_count": status_counts.get("OVERSTOCKED", 0),
+            "understocked_count": status_counts.get("UNDERSTOCKED", 0),
+            "stockedout_count": status_counts.get("STOCKED_OUT", 0),
+            "no_sales_count": status_counts.get("NO_SALES", 0),
+            "snapshot_date": str(latest_day)[:10] if latest_day else None,
+        },
+        "store_data": store_data[:100],
+        "category_data": [],
+        "trend_data": [],
+        "detail": detail_items[:200],
+        "recommendations": recs,
+        "data_source": "mongodb_aggregation",
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# STOCK-OUT ANALYSIS — MongoDB Aggregation
+# ═══════════════════════════════════════════════════════════
+
+async def agg_stock_out(
+    tdb: AsyncIOMotorDatabase,
+    tenant_id: str,
+    start_date: str = None,
+    end_date: str = None,
+    categories: List[str] = None,
+    channels: List[str] = None,
+    regions: List[str] = None,
+) -> dict:
+    """Stock-out analysis via MongoDB aggregation."""
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
+
+    extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
+    match = _tenant_match(_has_tid, tenant_id)
+    if start_date:
+        match["day"] = match.get("day", {})
+        match["day"]["$gte"] = start_date
+    if end_date:
+        match.setdefault("day", {})["$lte"] = end_date
+    match.update(extra)
+
+    # 1. ROS per store-SKU (last 30 days)
+    ros_pipeline = [
+        {"$match": match},
+        {"$addFields": {"qty": {"$toDouble": {"$ifNull": ["$quantity", 0]}},
+                        "rev": {"$toDouble": {"$ifNull": ["$revenue", 0]}}}},
+        {"$group": {
+            "_id": {"store": "$store_code", "sku": "$sku"},
+            "total_qty": {"$sum": "$qty"},
+            "total_revenue": {"$sum": "$rev"},
+            "days": {"$addToSet": {"$substr": ["$day", 0, 10]}},
+        }},
+        {"$addFields": {"live_days": {"$size": "$days"}}},
+    ]
+    ros_map = {}
+    async for doc in tdb.daily_sales.aggregate(ros_pipeline):
+        key = (doc["_id"]["store"], doc["_id"]["sku"])
+        live = max(doc["live_days"], 1)
+        ros_map[key] = {
+            "ros": round(doc["total_qty"] / live, 3),
+            "asp": round(doc["total_revenue"] / max(doc["total_qty"], 1), 2),
+            "total_qty": doc["total_qty"],
+        }
+
+    # 2. Latest SOH — find zero-stock items
+    _inv_has_tid = await _has_tenant_id(tdb, "store_inventory")
+    inv_dates = await tdb.store_inventory.aggregate([
+        {"$match": _tenant_match(_inv_has_tid, tenant_id)},
+        {"$group": {"_id": None, "max_day": {"$max": "$day"}}},
+    ]).to_list(1)
+    latest_day = inv_dates[0]["max_day"] if inv_dates else None
+
+    zero_stock = set()
+    if latest_day:
+        async for doc in tdb.store_inventory.find(
+            {**_tenant_match(_inv_has_tid, tenant_id), "day": latest_day},
+            {"_id": 0, "store_code": 1, "ean": 1, "sku": 1, "quantity": 1, "closing_stock": 1},
+        ):
+            qty = doc.get("quantity", doc.get("closing_stock", 0))
+            try:
+                qty = float(qty)
+            except (ValueError, TypeError):
+                qty = 0
+            sku_val = doc.get("ean", doc.get("sku", ""))
+            if qty == 0:
+                zero_stock.add((doc.get("store_code", ""), sku_val))
+
+    # 3. Stock-outs = zero stock AND positive ROS
+    stockout_items = []
+    total_daily_loss = 0
+    for key in zero_stock:
+        if key in ros_map:
+            info = ros_map[key]
+            daily_loss = round(info["ros"] * info["asp"], 2)
+            total_daily_loss += daily_loss
+            stockout_items.append({
+                "store_code": key[0],
+                "sku": key[1],
+                "ros": info["ros"],
+                "asp": info["asp"],
+                "daily_sales_loss": daily_loss,
+                "severity": "HIGH" if daily_loss > 1000 else "MEDIUM" if daily_loss > 100 else "LOW",
+            })
+
+    stockout_items.sort(key=lambda x: x["daily_sales_loss"], reverse=True)
+    total_skus_tracked = len(ros_map)
+    stockout_rate = round(len(stockout_items) / max(total_skus_tracked, 1) * 100, 1)
+
+    return {
+        "summary": {
+            "total_stockouts": len(stockout_items),
+            "stockout_rate": stockout_rate,
+            "daily_revenue_loss": round(total_daily_loss, 0),
+            "total_skus_tracked": total_skus_tracked,
+            "snapshot_date": str(latest_day)[:10] if latest_day else None,
+            "high_severity": sum(1 for s in stockout_items if s["severity"] == "HIGH"),
+            "medium_severity": sum(1 for s in stockout_items if s["severity"] == "MEDIUM"),
+            "low_severity": sum(1 for s in stockout_items if s["severity"] == "LOW"),
+        },
+        "data": stockout_items[:200],
+        "data_source": "mongodb_aggregation",
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# REPLENISHMENT PLAN — MongoDB Aggregation
+# ═══════════════════════════════════════════════════════════
+
+async def agg_replenishment(
+    tdb: AsyncIOMotorDatabase,
+    tenant_id: str,
+    start_date: str = None,
+    end_date: str = None,
+    categories: List[str] = None,
+    channels: List[str] = None,
+    regions: List[str] = None,
+    lead_time_days: int = 14,
+    safety_days: int = 7,
+    min_ros: float = 0.1,
+) -> dict:
+    """Replenishment plan via MongoDB aggregation."""
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
+
+    extra = await _resolve_filter_skus(tdb, tenant_id, categories, channels, regions)
+    match = _tenant_match(_has_tid, tenant_id)
+    if start_date:
+        match["day"] = match.get("day", {})
+        match["day"]["$gte"] = start_date
+    if end_date:
+        match.setdefault("day", {})["$lte"] = end_date
+    match.update(extra)
+
+    # 1. ROS per store-SKU
+    ros_pipeline = [
+        {"$match": match},
+        {"$addFields": {"qty": {"$toDouble": {"$ifNull": ["$quantity", 0]}},
+                        "rev": {"$toDouble": {"$ifNull": ["$revenue", 0]}}}},
+        {"$group": {
+            "_id": {"store": "$store_code", "sku": "$sku"},
+            "total_qty": {"$sum": "$qty"},
+            "total_revenue": {"$sum": "$rev"},
+            "days": {"$addToSet": {"$substr": ["$day", 0, 10]}},
+        }},
+        {"$addFields": {"live_days": {"$size": "$days"}}},
+    ]
+    ros_map = {}
+    async for doc in tdb.daily_sales.aggregate(ros_pipeline):
+        key = (doc["_id"]["store"], doc["_id"]["sku"])
+        live = max(doc["live_days"], 1)
+        ros = round(doc["total_qty"] / live, 3)
+        if ros >= min_ros:
+            ros_map[key] = {
+                "ros": ros,
+                "asp": round(doc["total_revenue"] / max(doc["total_qty"], 1), 2),
+                "total_qty": doc["total_qty"],
+            }
+
+    # 2. Current SOH
+    _inv_has_tid = await _has_tenant_id(tdb, "store_inventory")
+    inv_dates = await tdb.store_inventory.aggregate([
+        {"$match": _tenant_match(_inv_has_tid, tenant_id)},
+        {"$group": {"_id": None, "max_day": {"$max": "$day"}}},
+    ]).to_list(1)
+    latest_day = inv_dates[0]["max_day"] if inv_dates else None
+
+    soh_map = {}
+    if latest_day:
+        async for doc in tdb.store_inventory.find(
+            {**_tenant_match(_inv_has_tid, tenant_id), "day": latest_day},
+            {"_id": 0, "store_code": 1, "ean": 1, "sku": 1, "quantity": 1, "closing_stock": 1},
+        ):
+            qty = doc.get("quantity", doc.get("closing_stock", 0))
+            try:
+                qty = float(qty)
+            except (ValueError, TypeError):
+                qty = 0
+            sku_val = doc.get("ean", doc.get("sku", ""))
+            soh_map[(doc.get("store_code", ""), sku_val)] = qty
+
+    # 3. Compute reorder quantities
+    items = []
+    total_po_value = 0
+    critical = 0
+    for key, info in ros_map.items():
+        ros = info["ros"]
+        asp = info["asp"]
+        soh = soh_map.get(key, 0)
+        safety_stock = round(ros * safety_days, 0)
+        reorder_qty = max(0, round((ros * lead_time_days) + safety_stock - soh, 0))
+
+        if reorder_qty <= 0:
+            continue
+
+        po_value = round(reorder_qty * asp, 2)
+        total_po_value += po_value
+
+        projected_stockout_days = round(soh / ros, 1) if ros > 0 else 0
+        urgency = "CRITICAL" if projected_stockout_days <= 3 else "HIGH" if projected_stockout_days <= 7 else "MEDIUM" if projected_stockout_days <= 14 else "LOW"
+        if urgency == "CRITICAL":
+            critical += 1
+
+        items.append({
+            "store_code": key[0], "sku": key[1],
+            "ros": ros, "asp": asp, "current_soh": soh,
+            "safety_stock": safety_stock, "reorder_qty": reorder_qty,
+            "po_value": po_value, "projected_stockout_days": projected_stockout_days,
+            "urgency": urgency,
+        })
+
+    items.sort(key=lambda x: x["projected_stockout_days"])
+
+    return {
+        "summary": {
+            "total_items": len(items),
+            "total_po_value": round(total_po_value, 0),
+            "critical_items": critical,
+            "lead_time_days": lead_time_days,
+            "safety_days": safety_days,
+        },
+        "data": items[:200],
+        "data_source": "mongodb_aggregation",
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+# BI DASHBOARD OVERVIEW — MongoDB Aggregation
+# ═══════════════════════════════════════════════════════════
+
+async def agg_bi_overview(
+    tdb: AsyncIOMotorDatabase,
+    tenant_id: str,
+    start_date: str = None,
+    end_date: str = None,
+) -> dict:
+    """BI Dashboard overview stats via MongoDB aggregation."""
+    _has_tid = await _has_tenant_id(tdb, "daily_sales")
+    match = _tenant_match(_has_tid, tenant_id)
+    if start_date:
+        match["day"] = match.get("day", {})
+        match["day"]["$gte"] = start_date
+    if end_date:
+        match.setdefault("day", {})["$lte"] = end_date
+
+    # Sales summary
+    sales_pipeline = [
+        {"$match": match},
+        {"$addFields": {"rev": {"$toDouble": {"$ifNull": ["$revenue", 0]}},
+                        "qty": {"$toInt": {"$ifNull": ["$quantity", 0]}}}},
+        {"$group": {
+            "_id": None,
+            "total_revenue": {"$sum": "$rev"},
+            "total_units": {"$sum": "$qty"},
+            "unique_skus": {"$addToSet": "$sku"},
+            "unique_stores": {"$addToSet": "$store_code"},
+            "unique_days": {"$addToSet": {"$substr": ["$day", 0, 10]}},
+        }},
+    ]
+    sales_result = await tdb.daily_sales.aggregate(sales_pipeline).to_list(1)
+
+    if not sales_result:
+        return {"total_revenue": 0, "total_units": 0, "unique_skus": 0,
+                "unique_stores": 0, "data_days": 0, "aov": 0, "has_data": False}
+
+    s = sales_result[0]
+    total_rev = float(s["total_revenue"])
+    total_units = int(s["total_units"])
+    unique_skus = len(s.get("unique_skus", []))
+    unique_stores = len(s.get("unique_stores", []))
+    data_days = len(s.get("unique_days", []))
+    aov = round(total_rev / max(total_units, 1), 2)
+
+    # Inventory summary
+    inv_pipeline = [
+        {"$match": _tenant_match(_has_tid, tenant_id)},
+        {"$group": {"_id": None, "max_day": {"$max": "$day"}}},
+    ]
+    inv_date = await tdb.store_inventory.aggregate(inv_pipeline).to_list(1)
+    total_inventory = 0
+    if inv_date:
+        inv_soh = await tdb.store_inventory.aggregate([
+            {"$match": {**_tenant_match(_has_tid, tenant_id), "day": inv_date[0]["max_day"]}},
+            {"$addFields": {"qty": {"$toDouble": {"$ifNull": ["$quantity", {"$ifNull": ["$closing_stock", 0]}]}}}},
+            {"$group": {"_id": None, "total": {"$sum": "$qty"}}},
+        ]).to_list(1)
+        if inv_soh:
+            total_inventory = int(inv_soh[0]["total"])
+
+    return {
+        "total_revenue": total_rev,
+        "total_units": total_units,
+        "unique_skus": unique_skus,
+        "unique_stores": unique_stores,
+        "data_days": data_days,
+        "aov": aov,
+        "total_inventory": total_inventory,
+        "has_data": True,
     }
