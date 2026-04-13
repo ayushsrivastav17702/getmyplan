@@ -995,10 +995,11 @@ async def agg_stock_out(
     monthly_trend = []
     moving_avg = []
 
-    # Get all inventory days
+    # Get all inventory days (filter out empty/null dates)
     inv_days_pipeline = [
-        {"$match": _tenant_match(_inv_has_tid, tenant_id)},
+        {"$match": {**_tenant_match(_inv_has_tid, tenant_id), "day": {"$exists": True, "$ne": None, "$ne": ""}}},
         {"$group": {"_id": {"$substr": ["$day", 0, 10]}}},
+        {"$match": {"_id": {"$ne": "", "$ne": None}}},
         {"$sort": {"_id": 1}},
     ]
     inv_days = [d["_id"] async for d in tdb.store_inventory.aggregate(inv_days_pipeline)]
