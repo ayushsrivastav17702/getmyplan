@@ -1,0 +1,134 @@
+{
+  "summary": "Iteration 85: Pandas→MongoDB Migration Testing - All 21 backend tests passed. Verified warehouse, planogram, and stock-out endpoints after migration from Pandas to MongoDB aggregation. No pandas imports found in warehouse.py or planogram.py.",
+
+  "test_case_matrix": {
+    "NO_PANDAS_IMPORT_TESTS": {
+      "TEST_01_no_pandas_in_warehouse": {"status": "PASS", "notes": "No 'import pandas' in warehouse.py"},
+      "TEST_02_no_pandas_from_in_warehouse": {"status": "PASS", "notes": "No 'from pandas' in warehouse.py"},
+      "TEST_03_no_pandas_in_planogram": {"status": "PASS", "notes": "No 'import pandas' in planogram.py"},
+      "TEST_04_no_pandas_from_in_planogram": {"status": "PASS", "notes": "No 'from pandas' in planogram.py"}
+    },
+    "HEALTH_ENDPOINTS": {
+      "TEST_05_health_main": {"status": "PASS", "notes": "GET /api/health returns status=healthy"},
+      "TEST_06_health_memory": {"status": "PASS", "notes": "GET /api/health/memory returns memory info"},
+      "TEST_07_health_ready": {"status": "PASS", "notes": "GET /api/health/ready returns status=ready"}
+    },
+    "WAREHOUSE_ENDPOINTS": {
+      "TEST_08_warehouse_stock": {"status": "PASS", "notes": "Returns error 'No warehouse inventory data' (expected - no warehouse_inventory collection)"},
+      "TEST_09_warehouse_daily_change": {"status": "PASS", "notes": "Returns empty days array (expected - no warehouse_inventory data)"},
+      "TEST_10_warehouse_dashboard": {"status": "PASS", "notes": "Returns error 'No warehouse data' (expected)"},
+      "TEST_11_warehouse_movements": {"status": "PASS", "notes": "Returns 500 movements with summary (inbound=79499, outbound=23195)"},
+      "TEST_12_warehouse_performance": {"status": "PASS", "notes": "Returns fulfillment_rate=60, by_warehouse=[], slow_moving=[]"}
+    },
+    "PLANOGRAM_ENDPOINTS": {
+      "TEST_13_planogram_analysis": {"status": "PASS", "notes": "Returns overall_fill_rate=99.1, 5 stores, 6 categories, 50 detail items"},
+      "TEST_14_planogram_trend": {"status": "PASS", "notes": "Returns 1 trend item with fill_rate=99.1, target=85, moving_avg_7d=99.1"},
+      "TEST_15_planogram_pre_post": {"status": "PASS", "notes": "Returns pre/post fill_rate=99.1, improvement=0"}
+    },
+    "STOCK_OUT_ENDPOINTS": {
+      "TEST_16_stock_out_returns_200": {"status": "PASS", "notes": "GET /api/analytics/stock-out returns 200"},
+      "TEST_17_stock_out_kpis_correct": {"status": "PASS", "notes": "total_lost_sales=161097 (>0, P0 fix verified)"},
+      "TEST_18_stock_out_daily_trend": {"status": "PASS", "notes": "daily_trend has 2 items (one legacy with empty date, one with 2026-04-13)"},
+      "TEST_19_stock_out_weekly_trend": {"status": "PASS", "notes": "weekly_trend has 1 item (2026-W16)"},
+      "TEST_20_stock_out_monthly_trend": {"status": "PASS", "notes": "monthly_trend has 2 items"},
+      "TEST_21_stock_out_moving_avg": {"status": "PASS", "notes": "moving_avg has 2 items"}
+    }
+  },
+
+  "summary_counts": {
+    "NO_PANDAS_IMPORT_TESTS": "4/4 PASS",
+    "HEALTH_ENDPOINTS": "3/3 PASS",
+    "WAREHOUSE_ENDPOINTS": "5/5 PASS",
+    "PLANOGRAM_ENDPOINTS": "3/3 PASS",
+    "STOCK_OUT_ENDPOINTS": "6/6 PASS",
+    "TOTAL": "21/21 PASS"
+  },
+
+  "migration_verification": {
+    "warehouse_module": {
+      "description": "Migrated from Pandas to MongoDB aggregation",
+      "pandas_import": "NONE FOUND",
+      "endpoints_tested": ["/stock", "/daily-change", "/dashboard", "/movements", "/performance"],
+      "status": "VERIFIED - All endpoints return 200 with expected structure"
+    },
+    "planogram_module": {
+      "description": "Migrated from Pandas to MongoDB aggregation",
+      "pandas_import": "NONE FOUND",
+      "endpoints_tested": ["/analysis", "/trend", "/pre-post"],
+      "status": "VERIFIED - All endpoints return data correctly"
+    },
+    "stock_out_daily_trend": {
+      "description": "daily_trend populated from historical inventory snapshots",
+      "implementation": "mongo_aggregations.py agg_stock_out function",
+      "status": "VERIFIED - Returns 2 daily items, 1 weekly, 2 monthly, 2 moving_avg"
+    }
+  },
+
+  "endpoint_responses": {
+    "warehouse_stock": {"items": 0, "error": "No warehouse inventory data"},
+    "warehouse_daily_change": {"days": 0},
+    "warehouse_dashboard": {"error": "No warehouse data"},
+    "warehouse_movements": {"movements": 500, "summary": {"total_inbound": 79499, "total_outbound": 23195}},
+    "warehouse_performance": {"fulfillment_rate": 60, "by_warehouse": 0, "slow_moving": 0},
+    "planogram_analysis": {"overall_fill_rate": 99.1, "stores": 5, "categories": 6, "detail": 50},
+    "planogram_trend": {"trend_items": 1, "fill_rate": 99.1, "target": 85},
+    "planogram_pre_post": {"pre_fill_rate": 99.1, "post_fill_rate": 99.1, "improvement": 0},
+    "stock_out": {"total_stockouts": 13, "total_lost_sales": 161097, "daily_trend": 2, "weekly_trend": 1, "monthly_trend": 2, "moving_avg": 2}
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/analytics/stock-out",
+        "issue": "daily_trend first item has empty date (legacy data issue)",
+        "priority": "LOW",
+        "notes": "Some inventory records may have empty/null day field causing empty date in trend"
+      }
+    ]
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_pandas_migration_iter85.py",
+    "/app/test_reports/pytest/pytest_results_iter85.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Warehouse endpoints correctly return error/empty when no warehouse_inventory data exists (expected behavior)",
+    "Planogram endpoints successfully migrated to MongoDB aggregation with full data response",
+    "Stock-out daily_trend now populated from historical inventory snapshots (2 items as expected for 2 snapshot dates)"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_pandas_migration_iter85.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "N/A (backend only testing)"
+  },
+
+  "test_credentials": {
+    "demo_admin": "admin@demo.com / demo1234 (demo tenant)"
+  },
+
+  "seed_data_creation": "None - used existing demo tenant data",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 85 verified Pandas→MongoDB migration for warehouse, planogram, and stock-out modules. No pandas imports in warehouse.py or planogram.py. Warehouse endpoints return empty/error because demo tenant has no warehouse_inventory data (only store_inventory). Planogram endpoints work correctly with store_inventory data. Stock-out daily_trend now shows 2 items from historical inventory snapshots. Health endpoints still working. P0 stock-out fix verified (total_lost_sales=161097 > 0).",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

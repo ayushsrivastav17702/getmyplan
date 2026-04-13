@@ -988,6 +988,90 @@ async def agg_stock_out(
                 "alternatives": sorted(alts, key=lambda x: x["soh"], reverse=True)[:5],
             })
 
+    # ── Daily / Weekly / Monthly trends ──
+    # Aggregate stockout counts per inventory day
+    daily_trend = []
+    weekly_trend = []
+    monthly_trend = []
+    moving_avg = []
+
+    # Get all inventory days
+    inv_days_pipeline = [
+        {"$match": _tenant_match(_inv_has_tid, tenant_id)},
+        {"$group": {"_id": {"$substr": ["$day", 0, 10]}}},
+        {"$sort": {"_id": 1}},
+    ]
+    inv_days = [d["_id"] async for d in tdb.store_inventory.aggregate(inv_days_pipeline)]
+
+    if len(inv_days) > 1:
+        # For each day, count zero-stock items that have positive ROS
+        for day_str in inv_days[-90:]:
+            day_zero = set()
+            async for doc in tdb.store_inventory.find(
+                {**_tenant_match(_inv_has_tid, tenant_id), "day": day_str},
+                {"_id": 0, "store_code": 1, "ean": 1, "sku": 1, "quantity": 1, "closing_stock": 1},
+            ):
+                qty = doc.get("quantity", doc.get("closing_stock", 0))
+                try:
+                    qty = float(qty)
+                except (ValueError, TypeError):
+                    qty = 0
+                if qty == 0:
+                    sku_val = doc.get("ean", doc.get("sku", ""))
+                    day_zero.add((doc.get("store_code", ""), sku_val))
+
+            so_count = sum(1 for k in day_zero if k in ros_map)
+            so_loss = sum(ros_map[k]["ros"] * ros_map[k]["asp"] for k in day_zero if k in ros_map)
+            daily_trend.append({
+                "date": day_str, "stockout_count": so_count,
+                "lost_sales": round(so_loss, 2),
+            })
+
+        # Moving average (7-day)
+        for i, d in enumerate(daily_trend):
+            window = daily_trend[max(0, i - 6):i + 1]
+            ma7 = round(sum(w["stockout_count"] for w in window) / len(window), 1)
+            moving_avg.append({"date": d["date"], "ma7": ma7})
+
+        # Weekly rollup
+        week_agg = {}
+        for d in daily_trend:
+            try:
+                from datetime import datetime as _dt
+                dt = _dt.fromisoformat(d["date"])
+                wk = dt.isocalendar()[1]
+                yr = dt.year
+                key = f"{yr}-W{wk:02d}"
+                if key not in week_agg:
+                    week_agg[key] = {"cnt": 0, "loss": 0, "days": 0, "rate": 0}
+                week_agg[key]["cnt"] += d["stockout_count"]
+                week_agg[key]["loss"] += d["lost_sales"]
+                week_agg[key]["days"] += 1
+            except Exception:
+                pass
+        for wk in sorted(week_agg.keys()):
+            v = week_agg[wk]
+            weekly_trend.append({
+                "week": wk, "stockout_count": v["cnt"],
+                "stockout_rate": round(v["cnt"] / max(total_skus_tracked * v["days"], 1) * 100, 1),
+            })
+
+        # Monthly rollup
+        month_agg = {}
+        for d in daily_trend:
+            m = d["date"][:7]
+            if m not in month_agg:
+                month_agg[m] = {"cnt": 0, "loss": 0, "days": 0}
+            month_agg[m]["cnt"] += d["stockout_count"]
+            month_agg[m]["loss"] += d["lost_sales"]
+            month_agg[m]["days"] += 1
+        for m in sorted(month_agg.keys()):
+            v = month_agg[m]
+            monthly_trend.append({
+                "month": m, "stockout_count": v["cnt"],
+                "stockout_rate": round(v["cnt"] / max(total_skus_tracked * v["days"], 1) * 100, 1),
+            })
+
     return {
         "summary": {
             "total_stockouts": len(stockout_items),
@@ -1008,11 +1092,11 @@ async def agg_stock_out(
         "high_risk_skus": high_risk[:50],
         "reorder_recommendations": reorder_recs[:50],
         "alternative_suggestions": alternatives[:20],
-        "daily_trend": [],
-        "weekly_trend": [],
-        "monthly_trend": [],
+        "daily_trend": daily_trend,
+        "weekly_trend": weekly_trend,
+        "monthly_trend": monthly_trend,
         "period_trends": {},
-        "moving_avg": [],
+        "moving_avg": moving_avg,
         "projected_trend": [],
         "prev_period_trend": [],
         "data": stockout_items[:200],
