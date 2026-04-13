@@ -48,6 +48,7 @@ from routes.data_quality_rules import router as dq_rules_router
 from routes.debug import router as debug_router
 from routes.upload import router as upload_v2_router
 from routes.demo import router as demo_router
+from routes.health import router as health_router
 from routes.backup import router as backup_router
 from routes.funnel_analytics import router as funnel_router
 from routes.drip_campaigns import router as drip_router
@@ -2779,6 +2780,7 @@ app.include_router(funnel_router)
 app.include_router(drip_router)
 app.include_router(invoice_router)
 app.include_router(data_ops_router)
+app.include_router(health_router, prefix="/api")
 
 # ==================== MIDDLEWARE STACK (Starlette LIFO: last added = first to run) ====================
 

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
+import "./utils/axiosRetry";
+import { Toaster } from "sonner";
 
 // Auth — eagerly loaded (needed on every page)
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -316,6 +318,7 @@ function App() {
         <OfflineBanner />
         <AppRouter />
         <CookieConsent />
+        <Toaster position="top-right" richColors closeButton />
       </AuthProvider>
     </BrowserRouter>
   );
