@@ -652,6 +652,58 @@ const AIDemandPlanning = () => {
       {/* Data Health Dashboard */}
       <DataHealthDashboard health={dataHealth} onNavigateUpload={() => window.location.href = "/upload"} />
 
+      {/* AI Onboarding Prompt — shown when no plan exists yet */}
+      {!plan && !loading && dataHealth && (() => {
+        const fr = dataHealth.forecast_readiness || {};
+        const days = fr.days_available || 0;
+        const needed = fr.days_required || 180;
+        if (days < 30) return (
+          <div data-testid="ai-onboarding-banner" className="rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-orange-50 p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-lg bg-red-100 shrink-0"><AlertCircle className="h-5 w-5 text-red-600" /></div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-gray-900">Not enough data for AI forecasting</h4>
+              <p className="text-xs text-gray-600 mt-1">You have <strong>{days}</strong> days of sales history. Minimum required: <strong>30 days</strong>. Upload at least <strong>{30 - days}</strong> more days to unlock forecasting.</p>
+              <button data-testid="ai-onboard-upload-btn" onClick={() => window.location.href = "/upload"}
+                className="mt-3 px-4 py-2 bg-[#0B2545] text-white rounded-lg text-xs font-semibold hover:bg-[#13315C] transition-colors inline-flex items-center gap-1.5">
+                <Upload className="h-3.5 w-3.5" /> Upload Sales Data
+              </button>
+            </div>
+          </div>
+        );
+        if (days < 90) return (
+          <div data-testid="ai-onboarding-banner" className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-lg bg-amber-100 shrink-0"><Database className="h-5 w-5 text-amber-600" /></div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-gray-900">Basic AI forecasting available</h4>
+              <p className="text-xs text-gray-600 mt-1">You have <strong>{days}</strong> days of data (minimum: 30). Forecast accuracy improves significantly with <strong>90+ days</strong> of history.</p>
+              <div className="flex gap-2 mt-3">
+                {canEdit && <button data-testid="ai-onboard-generate-btn" onClick={generatePlan}
+                  className="px-4 py-2 bg-[#0B2545] text-white rounded-lg text-xs font-semibold hover:bg-[#13315C] transition-colors inline-flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5" /> Generate AI Plan
+                </button>}
+                <button onClick={() => window.location.href = "/upload"}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors inline-flex items-center gap-1.5">
+                  <Upload className="h-3.5 w-3.5" /> Upload {90 - days} more days
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+        return (
+          <div data-testid="ai-onboarding-banner" className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-lg bg-emerald-100 shrink-0"><Zap className="h-5 w-5 text-emerald-600" /></div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-gray-900">Ready for AI forecasting</h4>
+              <p className="text-xs text-gray-600 mt-1">You have <strong>{days}</strong> days of sales history — enough for high-accuracy ML forecasts. Generate your first plan now.</p>
+              {canEdit && <button data-testid="ai-onboard-generate-btn" onClick={generatePlan}
+                className="mt-3 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors inline-flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5" /> Generate AI Plan
+              </button>}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Controls + Tabs ─────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-4 py-2.5 flex flex-wrap gap-2 items-center border-b border-gray-100">

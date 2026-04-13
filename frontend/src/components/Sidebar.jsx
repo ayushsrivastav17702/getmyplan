@@ -163,7 +163,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   /* ─── Upload status ─── */
   const getUploadCount = () => {
     if (!uploadStatus) return { uploaded: 0, total: 7 };
-    const uploaded = Object.values(uploadStatus).filter(s => s.uploaded && s.valid).length;
+    const uploaded = Object.values(uploadStatus).filter(s => s.uploaded).length;
     return { uploaded, total: 7 };
   };
   const { uploaded, total } = getUploadCount();

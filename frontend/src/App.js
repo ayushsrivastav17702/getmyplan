@@ -125,8 +125,18 @@ const AuthenticatedApp = () => {
     try {
       const response = await axios.get(`${API}/upload/status`);
       setUploadStatus(response.data);
+      localStorage.setItem("gmp_upload_status", JSON.stringify({
+        data: response.data,
+        ts: Date.now(),
+      }));
     } catch (error) {
-      console.error("Error fetching upload status:", error);
+      console.warn("Upload status API failed, using cache");
+      try {
+        const cached = JSON.parse(localStorage.getItem("gmp_upload_status"));
+        if (cached && Date.now() - cached.ts < 86400000) {
+          setUploadStatus(cached.data);
+        }
+      } catch {}
     }
   }, []);
 
