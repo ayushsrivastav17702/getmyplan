@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API } from "../App";
+import { toast } from "sonner";
 import {
   CheckCircle, Lock, Loader2, ArrowRight, Database,
   BarChart3, Upload, Rocket, ChevronDown, ChevronUp,
@@ -424,16 +425,19 @@ export default function OnboardingWizard({ onComplete }) {
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   const loadSampleData = async () => {
-    setSampleLoading(true);
-    setError(null);
+    // Navigate to dashboard immediately — no waiting
+    if (onComplete) onComplete();
+    else window.location.href = "/dashboard";
+
+    toast.loading("Creating your demo workspace...", { id: "sample-data", duration: Infinity });
+
     try {
       await axios.post(`${API}/upload/v2/load-sample-data`);
-      await fetchStatus();
-      setShowProgress(true);
+      toast.success("Your demo workspace is ready!", { id: "sample-data", duration: 3000 });
+      setTimeout(() => window.location.reload(), 1200);
     } catch (e) {
-      setError(e.response?.data?.detail || "Failed to load sample data");
+      toast.error(e.response?.data?.detail || "Failed to load sample data", { id: "sample-data" });
     }
-    setSampleLoading(false);
   };
 
   const skipToUpload = () => {
