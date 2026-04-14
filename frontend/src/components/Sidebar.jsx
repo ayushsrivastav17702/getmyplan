@@ -7,7 +7,8 @@ import {
   Check, AlertCircle, Warehouse, Server, Award, XCircle,
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
-  Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail
+  Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
+  HelpCircle
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -78,6 +79,7 @@ const NAV_GROUPS = [
       { path: "/sftp-monitor",  label: "SFTP Monitor",         icon: Server,          permission: "data.sftp.view" },
       { path: "/data-quality",  label: "Data Quality",         icon: Award,           permission: "data.quality.view" },
       { path: "/chatbot",       label: "FAQ Chatbot",          icon: MessageSquare,   permission: "chatbot.faq.view" },
+      { path: "/help",          label: "Help & Support",       icon: HelpCircle,      permission: null },
     ],
   },
 ];

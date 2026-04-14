@@ -50,6 +50,7 @@ const BackupRestore = lazy(() => import("./pages/BackupRestore"));
 const UserFunnelDashboard = lazy(() => import("./pages/UserFunnelDashboard"));
 const DripCampaigns = lazy(() => import("./pages/DripCampaigns"));
 const InvoiceManagement = lazy(() => import("./pages/InvoiceManagement"));
+const HelpCenter = lazy(() => import("./pages/HelpCenter"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -214,6 +215,8 @@ const AuthenticatedApp = () => {
             <Route path="/funnel-analytics" element={<UserFunnelDashboard />} />
             <Route path="/drip-campaigns" element={<DripCampaigns />} />
             <Route path="/invoices" element={<InvoiceManagement />} />
+            <Route path="/help" element={<HelpCenter />} />
+            <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}
             <Route path="*" element={<NotFound />} />
@@ -293,6 +296,8 @@ const AppRouter = () => {
       {/* Blog — always public */}
       <Route path="/blog" element={<BlogIndex />} />
       <Route path="/blog/:slug" element={<BlogPost />} />
+      {/* Help Center — always public */}
+      <Route path="/help" element={<HelpCenter />} />
       {isAuthenticated ? (
         <Route path="/*" element={<AuthenticatedApp />} />
       ) : (
