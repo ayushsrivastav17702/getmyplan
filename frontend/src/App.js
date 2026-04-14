@@ -15,6 +15,7 @@ import CookieConsent from "./components/CookieConsent";
 
 // Eagerly loaded (critical path)
 import Unauthorized from "./pages/Unauthorized";
+import { OnboardingChecklist } from "./components/OnboardingChecklist";
 
 // Lazy-loaded pages — split into separate chunks
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -177,6 +178,11 @@ const AuthenticatedApp = () => {
             onContinue={() => { window.location.href = "/onboarding"; }}
             onDismiss={() => setBannerDismissed(true)}
           />
+        )}
+        {onboardingStatus && !onboardingStatus.is_onboarded && (
+          <div className="px-6 lg:px-10 pt-4">
+            <OnboardingChecklist status={onboardingStatus} />
+          </div>
         )}
         <div className="flex items-center justify-end px-6 lg:px-10 pt-4 pb-0">
           <NotificationBell />
