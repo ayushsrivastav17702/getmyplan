@@ -16,6 +16,7 @@ import CookieConsent from "./components/CookieConsent";
 // Eagerly loaded (critical path)
 import Unauthorized from "./pages/Unauthorized";
 import { OnboardingChecklist } from "./components/OnboardingChecklist";
+import { FAQWidget } from "./components/FAQWidget";
 
 // Lazy-loaded pages — split into separate chunks
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -230,6 +231,7 @@ const AuthenticatedApp = () => {
           </Suspense>
         </div>
       </main>
+      <FAQWidget />
     </div>
   );
 };
