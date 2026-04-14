@@ -749,6 +749,7 @@ async def _run_seed(db, job_id: str):
     import random
     import math
     import asyncio
+    import gc
     random.seed(42)
     now = datetime.now(timezone.utc)
     j = _seed_jobs[job_id]
@@ -911,15 +912,17 @@ async def _run_seed(db, job_id: str):
                     total_sales += 1
 
                     if len(sales_batch) >= BATCH:
-                        await db.daily_sales.insert_many(sales_batch)
-                        await db.cogs.insert_many(cogs_batch)
+                        await db.daily_sales.insert_many(sales_batch, ordered=False)
+                        await db.cogs.insert_many(cogs_batch, ordered=False)
                         sales_batch.clear()
                         cogs_batch.clear()
-                        await asyncio.sleep(0)
+                        await asyncio.sleep(0.1)
 
-            # Update progress: 15% → 75% over 90 days
+            # Update progress + GC every 10 days
             pct = 15 + int((day_offset / 90) * 60)
             j.update(progress=pct, step=f"Sales day {day_offset + 1}/90...")
+            if day_offset % 10 == 0:
+                gc.collect()
 
         if sales_batch:
             await db.daily_sales.insert_many(sales_batch)

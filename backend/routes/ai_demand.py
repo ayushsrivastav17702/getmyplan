@@ -71,6 +71,17 @@ def init_ai_demand(mongo_client, get_cached_data_func, get_db_func, get_current_
 # OPTIONS — Dynamic filter values from TenantDataProvider
 # ═══════════════════════════════════════════════════════════════
 
+@router.get("/analytics/ai-demand/health")
+async def ai_demand_health():
+    """Health check for AI demand service."""
+    try:
+        db = _get_db()
+        count = await db.daily_sales.estimated_document_count()
+        return {"status": "healthy", "service": "ai-demand", "sales_records": count}
+    except Exception as e:
+        return {"status": "degraded", "service": "ai-demand", "error": str(e)}
+
+
 @router.get("/analytics/ai-demand/options")
 async def ai_demand_options(request: Request):
     """Dynamic categories, subcategories, channels, SKUs, and data status for AI Demand filters."""

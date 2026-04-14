@@ -2796,6 +2796,19 @@ app.add_middleware(StructuredLoggingMiddleware)
 # 3. Request size limiter — rejects oversized payloads
 app.add_middleware(RequestSizeLimitMiddleware)
 
+# 2.5 Memory cleanup — periodic GC to prevent leaks from unclosed cursors
+import gc as _gc
+_gc_counter = 0
+
+@app.middleware("http")
+async def gc_middleware(request, call_next):
+    global _gc_counter
+    response = await call_next(request)
+    _gc_counter += 1
+    if _gc_counter % 100 == 0:
+        _gc.collect(0)
+    return response
+
 # 2. Error handler — catches unhandled exceptions, returns clean JSON
 app.add_middleware(ErrorHandlerMiddleware)
 
