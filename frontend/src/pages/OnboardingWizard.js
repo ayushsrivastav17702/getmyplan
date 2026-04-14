@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { API } from "../App";
-import { toast } from "sonner";
 import {
   CheckCircle, Lock, Loader2, ArrowRight, Database,
   BarChart3, Upload, Rocket, ChevronDown, ChevronUp,
@@ -425,18 +424,48 @@ export default function OnboardingWizard({ onComplete }) {
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   const loadSampleData = async () => {
-    // Navigate to dashboard immediately — no waiting
-    if (onComplete) onComplete();
-    else window.location.href = "/dashboard";
-
-    toast.loading("Creating your demo workspace...", { id: "sample-data", duration: Infinity });
+    setSampleLoading(true);
+    setError(null);
 
     try {
-      await axios.post(`${API}/upload/v2/load-sample-data`);
-      toast.success("Your demo workspace is ready!", { id: "sample-data", duration: 3000 });
-      setTimeout(() => window.location.reload(), 1200);
+      const res = await axios.post(`${API}/upload/v2/load-sample-data`);
+      if (!res.data.success) {
+        setError(res.data.message || "Failed to start sample data loading");
+        setSampleLoading(false);
+        return;
+      }
+
+      const jobId = res.data.job_id;
+      if (!jobId) {
+        // Fallback: old synchronous response (no job_id)
+        await fetchStatus();
+        setShowProgress(true);
+        setSampleLoading(false);
+        return;
+      }
+
+      // Poll for progress
+      const poll = setInterval(async () => {
+        try {
+          const s = await axios.get(`${API}/upload/v2/seed-status/${jobId}`);
+          const d = s.data;
+          if (d.status === "completed") {
+            clearInterval(poll);
+            await fetchStatus();
+            setShowProgress(true);
+            setSampleLoading(false);
+          } else if (d.status === "failed") {
+            clearInterval(poll);
+            setError(d.error || "Sample data loading failed");
+            setSampleLoading(false);
+          }
+        } catch {
+          // Ignore transient polling errors
+        }
+      }, 2000);
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to load sample data", { id: "sample-data" });
+      setError(e.response?.data?.detail || "Failed to load sample data");
+      setSampleLoading(false);
     }
   };
 

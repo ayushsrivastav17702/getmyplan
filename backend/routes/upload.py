@@ -717,315 +717,264 @@ async def preview_data(upload_type: str, request: Request):
 # SAMPLE DATA LOADER — Enterprise Scale (~220K rows)
 # ============================================================
 
+# In-memory job tracker (lightweight — only stores status dicts)
+_seed_jobs = {}
+
+
 @router.post("/load-sample-data")
-async def load_sample_data(request: Request):
-    """Load enterprise-scale sample data for onboarding / demo."""
-    import random
-    import math
+async def load_sample_data(request: Request, background_tasks: BackgroundTasks):
+    """Start sample data seeding in background. Returns immediately with job_id."""
     db = _get_db()
 
     existing = await db.daily_sales.estimated_document_count()
     if existing > 50:
         return {"success": False, "message": "This tenant already has data. Sample data is for empty tenants."}
 
-    now = datetime.now(timezone.utc)
+    job_id = str(uuid.uuid4())[:12]
+    _seed_jobs[job_id] = {"status": "pending", "progress": 0, "step": "Starting..."}
+
+    background_tasks.add_task(_run_seed, db, job_id)
+
+    return {"success": True, "message": "Sample data loading started", "job_id": job_id}
+
+
+@router.get("/seed-status/{job_id}")
+async def get_seed_status(job_id: str):
+    """Poll progress of a seeding job."""
+    return _seed_jobs.get(job_id, {"status": "not_found"})
+
+
+async def _run_seed(db, job_id: str):
+    """Background task — generates all sample data in batches."""
+    import random
+    import math
+    import asyncio
     random.seed(42)
+    now = datetime.now(timezone.utc)
+    j = _seed_jobs[job_id]
 
-    # ── STORE MASTER: 30 stores across 5 regions ──
-    STORES = [
-        # North (8)
-        {"store_code": "DEL-01", "store_name": "Delhi Connaught Place", "city": "Delhi", "region": "North", "channel": "EBO", "area_sqft": 3200, "tier": "A"},
-        {"store_code": "DEL-02", "store_name": "Delhi Saket Mall", "city": "Delhi", "region": "North", "channel": "EBO", "area_sqft": 2800, "tier": "A"},
-        {"store_code": "DEL-03", "store_name": "Delhi Lajpat Nagar", "city": "Delhi", "region": "North", "channel": "MBO", "area_sqft": 1800, "tier": "B"},
-        {"store_code": "GGN-01", "store_name": "Gurgaon Cyber Hub", "city": "Gurgaon", "region": "North", "channel": "EBO", "area_sqft": 2500, "tier": "A"},
-        {"store_code": "NOI-01", "store_name": "Noida Sector 18", "city": "Noida", "region": "North", "channel": "MBO", "area_sqft": 2000, "tier": "B"},
-        {"store_code": "LKO-01", "store_name": "Lucknow Hazratganj", "city": "Lucknow", "region": "North", "channel": "MBO", "area_sqft": 1500, "tier": "C"},
-        {"store_code": "JAI-01", "store_name": "Jaipur MI Road", "city": "Jaipur", "region": "North", "channel": "MBO", "area_sqft": 1600, "tier": "C"},
-        {"store_code": "CHD-01", "store_name": "Chandigarh Sector 17", "city": "Chandigarh", "region": "North", "channel": "EBO", "area_sqft": 2200, "tier": "B"},
-        # South (8)
-        {"store_code": "BLR-01", "store_name": "Bangalore Indiranagar", "city": "Bangalore", "region": "South", "channel": "EBO", "area_sqft": 3000, "tier": "A"},
-        {"store_code": "BLR-02", "store_name": "Bangalore Koramangala", "city": "Bangalore", "region": "South", "channel": "EBO", "area_sqft": 2600, "tier": "A"},
-        {"store_code": "CHE-01", "store_name": "Chennai T Nagar", "city": "Chennai", "region": "South", "channel": "EBO", "area_sqft": 2400, "tier": "B"},
-        {"store_code": "CHE-02", "store_name": "Chennai Express Avenue", "city": "Chennai", "region": "South", "channel": "EBO", "area_sqft": 2100, "tier": "B"},
-        {"store_code": "HYD-01", "store_name": "Hyderabad Jubilee Hills", "city": "Hyderabad", "region": "South", "channel": "EBO", "area_sqft": 2800, "tier": "A"},
-        {"store_code": "HYD-02", "store_name": "Hyderabad Banjara Hills", "city": "Hyderabad", "region": "South", "channel": "MBO", "area_sqft": 1900, "tier": "B"},
-        {"store_code": "COK-01", "store_name": "Kochi MG Road", "city": "Kochi", "region": "South", "channel": "MBO", "area_sqft": 1400, "tier": "C"},
-        {"store_code": "COI-01", "store_name": "Coimbatore RS Puram", "city": "Coimbatore", "region": "South", "channel": "MBO", "area_sqft": 1300, "tier": "C"},
-        # West (7)
-        {"store_code": "MUM-01", "store_name": "Mumbai Linking Road", "city": "Mumbai", "region": "West", "channel": "EBO", "area_sqft": 3500, "tier": "A"},
-        {"store_code": "MUM-02", "store_name": "Mumbai Phoenix Mall", "city": "Mumbai", "region": "West", "channel": "EBO", "area_sqft": 3200, "tier": "A"},
-        {"store_code": "MUM-03", "store_name": "Mumbai Andheri", "city": "Mumbai", "region": "West", "channel": "MBO", "area_sqft": 2000, "tier": "B"},
-        {"store_code": "PUN-01", "store_name": "Pune Koregaon Park", "city": "Pune", "region": "West", "channel": "EBO", "area_sqft": 2400, "tier": "B"},
-        {"store_code": "PUN-02", "store_name": "Pune FC Road", "city": "Pune", "region": "West", "channel": "MBO", "area_sqft": 1700, "tier": "C"},
-        {"store_code": "AMD-01", "store_name": "Ahmedabad CG Road", "city": "Ahmedabad", "region": "West", "channel": "MBO", "area_sqft": 1800, "tier": "B"},
-        {"store_code": "SUR-01", "store_name": "Surat Athwa Gate", "city": "Surat", "region": "West", "channel": "MBO", "area_sqft": 1500, "tier": "C"},
-        # East (5)
-        {"store_code": "KOL-01", "store_name": "Kolkata Park Street", "city": "Kolkata", "region": "East", "channel": "EBO", "area_sqft": 2600, "tier": "A"},
-        {"store_code": "KOL-02", "store_name": "Kolkata South City", "city": "Kolkata", "region": "East", "channel": "MBO", "area_sqft": 1800, "tier": "B"},
-        {"store_code": "BHU-01", "store_name": "Bhubaneswar Patia", "city": "Bhubaneswar", "region": "East", "channel": "MBO", "area_sqft": 1300, "tier": "C"},
-        {"store_code": "PAT-01", "store_name": "Patna Boring Road", "city": "Patna", "region": "East", "channel": "MBO", "area_sqft": 1200, "tier": "C"},
-        {"store_code": "GHY-01", "store_name": "Guwahati GS Road", "city": "Guwahati", "region": "East", "channel": "MBO", "area_sqft": 1100, "tier": "C"},
-        # Central (2)
-        {"store_code": "IND-01", "store_name": "Indore MG Road", "city": "Indore", "region": "Central", "channel": "MBO", "area_sqft": 1600, "tier": "C"},
-        {"store_code": "BHO-01", "store_name": "Bhopal MP Nagar", "city": "Bhopal", "region": "Central", "channel": "MBO", "area_sqft": 1400, "tier": "C"},
-    ]
-    store_codes = [s["store_code"] for s in STORES]
-    tier_map = {s["store_code"]: s["tier"] for s in STORES}
-    TIER_MULT = {"A": 2.0, "B": 1.0, "C": 0.5}
-
-    # ── STYLE MASTER: 20 styles ──
-    STYLES = [
-        {"style_code": "STYLE-TS-001", "style_name": "Classic Cotton T-Shirt", "category": "Apparel", "sub_category": "T-Shirts", "brand": "Nike", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-TS-002", "style_name": "Premium Pima T-Shirt", "category": "Apparel", "sub_category": "T-Shirts", "brand": "Ralph Lauren", "gender": "Men", "season": "All Year"},
-        {"style_code": "STYLE-HD-001", "style_name": "Pullover Hoodie", "category": "Apparel", "sub_category": "Hoodies", "brand": "Adidas", "gender": "Unisex", "season": "Fall/Winter"},
-        {"style_code": "STYLE-HD-002", "style_name": "Zip-Up Hoodie", "category": "Apparel", "sub_category": "Hoodies", "brand": "Puma", "gender": "Women", "season": "Fall/Winter"},
-        {"style_code": "STYLE-JG-001", "style_name": "Slim Fit Joggers", "category": "Apparel", "sub_category": "Joggers", "brand": "Under Armour", "gender": "Men", "season": "All Year"},
-        {"style_code": "STYLE-JG-002", "style_name": "Cargo Joggers", "category": "Apparel", "sub_category": "Joggers", "brand": "Levi's", "gender": "Men", "season": "Fall/Winter"},
-        {"style_code": "STYLE-PL-001", "style_name": "Classic Polo", "category": "Apparel", "sub_category": "Polo Shirts", "brand": "Lacoste", "gender": "Men", "season": "Spring/Summer"},
-        {"style_code": "STYLE-PL-002", "style_name": "Performance Polo", "category": "Apparel", "sub_category": "Polo Shirts", "brand": "Nike", "gender": "Men", "season": "All Year"},
-        {"style_code": "STYLE-SN-001", "style_name": "Court Sneakers", "category": "Footwear", "sub_category": "Sneakers", "brand": "Reebok", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-SN-002", "style_name": "Running Shoes", "category": "Footwear", "sub_category": "Sneakers", "brand": "Nike", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-SN-003", "style_name": "Training Shoes", "category": "Footwear", "sub_category": "Sneakers", "brand": "Adidas", "gender": "Men", "season": "All Year"},
-        {"style_code": "STYLE-CP-001", "style_name": "Baseball Cap", "category": "Accessories", "sub_category": "Caps", "brand": "New Era", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-CP-002", "style_name": "Snapback Cap", "category": "Accessories", "sub_category": "Caps", "brand": "Mitchell & Ness", "gender": "Men", "season": "All Year"},
-        {"style_code": "STYLE-SK-001", "style_name": "Athletic Socks 3-Pack", "category": "Accessories", "sub_category": "Socks", "brand": "Puma", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-SK-002", "style_name": "Casual Socks 3-Pack", "category": "Accessories", "sub_category": "Socks", "brand": "Happy Socks", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-BG-001", "style_name": "Laptop Backpack", "category": "Accessories", "sub_category": "Bags", "brand": "Herschel", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-BG-002", "style_name": "Weekender Duffel", "category": "Accessories", "sub_category": "Bags", "brand": "The North Face", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-BT-001", "style_name": "Insulated Bottle 500ml", "category": "Accessories", "sub_category": "Bottles", "brand": "Hydro Flask", "gender": "Unisex", "season": "All Year"},
-        {"style_code": "STYLE-SW-001", "style_name": "Crewneck Sweatshirt", "category": "Apparel", "sub_category": "Hoodies", "brand": "Champion", "gender": "Unisex", "season": "Fall/Winter"},
-        {"style_code": "STYLE-TK-001", "style_name": "Performance Tank Top", "category": "Apparel", "sub_category": "T-Shirts", "brand": "Nike", "gender": "Men", "season": "Spring/Summer"},
-    ]
-    style_codes = [s["style_code"] for s in STYLES]  # noqa: F841
-    # Winter styles get seasonal peak
-    WINTER_STYLES = {"STYLE-HD-001", "STYLE-HD-002", "STYLE-JG-002", "STYLE-SW-001"}
-    # Top sellers get 3x demand
-    TOPSELLERS = {"STYLE-TS-001", "STYLE-SN-001", "STYLE-JG-001", "STYLE-HD-001", "STYLE-CP-001"}
-
-    # ── SKU MASTER: 100 SKUs ──
-    COLORS = {
-        "STYLE-TS-001": ["BLK", "WHT", "GRY", "NAV"], "STYLE-TS-002": ["WHT", "BLU", "PNK"],
-        "STYLE-HD-001": ["GRY", "BLK", "NAV"], "STYLE-HD-002": ["BLK", "PNK", "WHT"],
-        "STYLE-JG-001": ["BLK", "NAV", "GRY"], "STYLE-JG-002": ["OLV", "BLK", "KHK"],
-        "STYLE-PL-001": ["NAV", "WHT"], "STYLE-PL-002": ["BLK", "GRY"],
-        "STYLE-SN-001": ["WHT", "BLK", "GRY"], "STYLE-SN-002": ["BLK", "RED", "WHT"],
-        "STYLE-SN-003": ["BLK", "WHT"],
-        "STYLE-CP-001": ["BLK", "NAV", "RED", "WHT"], "STYLE-CP-002": ["BLK", "GRY"],
-        "STYLE-SK-001": ["WHT", "BLK"], "STYLE-SK-002": ["WHT", "BLK", "GRY"],
-        "STYLE-BG-001": ["BLK", "NAV"], "STYLE-BG-002": ["BLK"],
-        "STYLE-BT-001": ["BLK", "WHT"],
-        "STYLE-SW-001": ["GRY", "BLK", "NAV"],
-        "STYLE-TK-001": ["BLK", "WHT"],
-    }
-    SIZES_MAP = {
-        "Apparel": ["S", "M", "L", "XL"], "Footwear": ["7", "8", "9", "10", "11"],
-        "Accessories": ["ONE"],
-    }
-    # Sub-cat overrides for socks (pack sizes)
-    SOCKS_SIZES = ["S/M", "M/L"]
-    MRP_MAP = {
-        "T-Shirts": 999, "Hoodies": 2499, "Joggers": 1999, "Polo Shirts": 1499,
-        "Sneakers": 3499, "Caps": 799, "Socks": 499, "Bags": 2999, "Bottles": 699,
-    }
-
-    sku_docs = []
-    ean_to_info = {}  # ean -> {style, size, mrp, cost, sub_cat}
-    for style_def in STYLES:
-        sc = style_def["style_code"]
-        sub_cat = style_def["sub_category"]
-        cat = style_def["category"]
-        colors = COLORS.get(sc, ["BLK"])
-        sizes = SOCKS_SIZES if sub_cat == "Socks" else SIZES_MAP.get(cat, ["ONE"])
-        mrp = MRP_MAP.get(sub_cat, 999)
-        cogs_pct = random.uniform(0.40, 0.60)
-        for clr in colors:
-            for sz in sizes:
-                ean = f"{sc}-{clr}-{sz}"
-                cost = round(mrp * cogs_pct, 2)
-                sku_docs.append({
-                    "ean": ean, "style": sc, "color": clr, "size": sz,
-                    "mrp": mrp, "cost": cost, "barcode": ean,
-                    "category": cat, "sub_category": sub_cat,
-                })
-                ean_to_info[ean] = {"style": sc, "size": sz, "mrp": mrp, "cost": cost, "sub_cat": sub_cat}
-
-    all_eans = list(ean_to_info.keys())
-
-    # ── WAREHOUSE MASTER: 4 warehouses ──
-    WAREHOUSES = [
-        {"warehouse_code": "WH-NCR", "warehouse_name": "Delhi NCR DC", "city": "Delhi", "region": "North", "capacity": 60000, "online_fulfillment": True},
-        {"warehouse_code": "WH-BLR", "warehouse_name": "Bangalore DC", "city": "Bangalore", "region": "South", "capacity": 45000, "online_fulfillment": True},
-        {"warehouse_code": "WH-MUM", "warehouse_name": "Mumbai DC", "city": "Mumbai", "region": "West", "capacity": 50000, "online_fulfillment": True},
-        {"warehouse_code": "WH-KOL", "warehouse_name": "Kolkata DC", "city": "Kolkata", "region": "East", "capacity": 30000, "online_fulfillment": True},
-    ]
-
-    # ── PLANOGRAM: 7 planograms ──
-    PLANOGRAMS = [
-        {"store_code": "MUM-01", "category": "T-Shirts", "style": "STYLE-TS-001", "norm_allocated": 12, "replenish_cycle_days": 7, "cover_days": 14, "topseller_multiplier": 1.5},
-        {"store_code": "MUM-01", "category": "Hoodies", "style": "STYLE-HD-001", "norm_allocated": 8, "replenish_cycle_days": 14, "cover_days": 21, "topseller_multiplier": 1.3},
-        {"store_code": "DEL-01", "category": "T-Shirts", "style": "STYLE-TS-001", "norm_allocated": 10, "replenish_cycle_days": 7, "cover_days": 14, "topseller_multiplier": 1.5},
-        {"store_code": "BLR-01", "category": "Sneakers", "style": "STYLE-SN-001", "norm_allocated": 6, "replenish_cycle_days": 14, "cover_days": 21, "topseller_multiplier": 1.2},
-        {"store_code": "MUM-01", "category": "Caps", "style": "STYLE-CP-001", "norm_allocated": 15, "replenish_cycle_days": 5, "cover_days": 10, "topseller_multiplier": 1.0},
-        {"store_code": "DEL-01", "category": "Joggers", "style": "STYLE-JG-001", "norm_allocated": 8, "replenish_cycle_days": 10, "cover_days": 14, "topseller_multiplier": 1.3},
-        {"store_code": "BLR-01", "category": "Bags", "style": "STYLE-BG-001", "norm_allocated": 4, "replenish_cycle_days": 21, "cover_days": 30, "topseller_multiplier": 1.0},
-    ]
-
-    # ═══ INSERT MASTER DATA ═══
-    for coll_name, docs in [
-        ("style_master", STYLES),
-        ("sku_ean_master", sku_docs),
-        ("store_master", STORES),
-        ("warehouse_master", WAREHOUSES),
-        ("planogram", PLANOGRAMS),
-    ]:
-        await db[coll_name].delete_many({})
-        if docs:
-            await db[coll_name].insert_many(docs)
-
-    # ═══ DAILY SALES + COGS: 90 days, realistic patterns ═══
-    BATCH_SIZE = 5000
-    total_sales = 0
-    sales_batch = []
-    cogs_batch = []
-    await db.daily_sales.delete_many({})
-    await db.cogs.delete_many({})
-
-    for day_offset in range(90):
-        dt = now - timedelta(days=day_offset)
-        day_str = dt.strftime("%Y-%m-%d")
-        dow = dt.weekday()
-        month = dt.month
-        is_weekend = dow >= 4
-        weekend_mult = 1.5 if is_weekend else 1.0
-        winter_month = month in (12, 1, 2)
-
-        for store in store_codes:
-            store_tier = tier_map[store]
-            store_mult = TIER_MULT[store_tier]
-            n_skus = max(10, int(len(all_eans) * random.uniform(0.30, 0.50)))
-            day_skus = random.sample(all_eans, k=min(n_skus, len(all_eans)))
-
-            for ean in day_skus:
-                info = ean_to_info[ean]
-                style = info["style"]
-                mrp = info["mrp"]
-                cost = info["cost"]
-
-                base_qty = random.randint(1, 6)
-                mult = store_mult * weekend_mult
-                if style in TOPSELLERS:
-                    mult *= 3.0
-                if winter_month and style in WINTER_STYLES:
-                    mult *= 1.8
-                qty = max(1, int(base_qty * mult))
-                discount = random.uniform(0.75, 1.0)
-                revenue = round(qty * mrp * discount, 2)
-
-                sales_batch.append({
-                    "day": day_str, "store_code": store, "sku": ean,
-                    "style": style, "quantity": qty,
-                    "revenue": revenue, "mrp": mrp,
-                })
-                cogs_batch.append({
-                    "day": day_str, "store_code": store, "sku": ean,
-                    "style": style, "quantity": qty,
-                    "cogs": round(qty * cost, 2), "revenue": revenue,
-                })
-                total_sales += 1
-
-                if len(sales_batch) >= BATCH_SIZE:
-                    await db.daily_sales.insert_many(sales_batch)
-                    await db.cogs.insert_many(cogs_batch)
-                    sales_batch.clear()
-                    cogs_batch.clear()
-
-    if sales_batch:
-        await db.daily_sales.insert_many(sales_batch)
-    if cogs_batch:
-        await db.cogs.insert_many(cogs_batch)
-
-    # ═══ STORE INVENTORY: 30 stores × 100 SKUs = 3,000 rows ═══
-    inv_docs = []
-    today_str = now.strftime("%Y-%m-%d")
-    for store in store_codes:
-        for ean in all_eans:
-            info = ean_to_info[ean]
-            # Realistic patterns: 60% optimal, 15% overstock, 15% understock, 10% stockout
-            roll = random.random()
-            if roll < 0.10:
-                qty = 0  # stockout
-            elif roll < 0.25:
-                qty = random.randint(1, 5)  # understock (3-5 days cover)
-            elif roll < 0.85:
-                qty = random.randint(10, 35)  # optimal (2-3 weeks)
-            else:
-                qty = random.randint(50, 120)  # overstock (6-8 weeks)
-            inv_docs.append({
-                "store_code": store, "sku": ean, "style": info["style"],
-                "size": info["size"], "quantity": qty, "day": today_str,
-            })
-    await db.store_inventory.delete_many({})
-    for i in range(0, len(inv_docs), BATCH_SIZE):
-        await db.store_inventory.insert_many(inv_docs[i:i + BATCH_SIZE])
-
-    # ═══ WAREHOUSE INVENTORY: 4 warehouses × 100 SKUs = 400 rows ═══
-    wh_inv = []
-    for wh in WAREHOUSES:
-        for ean in all_eans:
-            info = ean_to_info[ean]
-            wh_inv.append({
-                "warehouse_code": wh["warehouse_code"], "sku": ean,
-                "style": info["style"], "size": info["size"],
-                "quantity": random.randint(20, 300),
-            })
-    await db.warehouse_inventory.delete_many({})
-    await db.warehouse_inventory.insert_many(wh_inv)
-
-    # ═══ OPEN ORDERS: 15 orders ═══
-    open_orders = []
-    for i in range(8):
-        ean = random.choice(all_eans)
-        info = ean_to_info[ean]
-        open_orders.append({
-            "order_id": f"PO-2026-{1001 + i}", "order_type": "vendor_po",
-            "sku": ean, "style": info["style"], "quantity": random.randint(50, 500),
-            "destination": random.choice(["WH-NCR", "WH-BLR", "WH-MUM", "WH-KOL"]),
-            "eta_date": (now + timedelta(days=random.randint(3, 14))).strftime("%Y-%m-%d"),
-            "status": "in_transit",
-        })
-    for i in range(7):
-        ean = random.choice(all_eans)
-        info = ean_to_info[ean]
-        open_orders.append({
-            "order_id": f"IST-2026-{2001 + i}", "order_type": "warehouse_transfer",
-            "sku": ean, "style": info["style"], "quantity": random.randint(10, 80),
-            "source": random.choice(["WH-NCR", "WH-BLR", "WH-MUM", "WH-KOL"]),
-            "destination": random.choice(store_codes),
-            "eta_date": (now + timedelta(days=random.randint(1, 5))).strftime("%Y-%m-%d"),
-            "status": "in_transit",
-        })
-    await db.open_orders.delete_many({})
-    await db.open_orders.insert_many(open_orders)
-
-    # Invalidate ALL caches for this tenant after sample data load
     try:
-        from services.cache_service import invalidate_tenant
-        invalidate_tenant(_cache_tid())
-        logger.info("Full cache invalidated for tenant after sample data load")
-    except Exception as cache_err:
-        logger.warning("Cache invalidation after sample data failed: %s", cache_err)
+        j.update(status="processing", progress=5, step="Creating styles & SKUs...")
 
-    return {
-        "success": True,
-        "message": "Enterprise sample data loaded successfully!",
-        "summary": {
-            "styles": len(STYLES), "skus": len(sku_docs),
-            "stores": len(STORES), "warehouses": len(WAREHOUSES),
-            "planograms": len(PLANOGRAMS),
-            "sales_records": total_sales, "cogs_records": total_sales,
-            "store_inventory": len(inv_docs),
-            "warehouse_inventory": len(wh_inv),
-            "open_orders": len(open_orders),
-            "days_of_history": 90,
-        },
-    }
+        # ── STORE MASTER: 30 stores ──
+        STORES = [
+            {"store_code":"DEL-01","store_name":"Delhi Connaught Place","city":"Delhi","region":"North","channel":"EBO","area_sqft":3200,"tier":"A"},
+            {"store_code":"DEL-02","store_name":"Delhi Saket Mall","city":"Delhi","region":"North","channel":"EBO","area_sqft":2800,"tier":"A"},
+            {"store_code":"DEL-03","store_name":"Delhi Lajpat Nagar","city":"Delhi","region":"North","channel":"MBO","area_sqft":1800,"tier":"B"},
+            {"store_code":"GGN-01","store_name":"Gurgaon Cyber Hub","city":"Gurgaon","region":"North","channel":"EBO","area_sqft":2500,"tier":"A"},
+            {"store_code":"NOI-01","store_name":"Noida Sector 18","city":"Noida","region":"North","channel":"MBO","area_sqft":2000,"tier":"B"},
+            {"store_code":"LKO-01","store_name":"Lucknow Hazratganj","city":"Lucknow","region":"North","channel":"MBO","area_sqft":1500,"tier":"C"},
+            {"store_code":"JAI-01","store_name":"Jaipur MI Road","city":"Jaipur","region":"North","channel":"MBO","area_sqft":1600,"tier":"C"},
+            {"store_code":"CHD-01","store_name":"Chandigarh Sector 17","city":"Chandigarh","region":"North","channel":"EBO","area_sqft":2200,"tier":"B"},
+            {"store_code":"BLR-01","store_name":"Bangalore Indiranagar","city":"Bangalore","region":"South","channel":"EBO","area_sqft":3000,"tier":"A"},
+            {"store_code":"BLR-02","store_name":"Bangalore Koramangala","city":"Bangalore","region":"South","channel":"EBO","area_sqft":2600,"tier":"A"},
+            {"store_code":"CHE-01","store_name":"Chennai T Nagar","city":"Chennai","region":"South","channel":"EBO","area_sqft":2400,"tier":"B"},
+            {"store_code":"CHE-02","store_name":"Chennai Express Avenue","city":"Chennai","region":"South","channel":"EBO","area_sqft":2100,"tier":"B"},
+            {"store_code":"HYD-01","store_name":"Hyderabad Jubilee Hills","city":"Hyderabad","region":"South","channel":"EBO","area_sqft":2800,"tier":"A"},
+            {"store_code":"HYD-02","store_name":"Hyderabad Banjara Hills","city":"Hyderabad","region":"South","channel":"MBO","area_sqft":1900,"tier":"B"},
+            {"store_code":"COK-01","store_name":"Kochi MG Road","city":"Kochi","region":"South","channel":"MBO","area_sqft":1400,"tier":"C"},
+            {"store_code":"COI-01","store_name":"Coimbatore RS Puram","city":"Coimbatore","region":"South","channel":"MBO","area_sqft":1300,"tier":"C"},
+            {"store_code":"MUM-01","store_name":"Mumbai Linking Road","city":"Mumbai","region":"West","channel":"EBO","area_sqft":3500,"tier":"A"},
+            {"store_code":"MUM-02","store_name":"Mumbai Phoenix Mall","city":"Mumbai","region":"West","channel":"EBO","area_sqft":3200,"tier":"A"},
+            {"store_code":"MUM-03","store_name":"Mumbai Andheri","city":"Mumbai","region":"West","channel":"MBO","area_sqft":2000,"tier":"B"},
+            {"store_code":"PUN-01","store_name":"Pune Koregaon Park","city":"Pune","region":"West","channel":"EBO","area_sqft":2400,"tier":"B"},
+            {"store_code":"PUN-02","store_name":"Pune FC Road","city":"Pune","region":"West","channel":"MBO","area_sqft":1700,"tier":"C"},
+            {"store_code":"AMD-01","store_name":"Ahmedabad CG Road","city":"Ahmedabad","region":"West","channel":"MBO","area_sqft":1800,"tier":"B"},
+            {"store_code":"SUR-01","store_name":"Surat Athwa Gate","city":"Surat","region":"West","channel":"MBO","area_sqft":1500,"tier":"C"},
+            {"store_code":"KOL-01","store_name":"Kolkata Park Street","city":"Kolkata","region":"East","channel":"EBO","area_sqft":2600,"tier":"A"},
+            {"store_code":"KOL-02","store_name":"Kolkata South City","city":"Kolkata","region":"East","channel":"MBO","area_sqft":1800,"tier":"B"},
+            {"store_code":"BHU-01","store_name":"Bhubaneswar Patia","city":"Bhubaneswar","region":"East","channel":"MBO","area_sqft":1300,"tier":"C"},
+            {"store_code":"PAT-01","store_name":"Patna Boring Road","city":"Patna","region":"East","channel":"MBO","area_sqft":1200,"tier":"C"},
+            {"store_code":"GHY-01","store_name":"Guwahati GS Road","city":"Guwahati","region":"East","channel":"MBO","area_sqft":1100,"tier":"C"},
+            {"store_code":"IND-01","store_name":"Indore MG Road","city":"Indore","region":"Central","channel":"MBO","area_sqft":1600,"tier":"C"},
+            {"store_code":"BHO-01","store_name":"Bhopal MP Nagar","city":"Bhopal","region":"Central","channel":"MBO","area_sqft":1400,"tier":"C"},
+        ]
+        store_codes = [s["store_code"] for s in STORES]
+        tier_map = {s["store_code"]: s["tier"] for s in STORES}
+        TIER_MULT = {"A": 2.0, "B": 1.0, "C": 0.5}
+
+        STYLES = [
+            {"style_code":"STYLE-TS-001","style_name":"Classic Cotton T-Shirt","category":"Apparel","sub_category":"T-Shirts","brand":"Nike","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-TS-002","style_name":"Premium Pima T-Shirt","category":"Apparel","sub_category":"T-Shirts","brand":"Ralph Lauren","gender":"Men","season":"All Year"},
+            {"style_code":"STYLE-HD-001","style_name":"Pullover Hoodie","category":"Apparel","sub_category":"Hoodies","brand":"Adidas","gender":"Unisex","season":"Fall/Winter"},
+            {"style_code":"STYLE-HD-002","style_name":"Zip-Up Hoodie","category":"Apparel","sub_category":"Hoodies","brand":"Puma","gender":"Women","season":"Fall/Winter"},
+            {"style_code":"STYLE-JG-001","style_name":"Slim Fit Joggers","category":"Apparel","sub_category":"Joggers","brand":"Under Armour","gender":"Men","season":"All Year"},
+            {"style_code":"STYLE-JG-002","style_name":"Cargo Joggers","category":"Apparel","sub_category":"Joggers","brand":"Levi's","gender":"Men","season":"Fall/Winter"},
+            {"style_code":"STYLE-PL-001","style_name":"Classic Polo","category":"Apparel","sub_category":"Polo Shirts","brand":"Lacoste","gender":"Men","season":"Spring/Summer"},
+            {"style_code":"STYLE-PL-002","style_name":"Performance Polo","category":"Apparel","sub_category":"Polo Shirts","brand":"Nike","gender":"Men","season":"All Year"},
+            {"style_code":"STYLE-SN-001","style_name":"Court Sneakers","category":"Footwear","sub_category":"Sneakers","brand":"Reebok","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-SN-002","style_name":"Running Shoes","category":"Footwear","sub_category":"Sneakers","brand":"Nike","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-SN-003","style_name":"Training Shoes","category":"Footwear","sub_category":"Sneakers","brand":"Adidas","gender":"Men","season":"All Year"},
+            {"style_code":"STYLE-CP-001","style_name":"Baseball Cap","category":"Accessories","sub_category":"Caps","brand":"New Era","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-CP-002","style_name":"Snapback Cap","category":"Accessories","sub_category":"Caps","brand":"Mitchell & Ness","gender":"Men","season":"All Year"},
+            {"style_code":"STYLE-SK-001","style_name":"Athletic Socks 3-Pack","category":"Accessories","sub_category":"Socks","brand":"Puma","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-SK-002","style_name":"Casual Socks 3-Pack","category":"Accessories","sub_category":"Socks","brand":"Happy Socks","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-BG-001","style_name":"Laptop Backpack","category":"Accessories","sub_category":"Bags","brand":"Herschel","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-BG-002","style_name":"Weekender Duffel","category":"Accessories","sub_category":"Bags","brand":"The North Face","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-BT-001","style_name":"Insulated Bottle 500ml","category":"Accessories","sub_category":"Bottles","brand":"Hydro Flask","gender":"Unisex","season":"All Year"},
+            {"style_code":"STYLE-SW-001","style_name":"Crewneck Sweatshirt","category":"Apparel","sub_category":"Hoodies","brand":"Champion","gender":"Unisex","season":"Fall/Winter"},
+            {"style_code":"STYLE-TK-001","style_name":"Performance Tank Top","category":"Apparel","sub_category":"T-Shirts","brand":"Nike","gender":"Men","season":"Spring/Summer"},
+        ]
+        WINTER_STYLES = {"STYLE-HD-001","STYLE-HD-002","STYLE-JG-002","STYLE-SW-001"}
+        TOPSELLERS = {"STYLE-TS-001","STYLE-SN-001","STYLE-JG-001","STYLE-HD-001","STYLE-CP-001"}
+
+        COLORS = {
+            "STYLE-TS-001":["BLK","WHT","GRY","NAV"],"STYLE-TS-002":["WHT","BLU","PNK"],
+            "STYLE-HD-001":["GRY","BLK","NAV"],"STYLE-HD-002":["BLK","PNK","WHT"],
+            "STYLE-JG-001":["BLK","NAV","GRY"],"STYLE-JG-002":["OLV","BLK","KHK"],
+            "STYLE-PL-001":["NAV","WHT"],"STYLE-PL-002":["BLK","GRY"],
+            "STYLE-SN-001":["WHT","BLK","GRY"],"STYLE-SN-002":["BLK","RED","WHT"],
+            "STYLE-SN-003":["BLK","WHT"],
+            "STYLE-CP-001":["BLK","NAV","RED","WHT"],"STYLE-CP-002":["BLK","GRY"],
+            "STYLE-SK-001":["WHT","BLK"],"STYLE-SK-002":["WHT","BLK","GRY"],
+            "STYLE-BG-001":["BLK","NAV"],"STYLE-BG-002":["BLK"],
+            "STYLE-BT-001":["BLK","WHT"],
+            "STYLE-SW-001":["GRY","BLK","NAV"],"STYLE-TK-001":["BLK","WHT"],
+        }
+        SIZES_MAP = {"Apparel":["S","M","L","XL"],"Footwear":["7","8","9","10","11"],"Accessories":["ONE"]}
+        SOCKS_SIZES = ["S/M","M/L"]
+        MRP_MAP = {"T-Shirts":999,"Hoodies":2499,"Joggers":1999,"Polo Shirts":1499,"Sneakers":3499,"Caps":799,"Socks":499,"Bags":2999,"Bottles":699}
+
+        sku_docs = []
+        ean_to_info = {}
+        for style_def in STYLES:
+            sc, sub_cat, cat = style_def["style_code"], style_def["sub_category"], style_def["category"]
+            colors = COLORS.get(sc, ["BLK"])
+            sizes = SOCKS_SIZES if sub_cat == "Socks" else SIZES_MAP.get(cat, ["ONE"])
+            mrp = MRP_MAP.get(sub_cat, 999)
+            cogs_pct = random.uniform(0.40, 0.60)
+            for clr in colors:
+                for sz in sizes:
+                    ean = f"{sc}-{clr}-{sz}"
+                    cost = round(mrp * cogs_pct, 2)
+                    sku_docs.append({"ean":ean,"style":sc,"color":clr,"size":sz,"mrp":mrp,"cost":cost,"barcode":ean,"category":cat,"sub_category":sub_cat})
+                    ean_to_info[ean] = {"style":sc,"size":sz,"mrp":mrp,"cost":cost,"sub_cat":sub_cat}
+        all_eans = list(ean_to_info.keys())
+
+        WAREHOUSES = [
+            {"warehouse_code":"WH-NCR","warehouse_name":"Delhi NCR DC","city":"Delhi","region":"North","capacity":60000,"online_fulfillment":True},
+            {"warehouse_code":"WH-BLR","warehouse_name":"Bangalore DC","city":"Bangalore","region":"South","capacity":45000,"online_fulfillment":True},
+            {"warehouse_code":"WH-MUM","warehouse_name":"Mumbai DC","city":"Mumbai","region":"West","capacity":50000,"online_fulfillment":True},
+            {"warehouse_code":"WH-KOL","warehouse_name":"Kolkata DC","city":"Kolkata","region":"East","capacity":30000,"online_fulfillment":True},
+        ]
+        PLANOGRAMS = [
+            {"store_code":"MUM-01","category":"T-Shirts","style":"STYLE-TS-001","norm_allocated":12,"replenish_cycle_days":7,"cover_days":14,"topseller_multiplier":1.5},
+            {"store_code":"MUM-01","category":"Hoodies","style":"STYLE-HD-001","norm_allocated":8,"replenish_cycle_days":14,"cover_days":21,"topseller_multiplier":1.3},
+            {"store_code":"DEL-01","category":"T-Shirts","style":"STYLE-TS-001","norm_allocated":10,"replenish_cycle_days":7,"cover_days":14,"topseller_multiplier":1.5},
+            {"store_code":"BLR-01","category":"Sneakers","style":"STYLE-SN-001","norm_allocated":6,"replenish_cycle_days":14,"cover_days":21,"topseller_multiplier":1.2},
+            {"store_code":"MUM-01","category":"Caps","style":"STYLE-CP-001","norm_allocated":15,"replenish_cycle_days":5,"cover_days":10,"topseller_multiplier":1.0},
+            {"store_code":"DEL-01","category":"Joggers","style":"STYLE-JG-001","norm_allocated":8,"replenish_cycle_days":10,"cover_days":14,"topseller_multiplier":1.3},
+            {"store_code":"BLR-01","category":"Bags","style":"STYLE-BG-001","norm_allocated":4,"replenish_cycle_days":21,"cover_days":30,"topseller_multiplier":1.0},
+        ]
+
+        # ═══ INSERT MASTER DATA ═══
+        j.update(progress=10, step="Inserting master data...")
+        for coll_name, docs in [("style_master",STYLES),("sku_ean_master",sku_docs),("store_master",STORES),("warehouse_master",WAREHOUSES),("planogram",PLANOGRAMS)]:
+            await db[coll_name].delete_many({})
+            if docs:
+                await db[coll_name].insert_many(docs)
+        await asyncio.sleep(0)
+
+        # ═══ DAILY SALES + COGS (batched) ═══
+        j.update(progress=15, step="Generating 90 days of sales...")
+        BATCH = 3000
+        total_sales = 0
+        sales_batch, cogs_batch = [], []
+        await db.daily_sales.delete_many({})
+        await db.cogs.delete_many({})
+
+        for day_offset in range(90):
+            dt = now - timedelta(days=day_offset)
+            day_str = dt.strftime("%Y-%m-%d")
+            dow = dt.weekday()
+            month = dt.month
+            weekend_mult = 1.5 if dow >= 4 else 1.0
+            winter_month = month in (12, 1, 2)
+
+            for store in store_codes:
+                store_mult = TIER_MULT[tier_map[store]]
+                n_skus = max(10, int(len(all_eans) * random.uniform(0.30, 0.50)))
+                day_skus = random.sample(all_eans, k=min(n_skus, len(all_eans)))
+                for ean in day_skus:
+                    info = ean_to_info[ean]
+                    base_qty = random.randint(1, 6)
+                    mult = store_mult * weekend_mult
+                    if info["style"] in TOPSELLERS:
+                        mult *= 3.0
+                    if winter_month and info["style"] in WINTER_STYLES:
+                        mult *= 1.8
+                    qty = max(1, int(base_qty * mult))
+                    discount = random.uniform(0.75, 1.0)
+                    revenue = round(qty * info["mrp"] * discount, 2)
+                    sales_batch.append({"day":day_str,"store_code":store,"sku":ean,"style":info["style"],"quantity":qty,"revenue":revenue,"mrp":info["mrp"]})
+                    cogs_batch.append({"day":day_str,"store_code":store,"sku":ean,"style":info["style"],"quantity":qty,"cogs":round(qty*info["cost"],2),"revenue":revenue})
+                    total_sales += 1
+
+                    if len(sales_batch) >= BATCH:
+                        await db.daily_sales.insert_many(sales_batch)
+                        await db.cogs.insert_many(cogs_batch)
+                        sales_batch.clear()
+                        cogs_batch.clear()
+                        await asyncio.sleep(0)
+
+            # Update progress: 15% → 75% over 90 days
+            pct = 15 + int((day_offset / 90) * 60)
+            j.update(progress=pct, step=f"Sales day {day_offset + 1}/90...")
+
+        if sales_batch:
+            await db.daily_sales.insert_many(sales_batch)
+        if cogs_batch:
+            await db.cogs.insert_many(cogs_batch)
+
+        # ═══ STORE INVENTORY ═══
+        j.update(progress=78, step="Creating store inventory...")
+        inv_docs = []
+        today_str = now.strftime("%Y-%m-%d")
+        for store in store_codes:
+            for ean in all_eans:
+                roll = random.random()
+                qty = 0 if roll < 0.10 else random.randint(1, 5) if roll < 0.25 else random.randint(10, 35) if roll < 0.85 else random.randint(50, 120)
+                inv_docs.append({"store_code":store,"sku":ean,"ean":ean,"style":ean_to_info[ean]["style"],"size":ean_to_info[ean]["size"],"quantity":qty,"closing_stock":qty,"day":today_str})
+        await db.store_inventory.delete_many({})
+        for i in range(0, len(inv_docs), BATCH):
+            await db.store_inventory.insert_many(inv_docs[i:i + BATCH])
+            await asyncio.sleep(0)
+
+        # ═══ WAREHOUSE INVENTORY ═══
+        j.update(progress=88, step="Creating warehouse inventory...")
+        wh_inv = []
+        for wh in WAREHOUSES:
+            for ean in all_eans:
+                wh_inv.append({"warehouse_code":wh["warehouse_code"],"warehouse":wh["warehouse_code"],"sku":ean,"style":ean_to_info[ean]["style"],"size":ean_to_info[ean]["size"],"quantity":random.randint(20,300),"day":today_str})
+        await db.warehouse_inventory.delete_many({})
+        await db.warehouse_inventory.insert_many(wh_inv)
+
+        # ═══ OPEN ORDERS ═══
+        j.update(progress=93, step="Creating open orders...")
+        open_orders = []
+        for i in range(8):
+            ean = random.choice(all_eans)
+            open_orders.append({"order_id":f"PO-2026-{1001+i}","order_type":"vendor_po","sku":ean,"style":ean_to_info[ean]["style"],"quantity":random.randint(50,500),"destination":random.choice(["WH-NCR","WH-BLR","WH-MUM","WH-KOL"]),"eta_date":(now+timedelta(days=random.randint(3,14))).strftime("%Y-%m-%d"),"status":"in_transit"})
+        for i in range(7):
+            ean = random.choice(all_eans)
+            open_orders.append({"order_id":f"IST-2026-{2001+i}","order_type":"warehouse_transfer","sku":ean,"style":ean_to_info[ean]["style"],"quantity":random.randint(10,80),"source":random.choice(["WH-NCR","WH-BLR","WH-MUM","WH-KOL"]),"destination":random.choice(store_codes),"eta_date":(now+timedelta(days=random.randint(1,5))).strftime("%Y-%m-%d"),"status":"in_transit"})
+        await db.open_orders.delete_many({})
+        await db.open_orders.insert_many(open_orders)
+
+        # ═══ CACHE INVALIDATION ═══
+        j.update(progress=97, step="Finalizing...")
+        try:
+            from services.cache_service import invalidate_tenant
+            invalidate_tenant(_cache_tid())
+        except Exception:
+            pass
+
+        j.update(status="completed", progress=100, step="Complete!", summary={
+            "styles":len(STYLES),"skus":len(sku_docs),"stores":len(STORES),
+            "sales_records":total_sales,"days_of_history":90,
+        })
+        logger.info(f"Sample data seeded: {total_sales} sales rows")
+
+    except Exception as e:
+        logger.error(f"Sample data seed failed: {e}")
+        j.update(status="failed", error=str(e))
