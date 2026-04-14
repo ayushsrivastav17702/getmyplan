@@ -1,57 +1,40 @@
 # GetMyPlan PRD — AI-Powered Demand Planning Platform
 
 ## Original Problem Statement
-Multi-tenant SaaS demand planning platform.
+Multi-tenant SaaS demand planning platform for fashion retailers.
 
 ## Architecture
-- React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
+React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 
-## MongoDB Aggregation Migration — COMPLETE (Apr 2026)
-**All** high-traffic analytics endpoints migrated from Pandas to native MongoDB aggregation pipelines. Zero Pandas dependencies in analytics.
+## Production Readiness — April 14, 2026
 
-### Migrated Endpoints
-| Phase | Endpoint | Status |
-|---|---|---|
-| 1 | `/api/analytics/executive-kpis` | Done |
-| 1 | `/api/analytics/executive-revenue-trend` | Done |
-| 2 | `/api/analytics/doh` | Done |
-| 2 | `/api/analytics/stock-out` | Done (+ daily_trend charts) |
-| 2 | `/api/analytics/replenishment` | Done |
-| 3 | `/api/analytics/executive-dashboard` | Done |
-| 4 | `/api/analytics/warehouse/*` (5 endpoints) | Done |
-| 4 | `/api/analytics/planogram/*` (3 endpoints) | Done |
+### All Critical Issues Resolved
+| Priority | Issue | Status | Test |
+|----------|-------|--------|------|
+| P0 | Stock-Out ₹0 Lost Sales | Fixed | iter 83 (31/31) |
+| P1 | 503/520 OOM Crashes | Fixed | MongoDB migration complete |
+| P1 | Axios Retry Interceptor | Deployed | iter 84 (23/23) |
+| P1 | Health Check Endpoints | Deployed | iter 84 |
+| P2 | AI Onboarding Prompt (I-05) | Deployed | iter 84 |
+| P2 | Upload Status Cache (I-03) | Deployed | iter 84 |
+| P2 | COGS False Negative (I-04) | Deployed | iter 84 |
+| P4 | Warehouse Pandas→MongoDB | Deployed | iter 85 (21/21) |
+| P4 | Planogram Pandas→MongoDB | Deployed | iter 85 |
+| P4 | Stock-Out Daily Trends | Deployed | iter 85 |
 
-### Stock-Out Daily Trend (Task 3)
-- Aggregates historical inventory snapshots to compute daily stockout counts
-- Provides daily_trend, weekly_trend, monthly_trend, and 7-day moving_avg
-- Frontend Trends tab now renders line charts
-
-### Key Technical Decisions
-- `_has_tenant_id()` — auto-detects whether collection uses tenant_id field
-- Planogram uses `$ifNull` for ean/sku field compatibility
-- Cache flush: `POST /api/admin/cache/flush`
-- Health endpoints: `/api/health/memory`, `/api/health/ready`, `/api/health/live`
-
-### Resilience Layer
-- Axios retry interceptor (503/520 with exponential backoff + toast)
-- localStorage cache for upload status (I-03)
-- COGS upload count fix (I-04)
-- AI onboarding banner (I-05)
-
-### Key Files
-- `/app/backend/core/mongo_aggregations.py` — Core aggregation pipelines
-- `/app/backend/routes/warehouse.py` — Warehouse (MongoDB, no Pandas)
-- `/app/backend/routes/planogram.py` — Planogram (MongoDB, no Pandas)
-- `/app/backend/routes/health.py` — Health endpoints
-- `/app/frontend/src/utils/axiosRetry.js` — Retry interceptor
-
-## All Implemented Features
+### All Implemented Features
 - Multi-tenant RBAC, JWT + MFA (TOTP + Email OTP)
 - Invoice generation, Backup/Restore, User Funnel Analytics, Email Drip Campaigns
 - SFTP scheduling, Chunked uploads
-- 42 SEO blogs, Puppeteer pre-rendering, dynamic meta, sitemaps, RSS
-- 503/520 resilience (retry + toast + health probes)
+- 42 SEO blogs, Puppeteer pre-rendering, sitemaps, RSS
+- 503/520 resilience (axios retry + sonner toast + health probes)
 - Complete MongoDB aggregation migration (zero Pandas analytics)
+- Help Center (12 articles, 8 categories, search, public access)
+- Onboarding Checklist widget (7 steps, progress tracking)
+- FAQ Chatbot floating widget (GPT-5.2, every page)
+- Tawk.to live chat integration
+- Sample data loading UX fix (instant navigation + background load)
 
-## Remaining Backlog
-- None — all user-requested features and migrations complete
+### Post-Launch Polish (P3 — Next Sprint)
+- PDF Export Quality: chart label resolution, DOH legend font size
+- Upload Speed: 6,450 rows in 8.5s → target <5s via chunked inserts
