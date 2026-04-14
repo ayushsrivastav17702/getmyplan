@@ -51,6 +51,7 @@ export default function Navbar() {
               {dropdownOpen && (
                 <div className="absolute top-8 right-0 w-48 bg-white rounded-xl shadow-lg py-2 border border-gray-100 animate-fadeIn">
                   <a href="#faq" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">FAQ</a>
+                  <Link to="/help" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Help Center</Link>
                   <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Documentation</a>
                   <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API Reference</a>
                   <Link to="/blog" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Blog</Link>
@@ -90,6 +91,7 @@ export default function Navbar() {
             <a href="#how-it-works" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">How It Works</a>
             <a href="#pricing" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Pricing</a>
             <a href="#customers" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Customers</a>
+            <Link to="/help" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Help Center</Link>
             <div className="pt-3 border-t border-gray-100">
               <Link to="/login" onClick={() => setIsOpen(false)} className="block py-2 text-gray-600">Log in</Link>
               <button onClick={() => { setIsOpen(false); setShowDemo(true); }} className="block w-full py-2 text-center border border-blue-600 text-blue-600 rounded-lg mt-2">
