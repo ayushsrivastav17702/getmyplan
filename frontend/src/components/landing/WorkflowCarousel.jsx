@@ -7,26 +7,26 @@ const SLIDES = [
   {
     step: 1, icon: Upload, title: "Upload Your Data",
     desc: "Drop 5 CSV files. Our 75-rule validation fixes errors automatically. Templates provided. Takes 5 minutes.",
-    img: "/dashboard-screenshot.webp",
-    alt: "GetMyPlan data upload page with validation",
+    img: "/slides/slide-upload.webp",
+    alt: "GetMyPlan data upload page showing master data cards, today's status, and upload interface",
   },
   {
     step: 2, icon: Brain, title: "AI Analyzes Your Data",
     desc: "3-model ensemble runs in parallel. 92.7% forecast accuracy. Get 12-month predictions with confidence intervals.",
-    img: "/dashboard-screenshot.webp",
-    alt: "GetMyPlan AI demand forecast with confidence bands",
+    img: "/slides/slide-ai.webp",
+    alt: "GetMyPlan AI demand planning page showing forecast chart with Holt-Winters, Random Forest, and Seasonal Decomposition models",
   },
   {
     step: 3, icon: BarChart3, title: "See Exactly What's Happening",
     desc: "Color-coded DOH heatmap shows optimal, overstock, understock, and stockout at a glance. Drill down to SKU level.",
-    img: "/dashboard-screenshot.webp",
-    alt: "GetMyPlan DOH heatmap with store inventory health",
+    img: "/slides/slide-doh.webp",
+    alt: "GetMyPlan DOH analysis page with overall DOH score, status distribution donut, and trend chart",
   },
   {
     step: 4, icon: ShoppingCart, title: "Take Action",
     desc: "Auto-generated purchase orders. IST recommendations. Know exactly what to order, how much, and where.",
-    img: "/dashboard-screenshot.webp",
-    alt: "GetMyPlan replenishment planner with purchase orders",
+    img: "/slides/slide-replenishment.webp",
+    alt: "GetMyPlan replenishment planner showing reorder points table with store, SKU, demand, safety stock, and trigger columns",
   },
 ];
 
@@ -100,7 +100,7 @@ export default function WorkflowCarousel() {
         {/* CTA */}
         <div className="mt-10 text-center">
           <Link to="/signup" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-xl transition-all hover:scale-105">
-            Start Free Trial
+            Start Your Free Trial
             <ChevronRight className="h-5 w-5" />
           </Link>
         </div>

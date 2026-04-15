@@ -4,7 +4,7 @@ import { Clock, TrendingDown, HelpCircle, Package } from "lucide-react";
 
 const PAINS = [
   { icon: Clock, label: "Excel Hell", stat: "14 hours/week", desc: "in spreadsheets doing manual demand planning", color: "text-red-500 bg-red-50" },
-  { icon: TrendingDown, label: "Stockouts", stat: "8-15L/month", desc: "lost to empty shelves and missed sales", color: "text-orange-500 bg-orange-50" },
+  { icon: TrendingDown, label: "Stockouts", stat: "$50K-100K/mo", desc: "lost to empty shelves and missed sales", color: "text-orange-500 bg-orange-50" },
   { icon: HelpCircle, label: "Guesswork", stat: '"We think..."', desc: 'ordering based on gut feel, not data', color: "text-amber-500 bg-amber-50" },
   { icon: Package, label: "Dead Stock", stat: "30%", desc: "of inventory never sells at full price", color: "text-rose-500 bg-rose-50" },
 ];
