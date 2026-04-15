@@ -42,39 +42,63 @@ const ExecutiveDashboard = () => {
     setExporting(true);
     try {
       const canvas = await html2canvas(dashboardRef.current, {
-        scale: 2,
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: "#F8F9FA",
+        imageTimeout: 15000,
+        onclone: (doc) => {
+          // Force crisp text rendering in cloned DOM
+          doc.querySelectorAll("canvas").forEach((c) => {
+            c.style.imageRendering = "crisp-edges";
+          });
+          // Increase chart label font sizes for export
+          doc.querySelectorAll(".chartjs-render-monitor, canvas").forEach((c) => {
+            c.style.fontSmooth = "always";
+          });
+        },
       });
-      const imgData = canvas.toDataURL("image/png");
-      const imgW = canvas.width;
-      const imgH = canvas.height;
 
-      const pdf = new jsPDF({ orientation: imgW > imgH ? "l" : "p", unit: "px", format: [imgW + 40, imgH + 100] });
+      // Use high-quality JPEG for smaller file size with sharp text
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      const pxW = canvas.width;
+      const pxH = canvas.height;
+
+      // Convert to points (72 DPI) for proper print sizing
+      const ptW = (pxW / 3) * 0.75;
+      const ptH = (pxH / 3) * 0.75;
+      const pageW = ptW + 40;
+      const pageH = ptH + 80;
+
+      const pdf = new jsPDF({
+        orientation: ptW > ptH ? "l" : "p",
+        unit: "pt",
+        format: [pageW, pageH],
+        compress: true,
+      });
 
       // Header
-      pdf.setFillColor(1, 118, 211);
-      pdf.rect(0, 0, imgW + 40, 50, "F");
+      pdf.setFillColor(11, 37, 69);
+      pdf.rect(0, 0, pageW, 40, "F");
       pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(18);
+      pdf.setFontSize(14);
       pdf.setTextColor(255, 255, 255);
-      pdf.text("Executive Dashboard Report", 20, 33);
+      pdf.text("Executive Dashboard Report", 16, 26);
 
       // Date
-      pdf.setFontSize(10);
+      pdf.setFontSize(8);
       pdf.setTextColor(200, 220, 255);
       const dateStr = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
-      pdf.text(`Generated: ${dateStr}`, imgW + 20, 33, { align: "right" });
+      pdf.text(`Generated: ${dateStr}`, pageW - 16, 26, { align: "right" });
 
-      // Dashboard image
-      pdf.addImage(imgData, "PNG", 20, 60, imgW, imgH);
+      // Dashboard image (high resolution, scaled to fit)
+      pdf.addImage(imgData, "JPEG", 20, 50, ptW, ptH);
 
       // Footer
-      pdf.setFontSize(8);
+      pdf.setFontSize(7);
       pdf.setTextColor(150, 150, 150);
-      pdf.text("GetMyPlan Analytics - Confidential", 20, imgH + 85);
-      pdf.text(`Page 1 of 1`, imgW + 20, imgH + 85, { align: "right" });
+      pdf.text("GetMyPlan Analytics - Confidential", 16, pageH - 10);
+      pdf.text("Page 1 of 1", pageW - 16, pageH - 10, { align: "right" });
 
       pdf.save(`executive-dashboard-${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (err) {

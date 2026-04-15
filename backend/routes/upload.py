@@ -674,7 +674,10 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
             await collection.delete_many({"tenant_id": tenant_id})
 
     if records:
-        await collection.insert_many(records)
+        # Batched insert for speed — 2000 rows per batch, unordered for parallelism
+        BATCH = 2000
+        for i in range(0, len(records), BATCH):
+            await collection.insert_many(records[i:i + BATCH], ordered=False)
 
     return True
 
