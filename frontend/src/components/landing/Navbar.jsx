@@ -41,7 +41,7 @@ export default function Navbar() {
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+                onBlur={() => setTimeout(() => setDropdownOpen(false), 300)}
                 className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition"
                 data-testid="nav-resources-dropdown"
               >
@@ -50,11 +50,9 @@ export default function Navbar() {
               </button>
               {dropdownOpen && (
                 <div className="absolute top-8 right-0 w-48 bg-white rounded-xl shadow-lg py-2 border border-gray-100 animate-fadeIn">
-                  <a href="#faq" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">FAQ</a>
                   <Link to="/help" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Help Center</Link>
-                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Documentation</a>
-                  <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API Reference</a>
                   <Link to="/blog" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Blog</Link>
+                  <a href="/#faq" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">FAQ</a>
                 </div>
               )}
             </div>
