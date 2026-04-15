@@ -74,21 +74,6 @@ export default function LandingPage() {
 
           <h2 className="text-2xl font-bold text-gray-900 mt-10">What data do I need to start?</h2>
           <p className="text-gray-600">Five CSV files: SKU Master (products), Store Master (locations), Daily Sales (90+ days recommended), Store Inventory (current stock), and COGS (cost data). Download our templates, paste your data, and upload. 75-rule validation fixes common errors automatically.</p>
-
-          <h2 className="text-2xl font-bold text-gray-900 mt-10">GetMyPlan vs Excel vs Traditional ERP</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-50"><th className="border border-gray-200 p-3 text-left">Feature</th><th className="border border-gray-200 p-3 text-left">GetMyPlan</th><th className="border border-gray-200 p-3 text-left">Excel</th><th className="border border-gray-200 p-3 text-left">Traditional ERP</th></tr>
-              </thead>
-              <tbody>
-                <tr><td className="border border-gray-200 p-3">AI Demand Forecasting</td><td className="border border-gray-200 p-3 text-green-600 font-medium">92.7% accuracy</td><td className="border border-gray-200 p-3 text-red-500">Manual only</td><td className="border border-gray-200 p-3 text-amber-500">Basic</td></tr>
-                <tr><td className="border border-gray-200 p-3">Stockout Prediction</td><td className="border border-gray-200 p-3 text-green-600 font-medium">14-day warning</td><td className="border border-gray-200 p-3 text-red-500">None</td><td className="border border-gray-200 p-3 text-amber-500">Reactive</td></tr>
-                <tr><td className="border border-gray-200 p-3">Setup Time</td><td className="border border-gray-200 p-3 text-green-600 font-medium">15 minutes</td><td className="border border-gray-200 p-3 text-amber-500">Days</td><td className="border border-gray-200 p-3 text-red-500">Months</td></tr>
-                <tr><td className="border border-gray-200 p-3">Size Curve Optimization</td><td className="border border-gray-200 p-3 text-green-600 font-medium">Built-in</td><td className="border border-gray-200 p-3 text-red-500">Manual</td><td className="border border-gray-200 p-3 text-red-500">None</td></tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </section>
 
