@@ -1,6 +1,20 @@
 /* ── Help Center ────────────────────────────────── */
 .help-center-page { min-height: 100vh; background: #f8fafc; }
 
+/* Nav row */
+.help-nav-row { display: flex; align-items: center; justify-content: space-between; max-width: 1280px; margin: 0 auto 16px; padding: 0; }
+.help-nav-back { background: transparent; border: none; color: #0176D3; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0; }
+.help-nav-back:hover { text-decoration: underline; }
+.help-breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #94a3b8; }
+.help-breadcrumb a, .help-breadcrumb button { color: #64748b; text-decoration: none; background: none; border: none; cursor: pointer; font-size: 13px; padding: 0; }
+.help-breadcrumb a:hover, .help-breadcrumb button:hover { color: #0176D3; }
+.help-breadcrumb span:last-child { color: #334155; font-weight: 500; }
+.help-nav-dashboard { display: inline-flex; align-items: center; gap: 4px; color: #0176D3; font-size: 13px; font-weight: 500; text-decoration: none; }
+.help-nav-dashboard:hover { text-decoration: underline; }
+.help-nav-home { display: inline-flex; align-items: center; gap: 4px; color: #64748b; font-size: 13px; text-decoration: none; }
+.help-nav-home:hover { color: #0176D3; }
+.help-article-bottom-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding: 16px 0; border-top: 1px solid #e2e8f0; }
+
 /* Hero */
 .help-hero { text-align: center; padding: 48px 20px 32px; }
 .help-hero h1 { font-size: 32px; font-weight: 700; color: #0f172a; margin: 0 0 8px; }

@@ -4,9 +4,10 @@ import {
   Search, BookOpen, ChevronRight, LogIn, Database, Upload,
   LayoutDashboard, AlertTriangle, Store, Brain, ShoppingCart,
   Settings, AlertCircle, Download, Headphones, MessageCircle,
-  Mail, Phone,
+  Mail, Home, ArrowLeft, Printer,
 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
+import { useNavigate, Link } from "react-router-dom";
 
 const ARTICLES = [
   {
@@ -111,6 +112,8 @@ const HelpCenter = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedArticle, setSelectedArticle] = useState(null);
+  const navigate = useNavigate();
+  const isAuth = !!localStorage.getItem("merch_auth");
 
   const filteredArticles = ARTICLES.filter((a) => {
     const q = searchQuery.toLowerCase();
@@ -128,15 +131,37 @@ const HelpCenter = () => {
           <title>{`${selectedArticle.title} - GetMyPlan Help Center`}</title>
           <meta name="description" content={selectedArticle.description} />
         </Helmet>
-        <div className="help-article-header">
-          <button data-testid="help-back-btn" className="help-back-btn" onClick={() => setSelectedArticle(null)}>
-            &#8592; Back to Help Center
+
+        {/* Nav row */}
+        <div className="help-nav-row">
+          <button className="help-nav-back" onClick={() => navigate(-1)}>
+            <ArrowLeft size={16} /> Back
           </button>
+          <nav className="help-breadcrumb">
+            <Link to="/">Home</Link><span>/</span>
+            <button onClick={() => setSelectedArticle(null)}>Help Center</button><span>/</span>
+            <span>{selectedArticle.categoryName}</span>
+          </nav>
+          {isAuth && (
+            <Link to="/dashboard" className="help-nav-dashboard"><Home size={14} /> Dashboard</Link>
+          )}
+        </div>
+
+        <div className="help-article-header">
           <span className="help-cat-badge">{selectedArticle.categoryName}</span>
           <h1 className="help-article-title">{selectedArticle.title}</h1>
           <p className="help-article-desc">{selectedArticle.description}</p>
         </div>
         <div className="help-article-body" dangerouslySetInnerHTML={{ __html: selectedArticle.content }} />
+
+        {/* Bottom nav */}
+        <div className="help-article-bottom-nav">
+          <button onClick={() => setSelectedArticle(null)} className="help-nav-back">
+            <ArrowLeft size={16} /> Back to Help Center
+          </button>
+          <Link to="/" className="help-nav-home"><Home size={14} /> Homepage</Link>
+        </div>
+
         <div className="help-article-footer">
           <h3>Still need help?</h3>
           <div className="help-support-row">
@@ -155,6 +180,19 @@ const HelpCenter = () => {
         <meta name="description" content="Step-by-step guides for using GetMyPlan. Learn how to upload data, read dashboards, generate forecasts, and more." />
       </Helmet>
       <div className="help-hero">
+        {/* Nav row */}
+        <div className="help-nav-row">
+          <button className="help-nav-back" onClick={() => navigate(-1)}>
+            <ArrowLeft size={16} /> Back
+          </button>
+          <nav className="help-breadcrumb">
+            <Link to="/">Home</Link><span>/</span>
+            <span>Help Center</span>
+          </nav>
+          {isAuth && (
+            <Link to="/dashboard" className="help-nav-dashboard"><Home size={14} /> Dashboard</Link>
+          )}
+        </div>
         <h1>How can we help you?</h1>
         <p>Step-by-step guides to master GetMyPlan</p>
         <div className="help-search" data-testid="help-search">
