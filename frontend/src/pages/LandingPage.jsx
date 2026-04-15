@@ -54,7 +54,6 @@ export default function LandingPage() {
       </Helmet>
       <Navbar />
       <Hero onWatchDemo={openTour} onRequestDemo={openDemo} />
-      <StatsSection />
       <ProblemAgitation />
       <StatsSection />
       <WorkflowCarousel />

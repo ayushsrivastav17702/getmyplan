@@ -22,10 +22,10 @@ export default function Testimonials() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <motion.h2 initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} className="text-3xl sm:text-4xl lg:text-5xl font-bold">
-            Trusted by fashion retailers
+            What our beta customers say
           </motion.h2>
           <motion.p initial={{ opacity: 0, y: 20 }} animate={isInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.1 }} className="mt-4 text-base sm:text-lg text-gray-300">
-          Join fashion brands worldwide using GetMyPlan to plan smarter.
+          Real feedback from fashion brands using GetMyPlan.
         </motion.p>
         </div>
 
@@ -76,25 +76,6 @@ export default function Testimonials() {
               />
             ))}
           </div>
-        </div>
-
-        {/* Summary stats */}
-        <div className="mt-12 pt-8 border-t border-white/10">
-          <div className="flex flex-wrap justify-center gap-8 sm:gap-16">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400">92.7%</div>
-              <div className="text-sm text-gray-300">Forecast Accuracy*</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400">41%</div>
-              <div className="text-sm text-gray-300">Stockout Reduction**</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-400">4.9<span className="text-yellow-400 text-xl ml-0.5">&#9733;</span></div>
-              <div className="text-sm text-gray-300">Beta User Rating</div>
-            </div>
-          </div>
-          <p className="text-center text-xs text-gray-500 mt-4">*Backtested on 50+ datasets | **Based on beta results</p>
         </div>
       </div>
     </section>
