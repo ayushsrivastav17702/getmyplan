@@ -88,11 +88,6 @@ export default function Pricing() {
             Start free. Upgrade when you need more.
           </motion.p>
 
-          {/* AEO: TL;DR for pricing */}
-          <p className="mt-3 text-sm text-gray-500 max-w-xl mx-auto">
-            <strong>TL;DR:</strong> Starter ₹29K/mo (10 stores). Pro ₹50K/mo (50 stores + AI forecasting). Enterprise custom. 7-day free trial included. Annual plans save 20%.
-          </p>
-
           {/* Currency toggle */}
           <div className="mt-6 inline-flex items-center gap-1 p-1 bg-gray-100 rounded-full">
             <button

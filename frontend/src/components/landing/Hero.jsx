@@ -31,14 +31,9 @@ export default function Hero({ onWatchDemo, onRequestDemo }) {
             </h1>
 
             <p className="mt-5 text-base sm:text-lg text-gray-600 max-w-lg">
-              AI predicts what you'll sell, where, and when &mdash; with <strong>92.7% forecast accuracy</strong>. 
-              Stop losing revenue to stockouts and dead stock.
+              AI predicts what you'll sell, where, and when &mdash; with <strong>92.7% forecast accuracy</strong>.
+              Upload 5 CSV files. Get 12-month forecasts, stockout warnings, and purchase orders in 15 minutes.
             </p>
-
-            {/* AEO: TL;DR box */}
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700 max-w-lg">
-              <strong>TL;DR:</strong> GetMyPlan uses 3-model AI ensemble to predict fashion demand at 92.7% accuracy. Upload 5 CSV files. Get 12-month forecasts, stockout warnings, and auto-generated purchase orders in 15 minutes. Free 7-day trial.
-            </div>
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Link to="/signup" data-testid="hero-signup-btn"
