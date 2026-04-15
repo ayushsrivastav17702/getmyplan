@@ -3,9 +3,10 @@ import { Helmet } from "react-helmet-async";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
 import TrustBar from "../components/landing/TrustBar";
+import ProblemAgitation from "../components/landing/ProblemAgitation";
 import StatsSection from "../components/landing/StatsSection";
 import Features from "../components/landing/Features";
-import HowItWorks from "../components/landing/HowItWorks";
+import WorkflowCarousel from "../components/landing/WorkflowCarousel";
 import ComparisonTable from "../components/landing/ComparisonTable";
 import Pricing from "../components/landing/Pricing";
 import Testimonials from "../components/landing/Testimonials";
@@ -30,16 +31,17 @@ export default function LandingPage() {
       <Helmet>
         <link rel="canonical" href="https://getmyplan.in" />
         <meta property="og:title" content="GetMyPlan — AI-Powered Demand Planning for Fashion Retail" />
-        <meta property="og:description" content="AI demand planning platform for fashion retailers. 91% forecast accuracy, 40% stockout reduction, 15-min setup." />
+        <meta property="og:description" content="AI demand planning platform for fashion retailers. 92.7% forecast accuracy, 41% stockout reduction, 15-min setup." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://getmyplan.in" />
       </Helmet>
       <Navbar />
       <Hero onWatchDemo={openTour} onRequestDemo={openDemo} />
       <TrustBar />
+      <ProblemAgitation />
       <StatsSection />
+      <WorkflowCarousel />
       <Features />
-      <HowItWorks />
       <ComparisonTable />
       <Pricing />
       <Testimonials />
