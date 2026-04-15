@@ -134,6 +134,14 @@ const HelpCenter = () => {
         <Helmet>
           <title>{`${selectedArticle.title} - GetMyPlan Help Center`}</title>
           <meta name="description" content={selectedArticle.description} />
+          <script type="application/ld+json">{JSON.stringify({
+            "@context": "https://schema.org", "@type": "Article",
+            "headline": selectedArticle.title,
+            "description": selectedArticle.description,
+            "author": { "@type": "Organization", "name": "GetMyPlan" },
+            "publisher": { "@type": "Organization", "name": "GetMyPlan" },
+            "mainEntityOfPage": { "@type": "WebPage", "@id": `https://getmyplan.in/help/${selectedArticle.id}` }
+          })}</script>
         </Helmet>
 
         {/* Nav row */}
@@ -181,7 +189,14 @@ const HelpCenter = () => {
     <div className="help-center-page" data-testid="help-center">
       <Helmet>
         <title>Help Center - GetMyPlan</title>
-        <meta name="description" content="Step-by-step guides for using GetMyPlan. Learn how to upload data, read dashboards, generate forecasts, and more." />
+        <meta name="description" content="Step-by-step guides for using GetMyPlan. Learn how to upload data, read dashboards, generate AI forecasts, prevent stockouts, and create purchase orders." />
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org", "@type": "FAQPage",
+          "mainEntity": ARTICLES.slice(0, 6).map(a => ({
+            "@type": "Question", "name": a.title,
+            "acceptedAnswer": { "@type": "Answer", "text": a.description }
+          }))
+        })}</script>
       </Helmet>
       <div className="help-hero">
         {/* Nav row */}

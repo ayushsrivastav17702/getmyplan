@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { Check, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import ContactModal from "./ContactModal";
 
 const PRICES = {
@@ -66,6 +67,12 @@ export default function Pricing() {
 
   return (
     <>
+    <Helmet>
+      <script type="application/ld+json">{JSON.stringify([
+        {"@context":"https://schema.org","@type":"Product","name":"GetMyPlan Starter","description":"AI demand planning for up to 10 stores","offers":{"@type":"Offer","price":"29000","priceCurrency":"INR","priceValidUntil":"2026-12-31","url":"https://getmyplan.in/pricing"}},
+        {"@context":"https://schema.org","@type":"Product","name":"GetMyPlan Professional","description":"AI demand planning for up to 50 stores with AI forecasting and API access","offers":{"@type":"Offer","price":"50000","priceCurrency":"INR","priceValidUntil":"2026-12-31","url":"https://getmyplan.in/pricing"}}
+      ])}</script>
+    </Helmet>
     <section id="pricing" data-testid="pricing-section" className="py-20 bg-white" ref={ref}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
@@ -80,6 +87,11 @@ export default function Pricing() {
             className="mt-4 text-base sm:text-lg text-gray-600">
             Start free. Upgrade when you need more.
           </motion.p>
+
+          {/* AEO: TL;DR for pricing */}
+          <p className="mt-3 text-sm text-gray-500 max-w-xl mx-auto">
+            <strong>TL;DR:</strong> Starter ₹29K/mo (10 stores). Pro ₹50K/mo (50 stores + AI forecasting). Enterprise custom. 7-day free trial included. Annual plans save 20%.
+          </p>
 
           {/* Currency toggle */}
           <div className="mt-6 inline-flex items-center gap-1 p-1 bg-gray-100 rounded-full">

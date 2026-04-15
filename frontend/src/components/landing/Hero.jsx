@@ -35,6 +35,11 @@ export default function Hero({ onWatchDemo, onRequestDemo }) {
               Stop losing revenue to stockouts and dead stock.
             </p>
 
+            {/* AEO: TL;DR box */}
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700 max-w-lg">
+              <strong>TL;DR:</strong> GetMyPlan uses 3-model AI ensemble to predict fashion demand at 92.7% accuracy. Upload 5 CSV files. Get 12-month forecasts, stockout warnings, and auto-generated purchase orders in 15 minutes. Free 7-day trial.
+            </div>
+
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Link to="/signup" data-testid="hero-signup-btn"
                 className="group inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-xl transition-all hover:scale-105">
