@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from "react";
 import { Helmet } from "react-helmet-async";
 import Navbar from "../components/landing/Navbar";
 import Hero from "../components/landing/Hero";
-import TrustBar from "../components/landing/TrustBar";
 import ProblemAgitation from "../components/landing/ProblemAgitation";
 import StatsSection from "../components/landing/StatsSection";
 import Features from "../components/landing/Features";
@@ -55,7 +54,7 @@ export default function LandingPage() {
       </Helmet>
       <Navbar />
       <Hero onWatchDemo={openTour} onRequestDemo={openDemo} />
-      <TrustBar />
+      <StatsSection />
       <ProblemAgitation />
       <StatsSection />
       <WorkflowCarousel />
