@@ -114,6 +114,10 @@ const HelpCenter = () => {
   const [selectedArticle, setSelectedArticle] = useState(null);
   const navigate = useNavigate();
   const isAuth = !!localStorage.getItem("merch_auth");
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/");
+  };
 
   const filteredArticles = ARTICLES.filter((a) => {
     const q = searchQuery.toLowerCase();
@@ -134,7 +138,7 @@ const HelpCenter = () => {
 
         {/* Nav row */}
         <div className="help-nav-row">
-          <button className="help-nav-back" onClick={() => navigate(-1)}>
+          <button className="help-nav-back" onClick={goBack}>
             <ArrowLeft size={16} /> Back
           </button>
           <nav className="help-breadcrumb">
@@ -182,7 +186,7 @@ const HelpCenter = () => {
       <div className="help-hero">
         {/* Nav row */}
         <div className="help-nav-row">
-          <button className="help-nav-back" onClick={() => navigate(-1)}>
+          <button className="help-nav-back" onClick={goBack}>
             <ArrowLeft size={16} /> Back
           </button>
           <nav className="help-breadcrumb">
