@@ -99,3 +99,28 @@ def get_plan_info(plan: str) -> dict:
             "view_only": access == "view_only",
         }
     return {"modules": modules, "limits": cfg["limits"]}
+
+
+async def check_plan_limit(shared_db, tenant_id: str, resource: str):
+    """Check if a tenant has exceeded their plan limit for a resource.
+    resource: 'users' or 'stores'
+    Returns (allowed: bool, current: int, limit: int, plan: str)
+    """
+    tenant = await shared_db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "plan_type": 1})
+    plan = tenant.get("plan_type", "starter") if tenant else "starter"
+    limits = get_plan_limits(plan)
+
+    if resource == "users":
+        current = await shared_db.user_tenants.count_documents({"tenant_id": tenant_id, "is_active": True})
+        max_val = limits.get("max_users", 999999)
+    elif resource == "stores":
+        # Check across possible store collections
+        try:
+            current = await shared_db.store_master.count_documents({"tenant_id": tenant_id})
+        except Exception:
+            current = 0
+        max_val = limits.get("max_stores", 999999)
+    else:
+        return True, 0, 999999, plan
+
+    return current < max_val, current, max_val, plan

@@ -231,7 +231,7 @@ async def list_tenants(user: dict = Depends(_dep_get_current_user)):
 
 
 @router.post("/tenants")
-async def create_tenant(body: CreateTenantReq, user: dict = Depends(_dep_get_current_user)):
+async def create_tenant(body: CreateTenantReq, request: Request, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
 
@@ -419,6 +419,12 @@ async def create_user(body: CreateUserReq, request: Request, user: dict = Depend
     tenant = await shared.tenants.find_one({"tenant_id": body.tenant_id})
     if not tenant:
         raise HTTPException(404, f"Tenant '{body.tenant_id}' not found")
+
+    # Check plan user limit
+    from core.plan_access import check_plan_limit
+    allowed, current, limit, plan = await check_plan_limit(shared, body.tenant_id, "users")
+    if not allowed:
+        raise HTTPException(400, f"User limit reached ({current}/{limit}) for {plan} plan. Upgrade to add more users.")
 
     temp_password = secrets.token_urlsafe(12)
     hashed = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
@@ -676,3 +682,118 @@ async def dismiss_alert(alert_id: str, user: dict = Depends(_dep_get_current_use
     if result.matched_count == 0:
         raise HTTPException(404, "Alert not found")
     return {"success": True, "alert_id": alert_id, "status": "dismissed"}
+
+
+# ── Platform Analytics ──
+
+PLAN_MRR = {
+    "trial": 0,
+    "starter": 29000,
+    "professional": 99000,
+    "business": 199000,
+    "enterprise": 249000,
+}
+
+
+@router.get("/analytics")
+async def get_platform_analytics(user: dict = Depends(_dep_get_current_user)):
+    """Platform-wide analytics: MRR, tenant health, active users, churn."""
+    _super_admin_only(user)
+    shared = _shared()
+
+    # ── Tenant stats ──
+    tenants = []
+    async for t in shared.tenants.find({}, {"_id": 0}):
+        tenants.append(t)
+
+    total_tenants = len(tenants)
+    active_tenants = sum(1 for t in tenants if t.get("status") == "active")
+    trial_tenants = sum(1 for t in tenants if t.get("plan_type") == "trial" and t.get("status") == "active")
+    suspended_tenants = sum(1 for t in tenants if t.get("status") in ("suspended", "trial_expired"))
+
+    # Plan distribution
+    plan_dist = {}
+    for t in tenants:
+        p = t.get("plan_type", "starter")
+        plan_dist[p] = plan_dist.get(p, 0) + 1
+
+    # MRR calculation (only active paying tenants)
+    mrr = 0
+    for t in tenants:
+        if t.get("status") == "active" and t.get("plan_type") != "trial":
+            mrr += PLAN_MRR.get(t.get("plan_type", "starter"), 0)
+
+    # ── User stats ──
+    total_users = await shared.user_tenants.count_documents({})
+    active_users = await shared.user_tenants.count_documents({"is_active": True})
+
+    # Users active in last 7 days
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    recent_logins = await shared.users.count_documents({"last_login": {"$gte": week_ago}})
+
+    # Users active in last 30 days
+    month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    monthly_active = await shared.users.count_documents({"last_login": {"$gte": month_ago}})
+
+    # ── Tenant health breakdown ──
+    tenant_health = []
+    for t in tenants:
+        tid = t.get("tenant_id", "")
+        user_count = await shared.user_tenants.count_documents({"tenant_id": tid})
+        status = t.get("status", "unknown")
+        plan = t.get("plan_type", "starter")
+
+        # Check trial expiration
+        trial_days_left = None
+        if plan == "trial" and t.get("trial_end"):
+            try:
+                trial_end = datetime.fromisoformat(t["trial_end"])
+                if trial_end.tzinfo is None:
+                    trial_end = trial_end.replace(tzinfo=timezone.utc)
+                trial_days_left = max(0, (trial_end - datetime.now(timezone.utc)).days)
+            except Exception:
+                pass
+
+        from core.plan_access import get_plan_limits
+        limits = get_plan_limits(plan)
+
+        tenant_health.append({
+            "tenant_id": tid,
+            "company_name": t.get("company_name", tid),
+            "plan": plan,
+            "status": status,
+            "users": user_count,
+            "max_users": limits.get("max_users", 999),
+            "mrr": PLAN_MRR.get(plan, 0) if status == "active" and plan != "trial" else 0,
+            "trial_days_left": trial_days_left,
+            "created_at": t.get("created_at"),
+        })
+
+    # ── Signups over time (last 30 days) ──
+    signup_trend = []
+    for i in range(30, -1, -1):
+        day = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        count = sum(1 for t in tenants if t.get("created_at", "")[:10] == day)
+        signup_trend.append({"date": day, "count": count})
+
+    # ── Security alerts ──
+    active_alerts = await shared.admin_alerts.count_documents({"status": "active"})
+
+    return {
+        "overview": {
+            "total_tenants": total_tenants,
+            "active_tenants": active_tenants,
+            "trial_tenants": trial_tenants,
+            "suspended_tenants": suspended_tenants,
+            "mrr": mrr,
+            "mrr_formatted": f"₹{mrr:,.0f}",
+            "total_users": total_users,
+            "active_users": active_users,
+            "weekly_active_users": recent_logins,
+            "monthly_active_users": monthly_active,
+            "active_alerts": active_alerts,
+        },
+        "plan_distribution": plan_dist,
+        "tenant_health": sorted(tenant_health, key=lambda x: x["mrr"], reverse=True),
+        "signup_trend": signup_trend,
+    }

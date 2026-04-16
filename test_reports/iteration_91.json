@@ -1,0 +1,119 @@
+{
+  "summary": "Iteration 91: Platform Analytics & Plan Limits Testing. All 19 backend tests passed. Frontend verified: Platform Analytics page shows KPI cards (MRR, Active Tenants, Trial Tenants, Total Users, WAU, Active Alerts), Plan Distribution bars with percentages, Signup Trend 30-day chart, Tenant Health table with plan/status badges and users/limit. Sidebar shows Platform Analytics link under SUPER ADMIN section. Fixed bug: create_tenant endpoint was missing 'request' parameter causing 500 error.",
+
+  "test_case_matrix": {
+    "BACKEND_ANALYTICS_ENDPOINT": {
+      "TEST_01_analytics_returns_200": {"status": "PASS", "notes": "GET /api/admin/platform/analytics returns 200 for super admin"},
+      "TEST_02_overview_section": {"status": "PASS", "notes": "Response contains overview with mrr, mrr_formatted, total_tenants, active_tenants, trial_tenants, total_users, active_users, weekly_active_users, active_alerts"},
+      "TEST_03_plan_distribution": {"status": "PASS", "notes": "Response contains plan_distribution object with plan counts"},
+      "TEST_04_tenant_health_sorted": {"status": "PASS", "notes": "tenant_health array sorted by MRR descending, contains tenant_id, plan, status, users, max_users, mrr"},
+      "TEST_05_signup_trend_31_days": {"status": "PASS", "notes": "signup_trend has 31 days with date and count fields"},
+      "TEST_06_403_for_non_super_admin": {"status": "PASS", "notes": "Returns 403 for regular admin user"},
+      "TEST_07_401_without_token": {"status": "PASS", "notes": "Returns 401 without auth token"}
+    },
+    "BACKEND_PLAN_LIMITS": {
+      "TEST_08_get_tenants_list": {"status": "PASS", "notes": "GET /api/admin/platform/tenants returns tenant list"},
+      "TEST_09_create_test_tenant": {"status": "PASS", "notes": "Created test tenant with starter plan (max 3 users)"},
+      "TEST_10_add_users_within_limit": {"status": "PASS", "notes": "Added 2 users to starter tenant (within 3 user limit)"},
+      "TEST_11_exceed_limit_returns_400": {"status": "PASS", "notes": "Adding 4th user returns 400 with limit exceeded message"},
+      "TEST_12_cleanup_test_tenant": {"status": "PASS", "notes": "Deleted test tenant successfully"}
+    },
+    "BACKEND_PLAN_LIMITS_FUNCTION": {
+      "TEST_13_user_limits_per_plan": {"status": "PASS", "notes": "tenant_health shows correct max_users per plan (starter=3, professional=10, enterprise=999999)"},
+      "TEST_14_mrr_values_correct": {"status": "PASS", "notes": "MRR values match PLAN_MRR dict (starter=29000, professional=99000, enterprise=249000)"}
+    },
+    "BACKEND_TRIAL_SCHEDULER": {
+      "TEST_15_trial_days_left": {"status": "PASS", "notes": "Trial tenants show trial_days_left field"},
+      "TEST_16_health_endpoint": {"status": "PASS", "notes": "Health endpoint confirms app running (scheduler runs in background)"}
+    },
+    "BACKEND_DATA_INTEGRITY": {
+      "TEST_17_mrr_sum_matches": {"status": "PASS", "notes": "Overview MRR equals sum of individual tenant MRRs"},
+      "TEST_18_tenant_counts_match": {"status": "PASS", "notes": "Overview counts match tenant_health list counts"},
+      "TEST_19_plan_distribution_matches": {"status": "PASS", "notes": "Plan distribution matches tenant_health plans"}
+    },
+    "FRONTEND_PLATFORM_ANALYTICS": {
+      "STEP_01_page_loads": {"status": "PASS", "notes": "Platform Analytics page loads at /admin/analytics"},
+      "STEP_02_page_title": {"status": "PASS", "notes": "Page title 'Platform Analytics' displayed"},
+      "STEP_03_kpi_mrr": {"status": "PASS", "notes": "MRR KPI card shows ₹563,000"},
+      "STEP_04_kpi_active_tenants": {"status": "PASS", "notes": "Active Tenants KPI shows 9 (15 total)"},
+      "STEP_05_kpi_trial_tenants": {"status": "PASS", "notes": "Trial Tenants KPI shows 2"},
+      "STEP_06_kpi_total_users": {"status": "PASS", "notes": "Total Users KPI shows 23 (17 active)"},
+      "STEP_07_kpi_wau": {"status": "PASS", "notes": "WAU KPI shows 3 (last 7 days)"},
+      "STEP_08_kpi_active_alerts": {"status": "PASS", "notes": "Active Alerts KPI shows 0"},
+      "STEP_09_plan_distribution_bars": {"status": "PASS", "notes": "4 plan bars: Trial (47%), Starter (33%), Professional (13%), Enterprise (7%)"},
+      "STEP_10_signup_trend_chart": {"status": "PASS", "notes": "30-day bar chart displayed"},
+      "STEP_11_tenant_health_table": {"status": "PASS", "notes": "Table shows tenant_id, plan badge, status badge, users/limit, MRR, trial days, created date"},
+      "STEP_12_sidebar_link": {"status": "PASS", "notes": "Platform Analytics link found in SUPER ADMIN section"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "19/19 PASS",
+    "FRONTEND_STEPS": "12/12 PASS",
+    "TOTAL": "31/31 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "bugs_fixed": [
+    {
+      "file": "/app/backend/routes/super_admin.py",
+      "issue": "create_tenant endpoint missing 'request: Request' parameter causing NameError and 500 response",
+      "fix": "Added 'request: Request' parameter to function signature",
+      "line": 234
+    }
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_platform_analytics_plan_limits_iter91.py",
+    "/app/test_reports/pytest/pytest_results_iter91.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Platform Analytics endpoint properly implemented with comprehensive data: overview, plan_distribution, tenant_health, signup_trend",
+    "Plan limits enforcement working correctly via check_plan_limit() function in core/plan_access.py",
+    "PLAN_FEATURES dict correctly defines limits: trial=999, starter=3, professional=10, enterprise=999999 users",
+    "PLAN_MRR dict correctly defines pricing: trial=0, starter=29000, professional=99000, business=199000, enterprise=249000",
+    "Trial expiration scheduler configured in server.py (_trial_expiration_scheduler runs every hour)",
+    "Frontend PlatformAnalytics.jsx properly displays all KPI cards with data-testid attributes",
+    "Sidebar correctly shows Platform Analytics link under SUPER ADMIN section"
+  ],
+
+  "updated_files": [
+    "/app/backend/routes/super_admin.py",
+    "/app/backend/tests/test_platform_analytics_plan_limits_iter91.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "100% (12/12 steps passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: demo)",
+    "regular_user": "ayush.srivastav@increff.com / Ayush@114988 (role: admin, tenant: increff)"
+  },
+
+  "seed_data_creation": "Test tenant created and cleaned up during plan limit testing. Platform has: MRR ₹563,000, 9 active tenants, 15 total, 23 users.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 91 verified Platform Analytics and Plan Limits features. Backend: GET /api/admin/platform/analytics returns overview (mrr, tenants, users, alerts), plan_distribution, tenant_health (sorted by MRR), signup_trend (31 days). Plan limits enforced via check_plan_limit() - starter plan limited to 3 users. Frontend: PlatformAnalytics.jsx shows KPI cards, plan distribution bars, signup trend chart, tenant health table. Sidebar shows Platform Analytics under SUPER ADMIN section. Fixed bug: create_tenant was missing request parameter. Test file: test_platform_analytics_plan_limits_iter91.py",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

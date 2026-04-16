@@ -3034,6 +3034,8 @@ async def startup():
 
     # Start daily drip campaign background task
     asyncio.create_task(_drip_scheduler())
+    # Start trial expiration checker
+    asyncio.create_task(_trial_expiration_scheduler())
 
 
 async def _drip_scheduler():
@@ -3057,6 +3059,41 @@ async def _drip_scheduler():
         except Exception as e:
             logger.error(f"Drip scheduler error: {e}")
         await asyncio.sleep(86400)  # 24 hours
+
+
+async def _trial_expiration_scheduler():
+    """Check for expired trials every hour and auto-suspend them."""
+    await asyncio.sleep(120)  # Wait 2 min after startup
+    while True:
+        try:
+            shared = client[_default_db_name]
+            now = datetime.now(timezone.utc)
+            grace_days = 3
+
+            # Find trial tenants past grace period
+            async for tenant in shared.tenants.find({"plan_type": "trial", "status": "active"}):
+                trial_end_str = tenant.get("trial_end")
+                if not trial_end_str:
+                    continue
+                trial_end = datetime.fromisoformat(trial_end_str) if isinstance(trial_end_str, str) else trial_end_str
+                if trial_end.tzinfo is None:
+                    trial_end = trial_end.replace(tzinfo=timezone.utc)
+                grace_end = trial_end + timedelta(days=grace_days)
+                if now > grace_end:
+                    await shared.tenants.update_one(
+                        {"tenant_id": tenant["tenant_id"]},
+                        {"$set": {"status": "trial_expired", "expired_at": now.isoformat()}},
+                    )
+                    logger.info(f"Trial expired: {tenant['tenant_id']} (ended {trial_end_str})")
+                elif now > trial_end:
+                    # In grace period — add warning flag
+                    await shared.tenants.update_one(
+                        {"tenant_id": tenant["tenant_id"]},
+                        {"$set": {"trial_grace": True, "grace_end": grace_end.isoformat()}},
+                    )
+        except Exception as e:
+            logger.error(f"Trial expiration scheduler error: {e}")
+        await asyncio.sleep(3600)  # Every hour
 
 
 @app.on_event("shutdown")

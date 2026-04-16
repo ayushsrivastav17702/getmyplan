@@ -77,6 +77,7 @@ const NAV_GROUPS = [
     items: [
       { path: "/admin/tenants", label: "Tenant Management",   icon: Building2,       permission: null, superAdminOnly: true },
       { path: "/admin/users",   label: "User Management",     icon: Users,           permission: null, superAdminOnly: true },
+      { path: "/admin/analytics", label: "Platform Analytics", icon: BarChart3,       permission: null, superAdminOnly: true },
       { path: "/admin/audit-logs", label: "Audit Trail",       icon: FileText,        permission: null, superAdminOnly: true },
     ],
   },

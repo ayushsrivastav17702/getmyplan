@@ -148,6 +148,12 @@ async def register(body: RegisterRequest, request: Request):
 
     shared = get_shared_db()
 
+    # Check plan user limit
+    from core.plan_access import check_plan_limit
+    allowed, current, limit, plan = await check_plan_limit(shared, ctx.tenant_id, "users")
+    if not allowed:
+        raise HTTPException(status_code=400, detail=f"User limit reached ({current}/{limit}) for {plan} plan. Please upgrade to add more users.")
+
     existing = await _safe_db_op(
         shared.users.find_one({"email": body.email}),
         op_name="register_find_user",
