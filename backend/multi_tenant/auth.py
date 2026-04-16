@@ -428,6 +428,125 @@ async def me(user: dict = Depends(get_current_user)):
     }
 
 
+# ── Google OAuth ──
+
+class GoogleOAuthRequest(BaseModel):
+    session_id: str
+
+@auth_router.post("/google/callback")
+async def google_oauth_callback(body: GoogleOAuthRequest):
+    """Exchange Emergent Google OAuth session_id for a JWT token."""
+    import httpx
+
+    # 1. Exchange session_id with Emergent Auth
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": body.session_id},
+            )
+            if resp.status_code != 200:
+                raise HTTPException(400, "Invalid or expired Google session")
+            google_data = resp.json()
+    except httpx.RequestError as e:
+        logger.error(f"Google OAuth exchange failed: {e}")
+        raise HTTPException(502, "Failed to verify Google session")
+
+    email = google_data.get("email", "")
+    name = google_data.get("name", "")
+    picture = google_data.get("picture", "")
+
+    if not email:
+        raise HTTPException(400, "Google account has no email")
+
+    shared = get_shared_db()
+
+    # 2. Find or create user
+    user = await shared.users.find_one({"email": email})
+    if not user:
+        # Create new user from Google data
+        result = await shared.users.insert_one({
+            "email": email,
+            "full_name": name,
+            "username": email.split("@")[0],
+            "hashed_password": "",  # No password for Google OAuth users
+            "google_oauth": True,
+            "google_picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        user_id = str(result.inserted_id)
+    else:
+        user_id = str(user["_id"])
+        # Update Google picture if changed
+        if picture and picture != user.get("google_picture"):
+            await shared.users.update_one({"email": email}, {"$set": {"google_picture": picture, "google_oauth": True}})
+
+    # 3. Find tenant mapping (or auto-create for known domains)
+    mapping = await shared.user_tenants.find_one({"email": email, "is_active": True}, {"_id": 0})
+
+    if not mapping:
+        # Try to match by email domain
+        domain = email.split("@")[1] if "@" in email else ""
+        tenant = await shared.tenants.find_one({"email_domain": domain, "status": "active"})
+        if tenant:
+            # Auto-map user to tenant
+            await shared.user_tenants.update_one(
+                {"email": email, "tenant_id": tenant["tenant_id"]},
+                {"$set": {
+                    "email": email, "user_id": user_id,
+                    "tenant_id": tenant["tenant_id"], "role": "viewer",
+                    "is_active": True, "assigned_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+            mapping = {"email": email, "tenant_id": tenant["tenant_id"], "role": "viewer"}
+        else:
+            raise HTTPException(400, "No workspace found for this email. Please contact your admin or sign up first.")
+
+    resolved_tenant_id = mapping["tenant_id"]
+    role = mapping.get("role", "viewer")
+
+    # 4. Check tenant status
+    tenant_doc = await shared.tenants.find_one({"tenant_id": resolved_tenant_id})
+    if tenant_doc and tenant_doc.get("status") == "suspended":
+        raise HTTPException(403, "This workspace has been suspended. Please contact support.")
+
+    # 5. Issue JWT
+    token = _create_token({
+        "user_id": user_id,
+        "email": email,
+        "tenant_id": resolved_tenant_id,
+        "role": role,
+    })
+
+    from .rbac import resolve_permissions
+    perms = resolve_permissions(role)
+
+    from core.plan_access import get_plan_info
+    plan_type = tenant_doc.get("plan_type", "starter") if tenant_doc else "starter"
+    plan_info = get_plan_info(plan_type)
+
+    await shared.users.update_one({"email": email}, {"$set": {"last_login": datetime.now(timezone.utc).isoformat()}})
+    await _log_audit_safe(shared, "google_oauth_login", email=email, tenant_id=resolved_tenant_id, role=role)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "email": email,
+            "username": email.split("@")[0],
+            "full_name": name,
+            "role": role,
+            "tenant_id": resolved_tenant_id,
+            "permissions": perms,
+            "picture": picture,
+        },
+        "tenant_id": resolved_tenant_id,
+        "plan_info": plan_info,
+        "plan_type": plan_type,
+    }
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8)

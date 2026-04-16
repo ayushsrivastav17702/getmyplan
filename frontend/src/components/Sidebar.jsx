@@ -8,7 +8,7 @@ import {
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
-  HelpCircle, FileText
+  HelpCircle, FileText, Flag
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -78,6 +78,7 @@ const NAV_GROUPS = [
       { path: "/admin/tenants", label: "Tenant Management",   icon: Building2,       permission: null, superAdminOnly: true },
       { path: "/admin/users",   label: "User Management",     icon: Users,           permission: null, superAdminOnly: true },
       { path: "/admin/analytics", label: "Platform Analytics", icon: BarChart3,       permission: null, superAdminOnly: true },
+      { path: "/admin/feature-flags", label: "Feature Flags",  icon: Flag,            permission: null, superAdminOnly: true },
       { path: "/admin/audit-logs", label: "Audit Trail",       icon: FileText,        permission: null, superAdminOnly: true },
     ],
   },

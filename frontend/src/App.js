@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
@@ -58,6 +58,7 @@ const TenantManagement = lazy(() => import("./pages/admin/TenantManagement"));
 const UserManagementAdmin = lazy(() => import("./pages/admin/UserManagementAdmin"));
 const AuditLogs = lazy(() => import("./pages/admin/AuditLogs"));
 const PlatformAnalytics = lazy(() => import("./pages/admin/PlatformAnalytics"));
+const FeatureFlags = lazy(() => import("./pages/admin/FeatureFlags"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -265,6 +266,7 @@ const AuthenticatedApp = () => {
             <Route path="/admin/users" element={<UserManagementAdmin />} />
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/admin/analytics" element={<PlatformAnalytics />} />
+            <Route path="/admin/feature-flags" element={<FeatureFlags />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}
@@ -306,9 +308,61 @@ const OfflineBanner = () => {
   );
 };
 
+// ─── Google OAuth Callback Handler ───
+const GoogleAuthCallback = () => {
+  const hasProcessed = useRef(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (hasProcessed.current) return;
+    hasProcessed.current = true;
+
+    const hash = window.location.hash;
+    const sessionId = new URLSearchParams(hash.substring(1)).get("session_id");
+    if (!sessionId) { window.location.href = "/login"; return; }
+
+    (async () => {
+      try {
+        const resp = await axios.post(`${API}/auth/google/callback`, { session_id: sessionId });
+        const data = resp.data;
+        const authData = {
+          user: data.user, token: data.access_token, tenantId: data.tenant_id,
+          tenantInfo: null, branding: null,
+          permissions: data.user?.permissions || [], trialInfo: null,
+          planInfo: data.plan_info, mustChangePassword: false, mfaEnforced: false,
+        };
+        localStorage.setItem("merch_auth", JSON.stringify(authData));
+        window.location.href = "/dashboard";
+      } catch (e) {
+        setError(e.response?.data?.detail || "Google sign-in failed");
+      }
+    })();
+  }, []);
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
+        <div className="bg-white rounded-xl p-6 shadow-lg max-w-sm text-center space-y-3">
+          <p className="text-red-600 font-medium">{error}</p>
+          <a href="/login" className="text-sm text-blue-600 hover:underline">Back to login</a>
+        </div>
+      </div>
+    );
+  }
+
+  return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><div className="spinner" /></div>;
+};
+
 // ─── Root: gate on authentication, with public routes for signup/verify/landing ───
 const AppRouter = () => {
   const { isAuthenticated, loading, mustChangePassword } = useAuth();
+
+  // CRITICAL: Detect Google OAuth callback synchronously before anything else
+  const locationHash = window.location.hash;
+  if (locationHash?.includes("session_id=")) {
+    return <GoogleAuthCallback />;
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]"><div className="spinner" /></div>;
 
   // Force password change screen — blocks all other routes

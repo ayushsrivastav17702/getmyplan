@@ -60,6 +60,11 @@ export const AuthProvider = ({ children }) => {
 
   // Restore session from localStorage
   useEffect(() => {
+    // CRITICAL: If returning from OAuth callback, skip restore — AuthCallback will handle it
+    if (window.location.hash?.includes("session_id=")) {
+      setLoading(false);
+      return;
+    }
     const stored = localStorage.getItem("merch_auth");
     if (stored) {
       try {

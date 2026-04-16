@@ -797,3 +797,140 @@ async def get_platform_analytics(user: dict = Depends(_dep_get_current_user)):
         "tenant_health": sorted(tenant_health, key=lambda x: x["mrr"], reverse=True),
         "signup_trend": signup_trend,
     }
+
+
+# ── Feature Flags ──
+
+class FeatureFlagReq(BaseModel):
+    flag_key: str
+    label: str
+    description: str = ""
+    default_enabled: bool = False
+
+
+class FeatureFlagOverrideReq(BaseModel):
+    tenant_id: str
+    enabled: bool
+
+
+@router.get("/feature-flags")
+async def list_feature_flags(user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    flags = []
+    async for f in shared.feature_flags.find({}, {"_id": 0}).sort("flag_key", 1):
+        # Count overrides
+        overrides = await shared.feature_flag_overrides.count_documents({"flag_key": f["flag_key"]})
+        f["override_count"] = overrides
+        flags.append(f)
+    return {"flags": flags}
+
+
+@router.post("/feature-flags")
+async def create_feature_flag(body: FeatureFlagReq, request: Request, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    existing = await shared.feature_flags.find_one({"flag_key": body.flag_key})
+    if existing:
+        raise HTTPException(400, f"Flag '{body.flag_key}' already exists")
+    await shared.feature_flags.insert_one({
+        "flag_key": body.flag_key,
+        "label": body.label,
+        "description": body.description,
+        "default_enabled": body.default_enabled,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("email"),
+    })
+    await _log_admin_audit("feature_flag_created", user, request, flag_key=body.flag_key)
+    return {"success": True, "flag_key": body.flag_key}
+
+
+@router.put("/feature-flags/{flag_key}")
+async def update_feature_flag(flag_key: str, body: FeatureFlagReq, request: Request, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.feature_flags.update_one(
+        {"flag_key": flag_key},
+        {"$set": {
+            "label": body.label,
+            "description": body.description,
+            "default_enabled": body.default_enabled,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Feature flag not found")
+    await _log_admin_audit("feature_flag_updated", user, request, flag_key=flag_key)
+    return {"success": True, "flag_key": flag_key}
+
+
+@router.delete("/feature-flags/{flag_key}")
+async def delete_feature_flag(flag_key: str, request: Request, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.feature_flags.delete_one({"flag_key": flag_key})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Feature flag not found")
+    await shared.feature_flag_overrides.delete_many({"flag_key": flag_key})
+    await _log_admin_audit("feature_flag_deleted", user, request, flag_key=flag_key)
+    return {"success": True, "flag_key": flag_key}
+
+
+@router.get("/feature-flags/{flag_key}/overrides")
+async def get_flag_overrides(flag_key: str, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    overrides = []
+    async for o in shared.feature_flag_overrides.find({"flag_key": flag_key}, {"_id": 0}):
+        overrides.append(o)
+    return {"flag_key": flag_key, "overrides": overrides}
+
+
+@router.put("/feature-flags/{flag_key}/overrides")
+async def set_flag_override(flag_key: str, body: FeatureFlagOverrideReq, request: Request, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    flag = await shared.feature_flags.find_one({"flag_key": flag_key})
+    if not flag:
+        raise HTTPException(404, "Feature flag not found")
+    tenant = await shared.tenants.find_one({"tenant_id": body.tenant_id})
+    if not tenant:
+        raise HTTPException(404, f"Tenant '{body.tenant_id}' not found")
+    await shared.feature_flag_overrides.update_one(
+        {"flag_key": flag_key, "tenant_id": body.tenant_id},
+        {"$set": {
+            "flag_key": flag_key,
+            "tenant_id": body.tenant_id,
+            "enabled": body.enabled,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("email"),
+        }},
+        upsert=True,
+    )
+    await _log_admin_audit("feature_flag_override", user, request,
+        flag_key=flag_key, target_tenant_id=body.tenant_id, enabled=body.enabled)
+    return {"success": True, "flag_key": flag_key, "tenant_id": body.tenant_id, "enabled": body.enabled}
+
+
+@router.delete("/feature-flags/{flag_key}/overrides/{tenant_id}")
+async def delete_flag_override(flag_key: str, tenant_id: str, request: Request, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.feature_flag_overrides.delete_one({"flag_key": flag_key, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Override not found")
+    return {"success": True}
+
+
+# Public endpoint: get flags for current tenant (used by frontend useFeatureFlag hook)
+@router.get("/feature-flags/tenant/{tenant_id}")
+async def get_tenant_flags(tenant_id: str, user: dict = Depends(_dep_get_current_user)):
+    """Return resolved feature flags for a specific tenant."""
+    shared = _shared()
+    flags = {}
+    async for f in shared.feature_flags.find({}, {"_id": 0}):
+        flags[f["flag_key"]] = f.get("default_enabled", False)
+    # Apply tenant overrides
+    async for o in shared.feature_flag_overrides.find({"tenant_id": tenant_id}, {"_id": 0}):
+        flags[o["flag_key"]] = o.get("enabled", False)
+    return {"tenant_id": tenant_id, "flags": flags}
