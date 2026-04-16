@@ -1040,3 +1040,49 @@ async def apply_global_config(tenant_id: str, request: Request, user: dict = Dep
 
     await _log_admin_audit("global_config_applied", user, request, target_tenant_id=tenant_id)
     return {"success": True, "tenant_id": tenant_id, "message": "Global config applied"}
+
+
+# ── IP Whitelisting ──
+
+class IPWhitelistReq(BaseModel):
+    ips: List[str]
+    enabled: bool = True
+
+
+@router.get("/tenants/{tenant_id}/ip-whitelist")
+async def get_ip_whitelist(tenant_id: str, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "ip_whitelist": 1})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    wl = tenant.get("ip_whitelist", {"enabled": False, "ips": []})
+    return {"tenant_id": tenant_id, "ip_whitelist": wl}
+
+
+@router.put("/tenants/{tenant_id}/ip-whitelist")
+async def set_ip_whitelist(tenant_id: str, body: IPWhitelistReq, request: Request, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    # Validate IPs
+    import ipaddress
+    valid_ips = []
+    for ip in body.ips:
+        ip = ip.strip()
+        if not ip:
+            continue
+        try:
+            # Accept single IPs and CIDR ranges
+            ipaddress.ip_network(ip, strict=False)
+            valid_ips.append(ip)
+        except ValueError:
+            raise HTTPException(400, f"Invalid IP address or CIDR: '{ip}'")
+    await shared.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"ip_whitelist": {"enabled": body.enabled, "ips": valid_ips, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user.get("email")}}},
+    )
+    await _log_admin_audit("ip_whitelist_updated", user, request, target_tenant_id=tenant_id, ip_count=len(valid_ips), enabled=body.enabled)
+    return {"success": True, "tenant_id": tenant_id, "ip_whitelist": {"enabled": body.enabled, "ips": valid_ips}}

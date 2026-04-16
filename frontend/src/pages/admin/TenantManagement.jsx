@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 import {
   Building2, Users, Plus, Shield, Trash2, LogIn, RefreshCw,
-  Search, ChevronDown, Copy, Eye, EyeOff,
+  Search, ChevronDown, Copy, Eye, EyeOff, Lock,
 } from "lucide-react";
 
 const PLANS = ["starter", "professional", "business", "enterprise"];
@@ -25,6 +25,8 @@ export default function TenantManagement() {
   const [form, setForm] = useState({ tenant_id: "", company_name: "", admin_email: "", admin_name: "", plan: "professional" });
   const [userForm, setUserForm] = useState({ email: "", name: "", tenant_id: "", role: "viewer" });
   const [creds, setCreds] = useState(null);
+  const [ipModal, setIpModal] = useState(null); // { tenant_id, enabled, ips }
+  const [ipInput, setIpInput] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -96,6 +98,33 @@ export default function TenantManagement() {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
   };
+
+  const openIpWhitelist = async (tid) => {
+    try {
+      const res = await axios.get(`${API}/admin/platform/tenants/${tid}/ip-whitelist`);
+      const wl = res.data.ip_whitelist || { enabled: false, ips: [] };
+      setIpModal({ tenant_id: tid, enabled: wl.enabled, ips: wl.ips || [] });
+      setIpInput("");
+    } catch { toast.error("Failed to load IP whitelist"); }
+  };
+
+  const saveIpWhitelist = async () => {
+    if (!ipModal) return;
+    try {
+      await axios.put(`${API}/admin/platform/tenants/${ipModal.tenant_id}/ip-whitelist`, { ips: ipModal.ips, enabled: ipModal.enabled });
+      toast.success("IP whitelist updated");
+      setIpModal(null);
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to save"); }
+  };
+
+  const addIp = () => {
+    const ip = ipInput.trim();
+    if (!ip || ipModal.ips.includes(ip)) return;
+    setIpModal(prev => ({ ...prev, ips: [...prev.ips, ip] }));
+    setIpInput("");
+  };
+
+  const removeIp = (ip) => setIpModal(prev => ({ ...prev, ips: prev.ips.filter(i => i !== ip) }));
 
   const filtered = tab === "tenants"
     ? tenants.filter(t => !search || t.tenant_id?.includes(search) || t.company_name?.toLowerCase().includes(search.toLowerCase()))
@@ -181,6 +210,7 @@ export default function TenantManagement() {
                   <td className="p-3 text-right">
                     <div className="flex justify-end gap-1">
                       <button onClick={() => impersonate(t.tenant_id)} title="Login As" className="p-1.5 hover:bg-blue-50 rounded text-blue-600"><LogIn className="h-4 w-4" /></button>
+                      <button data-testid={`ip-whitelist-${t.tenant_id}`} onClick={() => openIpWhitelist(t.tenant_id)} title="IP Whitelist" className="p-1.5 hover:bg-gray-100 rounded text-gray-500"><Lock className="h-4 w-4" /></button>
                       <button onClick={() => toggleStatus(t.tenant_id, t.status)} title={t.status === "active" ? "Suspend" : "Activate"}
                         className={`p-1.5 hover:bg-gray-100 rounded ${t.status === "active" ? "text-amber-500" : "text-emerald-500"}`}>
                         {t.status === "active" ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -269,6 +299,42 @@ export default function TenantManagement() {
               <button type="submit" className="px-4 py-2 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">Add User</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* IP Whitelist Modal */}
+      {ipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setIpModal(null)}>
+          <div data-testid="ip-whitelist-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">IP Whitelist — {ipModal.tenant_id}</h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={ipModal.enabled} onChange={e => setIpModal(p => ({ ...p, enabled: e.target.checked }))} className="rounded border-gray-300" />
+              Enable IP whitelisting
+            </label>
+            {ipModal.enabled && (
+              <>
+                <div className="flex gap-2">
+                  <input data-testid="ip-input" placeholder="IP or CIDR (e.g. 203.0.113.0/24)" value={ipInput} onChange={e => setIpInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addIp())}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono" />
+                  <button onClick={addIp} className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add</button>
+                </div>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {ipModal.ips.map(ip => (
+                    <div key={ip} className="flex items-center justify-between px-3 py-1.5 bg-gray-50 rounded-lg">
+                      <code className="text-sm text-gray-700">{ip}</code>
+                      <button onClick={() => removeIp(ip)} className="text-xs text-red-500 hover:text-red-700">&times;</button>
+                    </div>
+                  ))}
+                  {ipModal.ips.length === 0 && <p className="text-xs text-gray-400 text-center py-2">No IPs added yet. All traffic will be blocked when enabled.</p>}
+                </div>
+              </>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setIpModal(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button data-testid="save-ip-whitelist" onClick={saveIpWhitelist} className="px-4 py-2 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">Save</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

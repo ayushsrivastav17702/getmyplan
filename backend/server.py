@@ -2803,6 +2803,62 @@ import gc as _gc
 _gc_counter = 0
 
 @app.middleware("http")
+async def ip_whitelist_middleware(request, call_next):
+    """Enforce IP whitelisting per tenant."""
+    # Only check on authenticated API routes
+    path = request.url.path
+    if not path.startswith("/api/") or path.startswith("/api/auth/") or path.startswith("/api/health"):
+        return await call_next(request)
+
+    tenant_id = request.headers.get("x-tenant-id")
+    if not tenant_id:
+        return await call_next(request)
+
+    try:
+        shared = client[_default_db_name]
+        tenant = await shared.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "ip_whitelist": 1})
+        if tenant:
+            wl = tenant.get("ip_whitelist", {})
+            if wl.get("enabled") and wl.get("ips"):
+                import ipaddress
+                client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                if not client_ip and request.client:
+                    client_ip = request.client.host
+
+                allowed = False
+                for allowed_ip in wl["ips"]:
+                    try:
+                        network = ipaddress.ip_network(allowed_ip, strict=False)
+                        if ipaddress.ip_address(client_ip) in network:
+                            allowed = True
+                            break
+                    except (ValueError, TypeError):
+                        continue
+
+                if not allowed:
+                    # Check if user is super_admin (bypass whitelist)
+                    auth = request.headers.get("Authorization", "")
+                    if auth.startswith("Bearer "):
+                        try:
+                            from multi_tenant.auth import decode_token
+                            payload = decode_token(auth[7:])
+                            if payload.get("role") == "super_admin":
+                                allowed = True
+                        except Exception:
+                            pass
+
+                if not allowed:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": f"Access denied: IP {client_ip} is not in the whitelist for this workspace."},
+                    )
+    except Exception:
+        pass  # Whitelist check failure should not block requests
+
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def gc_middleware(request, call_next):
     global _gc_counter
     response = await call_next(request)

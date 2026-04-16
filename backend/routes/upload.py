@@ -521,10 +521,13 @@ async def _handle_upload_inner(file, upload_type, replace_existing, validate_onl
                 "severity": "warning",
             }
 
-        # Fetch master data for cross-validation
-        master_skus = await _get_master_skus(db, tenant_id)
-        master_stores = await _get_master_stores(db, tenant_id)
-        master_warehouses = await _get_master_warehouses(db, tenant_id)
+        # Fetch master data for cross-validation (parallel)
+        import asyncio as _aio
+        master_skus, master_stores, master_warehouses = await _aio.gather(
+            _get_master_skus(db, tenant_id),
+            _get_master_stores(db, tenant_id),
+            _get_master_warehouses(db, tenant_id),
+        )
 
         service = UniversalUploadService(
             upload_type=upload_type,
@@ -679,40 +682,31 @@ async def _save_to_database(db, tenant_id, user_email, upload_type, records, rep
         return False
 
     collection = db[collection_name]
-    now = datetime.now(timezone.utc)
+    now_str = datetime.now(timezone.utc).isoformat()
 
+    # Bulk enrich records (single pass)
     for record in records:
         record["tenant_id"] = tenant_id
-        record["uploaded_at"] = now.isoformat()
+        record["uploaded_at"] = now_str
         record["uploaded_by"] = user_email
 
     if replace_existing:
+        # Batch delete by collecting unique keys first, then single bulk delete
         if upload_type == "daily_sales":
-            days = set()
-            for r in records:
-                d = r.get("day")
-                if d:
-                    days.add(d)
-            for day in days:
-                await collection.delete_many({"tenant_id": tenant_id, "day": day})
+            days = {r.get("day") for r in records if r.get("day")}
+            if days:
+                await collection.delete_many({"tenant_id": tenant_id, "day": {"$in": list(days)}})
         elif upload_type == "cogs":
-            dates = set()
-            for r in records:
-                d = r.get("transaction_date")
-                if d:
-                    dates.add(d)
-            for dt in dates:
-                await collection.delete_many({"tenant_id": tenant_id, "transaction_date": dt})
-        elif upload_type == "open_orders":
-            await collection.delete_many({"tenant_id": tenant_id})
-        elif upload_type in ["store_inventory", "warehouse_inventory"]:
-            await collection.delete_many({"tenant_id": tenant_id})
-        elif upload_type in ["sku_master", "store_master", "warehouse_master", "style_master", "planogram"]:
+            dates = {r.get("transaction_date") for r in records if r.get("transaction_date")}
+            if dates:
+                await collection.delete_many({"tenant_id": tenant_id, "transaction_date": {"$in": list(dates)}})
+        elif upload_type in ["open_orders", "store_inventory", "warehouse_inventory",
+                             "sku_master", "store_master", "warehouse_master", "style_master", "planogram"]:
             await collection.delete_many({"tenant_id": tenant_id})
 
     if records:
-        # Batched insert for speed — 2000 rows per batch, unordered for parallelism
-        BATCH = 2000
+        # Larger batches + unordered for max throughput
+        BATCH = 5000
         for i in range(0, len(records), BATCH):
             await collection.insert_many(records[i:i + BATCH], ordered=False)
 
