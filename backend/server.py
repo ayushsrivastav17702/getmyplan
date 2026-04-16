@@ -2811,6 +2811,38 @@ async def gc_middleware(request, call_next):
         _gc.collect(0)
     return response
 
+
+@app.middleware("http")
+async def impersonation_audit_middleware(request, call_next):
+    """Auto-log mutating API calls made during an impersonation session."""
+    response = await call_next(request)
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            try:
+                from multi_tenant.auth import decode_token
+                payload = decode_token(auth[7:])
+                impersonated_by = payload.get("impersonated_by")
+                if impersonated_by:
+                    shared_db = client[_default_db_name]
+                    await shared_db.audit_logs.insert_one({
+                        "audit_id": str(uuid.uuid4()),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "action": "impersonated_request",
+                        "actor_email": payload.get("email", ""),
+                        "actor_role": payload.get("role", ""),
+                        "impersonated_by": impersonated_by,
+                        "target_tenant_id": payload.get("tenant_id", ""),
+                        "method": request.method,
+                        "path": str(request.url.path),
+                        "status_code": response.status_code,
+                        "ip_address": request.headers.get("x-forwarded-for", request.client.host if request.client else ""),
+                        "source": "super_admin",
+                    })
+            except Exception:
+                pass
+    return response
+
 # 2. Error handler — catches unhandled exceptions, returns clean JSON
 app.add_middleware(ErrorHandlerMiddleware)
 

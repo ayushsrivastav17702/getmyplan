@@ -210,6 +210,8 @@ export const AuthProvider = ({ children }) => {
 
   const stopImpersonation = useCallback(() => {
     if (!impersonation?.originalSession) return;
+    // Log impersonation end (fire-and-forget)
+    axios.post(`${API}/admin/platform/impersonate/end`).catch(() => {});
     try {
       const original = JSON.parse(impersonation.originalSession);
       setUser(original.user);

@@ -56,6 +56,7 @@ const InvoiceManagement = lazy(() => import("./pages/InvoiceManagement"));
 const HelpCenter = lazy(() => import("./pages/HelpCenter"));
 const TenantManagement = lazy(() => import("./pages/admin/TenantManagement"));
 const UserManagementAdmin = lazy(() => import("./pages/admin/UserManagementAdmin"));
+const AuditLogs = lazy(() => import("./pages/admin/AuditLogs"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -261,6 +262,7 @@ const AuthenticatedApp = () => {
             <Route path="/help" element={<HelpCenter />} />
             <Route path="/admin/tenants" element={<TenantManagement />} />
             <Route path="/admin/users" element={<UserManagementAdmin />} />
+            <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}
