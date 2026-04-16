@@ -18,6 +18,7 @@ React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 | P1 | Sidebar isSuperAdmin scoping error | Fixed | iter 86 |
 | P1 | Impersonation Frontend Flow | Deployed | iter 87 (21/21) |
 | P1 | User Management Admin Page | Deployed | iter 88 (29/29) |
+| P1 | Audit Trail (SOC2 Compliance) | Deployed | iter 89 (27/27) |
 | P2 | Upload Status Cache (I-03) | Deployed | iter 84 |
 | P2 | COGS False Negative (I-04) | Deployed | iter 84 |
 | P2 | AI Onboarding Prompt (I-05) | Deployed | iter 84 |
@@ -34,18 +35,16 @@ React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 - Onboarding Checklist widget (7 steps, progress tracking)
 - FAQ Chatbot floating widget (GPT-5.2, every page)
 - Tawk.to live chat integration
-- Sample data loading UX fix (instant navigation + background load)
-- **Super Admin Panel** — Tenant CRUD, Impersonation (iter 86-87)
-- **User Management Admin** — Cross-tenant user CRUD, inline role edit, status toggle, password reset (iter 88)
+- **Super Admin Panel** — Tenant CRUD, User CRUD, Impersonation (iter 86-88)
+- **Audit Trail** — SOC2 compliance logging for all admin actions + impersonation middleware (iter 89)
 
-### Super Admin Panel (April 16, 2026)
-- 7 backend endpoints: GET/POST tenants, PUT status, DELETE tenant, GET/POST users, POST impersonate
-- 3 additional user endpoints: PUT role, PUT status, POST reset-password
-- Frontend pages: TenantManagement.jsx (/admin/tenants), UserManagementAdmin.jsx (/admin/users)
-- Impersonation: JWT swap, amber banner, session save/restore
-- Role-gated sidebar navigation (SUPER ADMIN section)
+### Super Admin Panel (Complete)
+- Pages: /admin/tenants (Tenant Management), /admin/users (User Management), /admin/audit-logs (Audit Trail)
+- Backend: 15+ endpoints covering tenant CRUD, user CRUD (role/status/password), impersonation, audit logs
+- Impersonation: JWT swap, amber banner, session save/restore, auto-logging of all mutating requests
+- Audit Trail: Logs impersonation_start/end, tenant_created/deleted/status_changed, user_created/role_changed/status_changed/password_reset, impersonated_request
+- CSV export, filters (action, tenant, actor), detail expansion, pagination
 
 ### Future/Backlog
 - P3: Upload speed optimization (8.5s → <5s for 6.4k rows via chunked inserts)
 - P3: PDF Export Quality (chart label resolution, DOH legend font size)
-- P3: Audit log viewer for Super Admin panel (compliance/SOC2)
