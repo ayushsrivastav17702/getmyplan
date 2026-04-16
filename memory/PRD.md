@@ -6,21 +6,20 @@ Multi-tenant SaaS demand planning platform for fashion retailers.
 ## Architecture
 React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 
-## Production Readiness — April 14, 2026
+## Production Readiness — April 16, 2026
 
 ### All Critical Issues Resolved
 | Priority | Issue | Status | Test |
 |----------|-------|--------|------|
-| P0 | Stock-Out ₹0 Lost Sales | Fixed | iter 83 (31/31) |
+| P0 | Stock-Out Lost Sales bug | Fixed | iter 83 (31/31) |
+| P0 | Super Admin 422 Dependency Injection | Fixed | iter 86 (22/22) |
 | P1 | 503/520 OOM Crashes | Fixed | MongoDB migration complete |
 | P1 | Axios Retry Interceptor | Deployed | iter 84 (23/23) |
-| P1 | Health Check Endpoints | Deployed | iter 84 |
-| P2 | AI Onboarding Prompt (I-05) | Deployed | iter 84 |
+| P1 | Sidebar isSuperAdmin scoping error | Fixed | iter 86 |
 | P2 | Upload Status Cache (I-03) | Deployed | iter 84 |
 | P2 | COGS False Negative (I-04) | Deployed | iter 84 |
-| P4 | Warehouse Pandas→MongoDB | Deployed | iter 85 (21/21) |
-| P4 | Planogram Pandas→MongoDB | Deployed | iter 85 |
-| P4 | Stock-Out Daily Trends | Deployed | iter 85 |
+| P2 | AI Onboarding Prompt (I-05) | Deployed | iter 84 |
+| P4 | Warehouse/Planogram Pandas→MongoDB | Deployed | iter 85 (21/21) |
 
 ### All Implemented Features
 - Multi-tenant RBAC, JWT + MFA (TOTP + Email OTP)
@@ -34,7 +33,19 @@ React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 - FAQ Chatbot floating widget (GPT-5.2, every page)
 - Tawk.to live chat integration
 - Sample data loading UX fix (instant navigation + background load)
+- **Super Admin Panel** (Tenant CRUD, User Management, Impersonation) — iter 86
 
-### Post-Launch Polish (P3 — Next Sprint)
-- PDF Export Quality: chart label resolution, DOH legend font size
-- Upload Speed: 6,450 rows in 8.5s → target <5s via chunked inserts
+### Super Admin Panel (April 16, 2026)
+- 7 backend endpoints: GET/POST tenants, PUT status, DELETE tenant, GET/POST users, POST impersonate
+- Frontend TenantManagement.jsx with tabs (Tenants/Users), modals (Create Tenant/Add User)
+- Role-gated sidebar navigation (super_admin role required)
+- Impersonation generates JWT with `impersonated_by` claim
+- Users created with `hashed_password` + `must_change_password` flag
+
+### Upcoming Tasks
+- P1: Impersonate frontend polish (JWT swap + dashboard redirect)
+- P1: Dedicated User Management page (/admin/users)
+
+### Future/Backlog
+- P3: Upload speed optimization (8.5s → <5s for 6.4k rows via chunked inserts)
+- P3: PDF Export Quality (chart label resolution, DOH legend font size)
