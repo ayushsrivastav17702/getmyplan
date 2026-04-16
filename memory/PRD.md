@@ -6,35 +6,39 @@ Multi-tenant SaaS demand planning platform for fashion retailers.
 ## Architecture
 React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA + Google OAuth
 
-## Production Readiness — April 16, 2026
+## Production State — April 16, 2026
+Database reset to clean slate. Single tenant: production (GetMyPlan, enterprise).
 
-### Super Admin Suite (6 pages)
-| Page | Path | Features | Test |
-|------|------|----------|------|
-| Tenant Management | `/admin/tenants` | CRUD, suspend/activate, impersonation | iter 86-87 |
-| User Management | `/admin/users` | Cross-tenant CRUD, role edit, status, password reset | iter 88 |
-| Audit Trail | `/admin/audit-logs` | SOC2 logging, 5 anomaly rules, alerts, CSV export | iter 89-90 |
-| Platform Analytics | `/admin/analytics` | MRR, tenant health, plan distribution, WAU/MAU | iter 91 |
-| Feature Flags | `/admin/feature-flags` | CRUD flags, per-tenant overrides, phased rollouts | iter 92 |
+### Super Admin Suite (7 pages)
+| Page | Path | Features |
+|------|------|----------|
+| Tenant Management | `/admin/tenants` | CRUD, suspend/activate, impersonation, IP whitelisting |
+| User Management | `/admin/users` | Cross-tenant CRUD, role edit, status, password reset |
+| Platform Analytics | `/admin/analytics` | MRR, tenant health, plan dist, WAU/MAU, signup trend |
+| Feature Flags | `/admin/feature-flags` | CRUD flags + per-tenant overrides |
+| Global Config | `/admin/global-config` | Default settings template, apply to tenants |
+| Audit Trail | `/admin/audit-logs` | SOC2 logging, 5 anomaly rules, alerts, CSV export |
 
-### Authentication
-- JWT + MFA (TOTP + Email OTP) — existing
-- Google OAuth via Emergent Auth — iter 92 ("Sign in with Google" on login page)
-- Plan limits enforcement (user count caps) — iter 91
-- Trial expiration automation (hourly scheduler) — iter 91
+### Security
+- JWT + MFA (TOTP + Email OTP) + Google OAuth
+- IP whitelisting per tenant (CIDR support, super_admin bypass)
+- Login rate limiting, security headers
+- Anomaly detection (5 rules), audit trail
 
-### Feature Flags System (iter 92)
-- Global flags with default_enabled toggle
-- Per-tenant overrides (enable/disable per tenant)
-- Resolved flags endpoint: `/api/admin/platform/feature-flags/tenant/{tenant_id}`
-- Frontend `FeatureFlags.jsx` management page with expandable overrides panel
+### Plan Enforcement
+- User count limits (starter: 3, professional: 10, enterprise: unlimited)
+- Store count limits (starter: 10, professional: 50, enterprise: unlimited)
+- Trial expiration automation (hourly scheduler, 3-day grace)
 
-### Existing Platform Features
-- Multi-tenant RBAC, Invoice gen, Backup/Restore, User Funnel, Drip Campaigns
-- SFTP scheduling, Chunked uploads, 42 SEO blogs, Pre-rendering
-- MongoDB aggregation analytics (zero Pandas), Help Center, Onboarding, FAQ Chatbot
+### Upload Performance
+- Batch size: 5000 (was 2000)
+- Parallel master data fetches (asyncio.gather)
+- Bulk $in deletes (was per-day loops)
 
-### Future/Backlog
+### Credentials
+- admin@demo.com / demo1234 (super_admin, tenant: production)
+
+### Remaining Backlog
 - P2: Payment integration (Stripe/Razorpay)
 - P2: Full SAML/OIDC SSO (Okta, Azure AD)
-- P3: Upload speed optimization, subdomain routing, IP whitelisting
+- P3: Subdomain-based tenant routing
