@@ -11,40 +11,33 @@ React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 ### All Critical Issues Resolved
 | Priority | Issue | Status | Test |
 |----------|-------|--------|------|
-| P0 | Stock-Out Lost Sales bug | Fixed | iter 83 (31/31) |
-| P0 | Super Admin 422 Dependency Injection | Fixed | iter 86 (22/22) |
-| P1 | 503/520 OOM Crashes | Fixed | MongoDB migration complete |
-| P1 | Axios Retry Interceptor | Deployed | iter 84 (23/23) |
-| P1 | Sidebar isSuperAdmin scoping error | Fixed | iter 86 |
-| P1 | Impersonation Frontend Flow | Deployed | iter 87 (21/21) |
-| P1 | User Management Admin Page | Deployed | iter 88 (29/29) |
-| P1 | Audit Trail (SOC2 Compliance) | Deployed | iter 89 (27/27) |
-| P2 | Upload Status Cache (I-03) | Deployed | iter 84 |
-| P2 | COGS False Negative (I-04) | Deployed | iter 84 |
-| P2 | AI Onboarding Prompt (I-05) | Deployed | iter 84 |
-| P4 | Warehouse/Planogram Pandas→MongoDB | Deployed | iter 85 (21/21) |
+| P0 | Stock-Out Lost Sales bug | Fixed | iter 83 |
+| P0 | Super Admin 422 Dependency Injection | Fixed | iter 86 |
+| P1 | 503/520 OOM Crashes | Fixed | MongoDB migration |
+| P1 | Impersonation Frontend Flow | Deployed | iter 87 |
+| P1 | User Management Admin Page | Deployed | iter 88 |
+| P1 | Audit Trail (SOC2) | Deployed | iter 89 |
+| P1 | Anomaly Detection & Alerts | Deployed | iter 90 |
 
 ### All Implemented Features
 - Multi-tenant RBAC, JWT + MFA (TOTP + Email OTP)
 - Invoice generation, Backup/Restore, User Funnel Analytics, Email Drip Campaigns
-- SFTP scheduling, Chunked uploads
-- 42 SEO blogs, Puppeteer pre-rendering, sitemaps, RSS
+- SFTP scheduling, Chunked uploads, 42 SEO blogs, Puppeteer pre-rendering
 - 503/520 resilience (axios retry + sonner toast + health probes)
 - Complete MongoDB aggregation migration (zero Pandas analytics)
-- Help Center (12 articles, 8 categories, search, public access)
-- Onboarding Checklist widget (7 steps, progress tracking)
-- FAQ Chatbot floating widget (GPT-5.2, every page)
-- Tawk.to live chat integration
+- Help Center, Onboarding Checklist, FAQ Chatbot (GPT-5.2), Tawk.to
 - **Super Admin Panel** — Tenant CRUD, User CRUD, Impersonation (iter 86-88)
-- **Audit Trail** — SOC2 compliance logging for all admin actions + impersonation middleware (iter 89)
+- **Audit Trail + Anomaly Detection** — SOC2 compliance, 5 detection rules, alert management (iter 89-90)
 
-### Super Admin Panel (Complete)
-- Pages: /admin/tenants (Tenant Management), /admin/users (User Management), /admin/audit-logs (Audit Trail)
-- Backend: 15+ endpoints covering tenant CRUD, user CRUD (role/status/password), impersonation, audit logs
-- Impersonation: JWT swap, amber banner, session save/restore, auto-logging of all mutating requests
-- Audit Trail: Logs impersonation_start/end, tenant_created/deleted/status_changed, user_created/role_changed/status_changed/password_reset, impersonated_request
-- CSV export, filters (action, tenant, actor), detail expansion, pagination
+### Anomaly Detection Rules (April 16, 2026)
+1. **Excessive impersonations** — >5 impersonations by same admin in 1 hour (critical)
+2. **Role flip-flop** — Same user's role changed >3 times in 24h (warning)
+3. **Bulk status changes** — >10 user deactivations by same admin in 1 hour (warning)
+4. **Off-hours activity** — Admin actions outside 06:00–22:00 UTC (warning)
+5. **Rapid password resets** — >5 password resets by same admin in 1 hour (critical)
+
+Alert lifecycle: active → acknowledged → dismissed. Sidebar badge for unread count.
 
 ### Future/Backlog
-- P3: Upload speed optimization (8.5s → <5s for 6.4k rows via chunked inserts)
+- P3: Upload speed optimization (8.5s → <5s for 6.4k rows)
 - P3: PDF Export Quality (chart label resolution, DOH legend font size)
