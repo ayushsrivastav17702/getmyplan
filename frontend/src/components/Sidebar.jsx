@@ -149,11 +149,12 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
 
   const isSectionExpanded = (id) => expandedSections[id] !== false; // default open
 
+  const isSuperAdmin = user?.role === "super_admin" || tenantId === "demo";
+
   /* ─── Permission & module toggle filtering ─── */
   const isItemVisible = useCallback((item) => {
     if (item.permission !== null && !hasPermission(item.permission)) return false;
     if (item.superAdminOnly) {
-      const isSuperAdmin = user?.role === "super_admin" || tenantId === "demo";
       if (!isSuperAdmin) return false;
     }
     if (moduleConfig) {
@@ -162,7 +163,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
       }
     }
     return true;
-  }, [hasPermission, moduleConfig, user?.role, tenantId]);
+  }, [hasPermission, moduleConfig, isSuperAdmin]);
 
   const getPlanAccess = (path) => {
     const modKey = NAV_PLAN_MODULE_MAP[path];

@@ -1,5 +1,5 @@
 """Super Admin tenant & user management APIs."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
@@ -18,6 +18,11 @@ def init_super_admin(mongo_client, get_current_user_func, require_role_func):
     _client = mongo_client
     _get_current_user = get_current_user_func
     _require_role = require_role_func
+
+
+async def _dep_get_current_user(request: Request) -> dict:
+    """Properly typed dependency wrapper for FastAPI injection."""
+    return await _get_current_user(request)
 
 
 def _shared():
@@ -48,7 +53,7 @@ class CreateUserReq(BaseModel):
 # ── Tenant CRUD ──
 
 @router.get("/tenants")
-async def list_tenants(user: dict = Depends(lambda r: _get_current_user(r))):
+async def list_tenants(user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
     tenants = []
@@ -59,7 +64,7 @@ async def list_tenants(user: dict = Depends(lambda r: _get_current_user(r))):
 
 
 @router.post("/tenants")
-async def create_tenant(body: CreateTenantReq, user: dict = Depends(lambda r: _get_current_user(r))):
+async def create_tenant(body: CreateTenantReq, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
 
@@ -71,7 +76,10 @@ async def create_tenant(body: CreateTenantReq, user: dict = Depends(lambda r: _g
     await shared.tenants.insert_one({
         "tenant_id": body.tenant_id,
         "company_name": body.company_name,
+        "subdomain": body.tenant_id,  # Use tenant_id as subdomain to avoid unique index violation
+        "db_name": f"tenant_{body.tenant_id}",
         "plan": body.plan,
+        "plan_type": body.plan,
         "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user.get("email"),
@@ -83,22 +91,27 @@ async def create_tenant(body: CreateTenantReq, user: dict = Depends(lambda r: _g
 
     existing_user = await shared.users.find_one({"email": body.admin_email})
     if not existing_user:
-        await shared.users.insert_one({
+        result = await shared.users.insert_one({
             "email": body.admin_email,
-            "name": body.admin_name,
-            "password": hashed,
-            "role": "admin",
+            "full_name": body.admin_name,
+            "username": body.admin_name.lower().replace(" ", "_"),
+            "hashed_password": hashed,
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "must_change_password": True,
         })
+        user_id = str(result.inserted_id)
+    else:
+        user_id = str(existing_user["_id"])
 
     # Map user to tenant
     await shared.user_tenants.update_one(
         {"email": body.admin_email, "tenant_id": body.tenant_id},
         {"$set": {
             "email": body.admin_email,
+            "user_id": user_id,
             "tenant_id": body.tenant_id,
             "role": "admin",
-            "active": True,
+            "is_active": True,
             "assigned_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
@@ -121,7 +134,7 @@ async def create_tenant(body: CreateTenantReq, user: dict = Depends(lambda r: _g
 
 
 @router.put("/tenants/{tenant_id}/status")
-async def update_tenant_status(tenant_id: str, body: dict, user: dict = Depends(lambda r: _get_current_user(r))):
+async def update_tenant_status(tenant_id: str, body: dict, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
     status = body.get("status", "active")
@@ -132,7 +145,7 @@ async def update_tenant_status(tenant_id: str, body: dict, user: dict = Depends(
 
 
 @router.delete("/tenants/{tenant_id}")
-async def delete_tenant(tenant_id: str, user: dict = Depends(lambda r: _get_current_user(r))):
+async def delete_tenant(tenant_id: str, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     if tenant_id == "demo":
         raise HTTPException(400, "Cannot delete the demo tenant")
@@ -145,7 +158,7 @@ async def delete_tenant(tenant_id: str, user: dict = Depends(lambda r: _get_curr
 # ── User management across tenants ──
 
 @router.get("/users")
-async def list_all_users(tenant_id: Optional[str] = None, user: dict = Depends(lambda r: _get_current_user(r))):
+async def list_all_users(tenant_id: Optional[str] = None, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
     query = {"tenant_id": tenant_id} if tenant_id else {}
@@ -157,7 +170,7 @@ async def list_all_users(tenant_id: Optional[str] = None, user: dict = Depends(l
 
 
 @router.post("/users")
-async def create_user(body: CreateUserReq, user: dict = Depends(lambda r: _get_current_user(r))):
+async def create_user(body: CreateUserReq, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
 
@@ -171,21 +184,26 @@ async def create_user(body: CreateUserReq, user: dict = Depends(lambda r: _get_c
 
     existing_user = await shared.users.find_one({"email": body.email})
     if not existing_user:
-        await shared.users.insert_one({
+        result = await shared.users.insert_one({
             "email": body.email,
-            "name": body.name,
-            "password": hashed,
-            "role": body.role,
+            "full_name": body.name,
+            "username": body.name.lower().replace(" ", "_"),
+            "hashed_password": hashed,
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "must_change_password": True,
         })
+        user_id = str(result.inserted_id)
+    else:
+        user_id = str(existing_user["_id"])
 
     await shared.user_tenants.update_one(
         {"email": body.email, "tenant_id": body.tenant_id},
         {"$set": {
             "email": body.email,
+            "user_id": user_id,
             "tenant_id": body.tenant_id,
             "role": body.role,
-            "active": True,
+            "is_active": True,
             "assigned_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,
@@ -197,7 +215,7 @@ async def create_user(body: CreateUserReq, user: dict = Depends(lambda r: _get_c
 # ── Impersonation ──
 
 @router.post("/impersonate/{tenant_id}")
-async def impersonate(tenant_id: str, user: dict = Depends(lambda r: _get_current_user(r))):
+async def impersonate(tenant_id: str, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
     shared = _shared()
 
