@@ -236,10 +236,28 @@ async def impersonate(tenant_id: str, user: dict = Depends(_dep_get_current_user
 
     from multi_tenant.auth import _create_token
     token = _create_token({
-        "sub": mapping["email"],
+        "user_id": mapping.get("user_id", ""),
+        "email": mapping["email"],
         "tenant_id": tenant_id,
         "role": mapping.get("role", "admin"),
         "impersonated_by": user.get("email"),
     })
 
-    return {"success": True, "access_token": token, "tenant_id": tenant_id, "email": mapping["email"]}
+    from multi_tenant.rbac import resolve_permissions
+    perms = resolve_permissions(mapping.get("role", "admin"))
+
+    return {
+        "success": True,
+        "access_token": token,
+        "tenant_id": tenant_id,
+        "user": {
+            "email": mapping["email"],
+            "username": target_user.get("username", ""),
+            "full_name": target_user.get("full_name", ""),
+            "role": mapping.get("role", "admin"),
+            "tenant_id": tenant_id,
+            "permissions": perms,
+        },
+        "impersonated_by": user.get("email"),
+        "company_name": tenant.get("company_name", tenant_id),
+    }

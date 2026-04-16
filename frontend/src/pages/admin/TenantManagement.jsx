@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API } from "../../App";
+import { useAuth } from "../../context/AuthContext";
 import { toast } from "sonner";
 import {
   Building2, Users, Plus, Shield, Trash2, LogIn, RefreshCw,
@@ -11,6 +13,8 @@ const PLANS = ["starter", "professional", "business", "enterprise"];
 const ROLES = ["admin", "merchandiser", "viewer"];
 
 export default function TenantManagement() {
+  const navigate = useNavigate();
+  const { startImpersonation } = useAuth();
   const [tenants, setTenants] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,11 +84,9 @@ export default function TenantManagement() {
   const impersonate = async (tid) => {
     try {
       const res = await axios.post(`${API}/admin/platform/impersonate/${tid}`);
-      const token = res.data.access_token;
-      // Open in new tab with impersonation token
-      const w = window.open("", "_blank");
-      w.document.write(`<script>localStorage.setItem('merch_auth','${token}');window.location.href='/dashboard';</script>`);
-      toast.success(`Impersonating ${tid}`);
+      startImpersonation(res.data);
+      toast.success(`Now viewing as ${res.data.company_name || tid}`);
+      navigate("/dashboard");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to impersonate");
     }

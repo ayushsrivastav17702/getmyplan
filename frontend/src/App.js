@@ -12,6 +12,7 @@ import NotificationBell from "./components/NotificationBell";
 import Sidebar from "./components/Sidebar";
 import { Helmet } from "react-helmet-async";
 import CookieConsent from "./components/CookieConsent";
+import { Eye } from "lucide-react";
 
 // Eagerly loaded (critical path)
 import Unauthorized from "./pages/Unauthorized";
@@ -116,6 +117,38 @@ const TrialBanner = () => {
   );
 };
 
+// ─── Impersonation Banner ───
+const ImpersonationBanner = () => {
+  const { isImpersonating, impersonation, stopImpersonation } = useAuth();
+
+  if (!isImpersonating) return null;
+
+  const handleStop = () => {
+    stopImpersonation();
+    window.location.href = "/admin/tenants";
+  };
+
+  return (
+    <div
+      data-testid="impersonation-banner"
+      className="px-4 py-2 text-sm font-medium flex items-center justify-between bg-amber-400 text-amber-950"
+    >
+      <span className="flex items-center gap-2">
+        <Eye className="h-4 w-4" />
+        Viewing as <strong>{impersonation?.companyName || impersonation?.targetTenant}</strong>
+        <span className="text-xs opacity-75">(by {impersonation?.impersonatedBy})</span>
+      </span>
+      <button
+        data-testid="stop-impersonation-btn"
+        onClick={handleStop}
+        className="px-3 py-1 text-xs font-semibold bg-amber-950 text-amber-100 rounded-md hover:bg-amber-900 transition-colors"
+      >
+        Stop Impersonating
+      </button>
+    </div>
+  );
+};
+
 // ─── Authenticated app with permission-guarded routes ───
 const AuthenticatedApp = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
@@ -173,6 +206,7 @@ const AuthenticatedApp = () => {
       <Sidebar uploadStatus={uploadStatus} isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
 
       <main className="flex-1 min-h-screen">
+        <ImpersonationBanner />
         <TrialBanner />
         {showReturnBanner && (
           <ReturnUserBanner

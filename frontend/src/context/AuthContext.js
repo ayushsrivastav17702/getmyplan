@@ -20,6 +20,9 @@ export const AuthProvider = ({ children }) => {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [mfaChallenge, setMfaChallenge] = useState(null); // { mfa_token, mfa_methods, email }
   const [mfaEnforced, setMfaEnforced] = useState(false);
+  const [impersonation, setImpersonation] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("merch_impersonation")); } catch { return null; }
+  });
   const interceptorId = useRef(null);
 
   // Setup 401 response interceptor
@@ -160,6 +163,76 @@ export const AuthProvider = ({ children }) => {
     setMfaChallenge(null);
   }, []);
 
+  const startImpersonation = useCallback((data) => {
+    // Save current super admin session
+    const currentSession = localStorage.getItem("merch_auth");
+    const impInfo = {
+      originalSession: currentSession,
+      impersonatedBy: data.impersonated_by,
+      targetTenant: data.tenant_id,
+      companyName: data.company_name,
+    };
+    localStorage.setItem("merch_impersonation", JSON.stringify(impInfo));
+    setImpersonation(impInfo);
+
+    // Set new impersonated session
+    const { access_token, user: userData, tenant_id: tid } = data;
+    const userPerms = userData.permissions || [];
+
+    axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
+    axios.defaults.headers.common["X-Tenant-ID"] = tid;
+
+    setUser(userData);
+    setToken(access_token);
+    setTenantId(tid);
+    setPermissions(userPerms);
+    setTrialInfo(null);
+    setPlanInfo(null);
+    setMustChangePassword(false);
+    setMfaEnforced(false);
+
+    localStorage.setItem("merch_auth", JSON.stringify({
+      user: userData, token: access_token, tenantId: tid,
+      tenantInfo: null, branding: null,
+      permissions: userPerms, trialInfo: null, planInfo: null,
+      mustChangePassword: false, mfaEnforced: false,
+    }));
+
+    // Fetch tenant info in background
+    Promise.all([
+      axios.get(`${API}/tenants/${tid}/status`).catch(() => ({ data: { tenant_id: tid, company_name: tid } })),
+      axios.get(`${API}/tenants/${tid}/branding`).catch(() => ({ data: null })),
+    ]).then(([tResp, bResp]) => {
+      setTenantInfo(tResp.data);
+      setBranding(bResp.data);
+    });
+  }, []);
+
+  const stopImpersonation = useCallback(() => {
+    if (!impersonation?.originalSession) return;
+    try {
+      const original = JSON.parse(impersonation.originalSession);
+      setUser(original.user);
+      setToken(original.token);
+      setTenantId(original.tenantId);
+      setTenantInfo(original.tenantInfo);
+      setBranding(original.branding || null);
+      setPermissions(original.permissions || original.user?.permissions || []);
+      setTrialInfo(original.trialInfo || null);
+      setPlanInfo(original.planInfo || null);
+      setMfaEnforced(original.mfaEnforced || false);
+      axios.defaults.headers.common["Authorization"] = `Bearer ${original.token}`;
+      axios.defaults.headers.common["X-Tenant-ID"] = original.tenantId;
+      localStorage.setItem("merch_auth", impersonation.originalSession);
+    } catch {
+      // Fallback: full logout
+    }
+    localStorage.removeItem("merch_impersonation");
+    setImpersonation(null);
+  }, [impersonation]);
+
+  const isImpersonating = !!impersonation;
+
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
@@ -172,9 +245,11 @@ export const AuthProvider = ({ children }) => {
     setMustChangePassword(false);
     setMfaChallenge(null);
     setMfaEnforced(false);
+    setImpersonation(null);
     delete axios.defaults.headers.common["Authorization"];
     delete axios.defaults.headers.common["X-Tenant-ID"];
     localStorage.removeItem("merch_auth");
+    localStorage.removeItem("merch_impersonation");
   }, []);
 
   const clearMustChangePassword = useCallback(() => {
@@ -209,6 +284,7 @@ export const AuthProvider = ({ children }) => {
       user, token, tenantId, tenantInfo, branding, permissions, trialInfo, planInfo,
       mustChangePassword, loading, isAuthenticated, sessionExpired,
       mfaChallenge, mfaEnforced, completeMfaLogin, cancelMfa,
+      isImpersonating, impersonation, startImpersonation, stopImpersonation,
       login, logout, hasPermission, hasRole, clearSessionExpired, clearMustChangePassword,
     }}>
       {children}
