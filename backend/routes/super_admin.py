@@ -291,6 +291,12 @@ async def create_tenant(body: CreateTenantReq, request: Request, user: dict = De
     for coll in ["daily_sales", "store_inventory", "sku_master", "style_master", "store_master"]:
         await tdb[coll].create_index("tenant_id", sparse=True)
 
+    # Apply global configuration defaults
+    stored = await shared.global_config.find_one({"_id": "defaults"}, {"_id": 0})
+    config = stored.get("config", DEFAULT_TENANT_CONFIG) if stored else DEFAULT_TENANT_CONFIG
+    analysis = config.get("analysis", {})
+    await tdb.analysis_config.update_one({"_id": "main"}, {"$set": analysis}, upsert=True)
+
     await _log_admin_audit("tenant_created", user, request,
         target_tenant_id=body.tenant_id, company_name=body.company_name,
         admin_email=body.admin_email, plan=body.plan)
@@ -934,3 +940,103 @@ async def get_tenant_flags(tenant_id: str, user: dict = Depends(_dep_get_current
     async for o in shared.feature_flag_overrides.find({"tenant_id": tenant_id}, {"_id": 0}):
         flags[o["flag_key"]] = o.get("enabled", False)
     return {"tenant_id": tenant_id, "flags": flags}
+
+
+# ── Global Configuration Defaults ──
+
+DEFAULT_TENANT_CONFIG = {
+    "analysis": {
+        "noos_enabled": True,
+        "ros_enabled": True,
+        "size_gap_enabled": True,
+        "lifecycle_enabled": True,
+        "replenishment_enabled": True,
+        "min_shelf_life_days": 30,
+        "pivotal_size_threshold": 75,
+        "cover_days": 7,
+        "ros_period": 30,
+        "ideal_doh": 9,
+        "topseller_x_factor": 2.0,
+        "lead_time_days": 14,
+        "safety_days": 7,
+    },
+    "branding": {
+        "primary_color": "#0176D3",
+        "logo_url": "",
+    },
+    "notifications": {
+        "email_digest": True,
+        "weekly_report": True,
+    },
+    "modules": {
+        "data_quality": True,
+        "bi_dashboards": True,
+        "planogram": True,
+        "warehouse": True,
+        "sftp": False,
+    },
+}
+
+
+@router.get("/global-config")
+async def get_global_config(user: dict = Depends(_dep_get_current_user)):
+    """Get the global configuration defaults template."""
+    _super_admin_only(user)
+    shared = _shared()
+    stored = await shared.global_config.find_one({"_id": "defaults"}, {"_id": 0})
+    if not stored:
+        return {"config": DEFAULT_TENANT_CONFIG}
+    return {"config": stored.get("config", DEFAULT_TENANT_CONFIG)}
+
+
+@router.put("/global-config")
+async def update_global_config(request: Request, user: dict = Depends(_dep_get_current_user)):
+    """Update the global configuration defaults template."""
+    _super_admin_only(user)
+    shared = _shared()
+    body = await request.json()
+    config = body.get("config", {})
+    await shared.global_config.update_one(
+        {"_id": "defaults"},
+        {"$set": {"config": config, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user.get("email")}},
+        upsert=True,
+    )
+    await _log_admin_audit("global_config_updated", user, request)
+    return {"success": True}
+
+
+@router.post("/global-config/apply/{tenant_id}")
+async def apply_global_config(tenant_id: str, request: Request, user: dict = Depends(_dep_get_current_user)):
+    """Apply global configuration defaults to a specific tenant."""
+    _super_admin_only(user)
+    shared = _shared()
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id})
+    if not tenant:
+        raise HTTPException(404, f"Tenant '{tenant_id}' not found")
+
+    stored = await shared.global_config.find_one({"_id": "defaults"}, {"_id": 0})
+    config = stored.get("config", DEFAULT_TENANT_CONFIG) if stored else DEFAULT_TENANT_CONFIG
+
+    # Apply analysis config to tenant's DB
+    tenant_db = _client[f"merch_{tenant_id}"]
+
+    # Analysis config
+    analysis = config.get("analysis", {})
+    await tenant_db.analysis_config.update_one(
+        {"_id": "main"},
+        {"$set": analysis},
+        upsert=True,
+    )
+
+    # Branding
+    branding = config.get("branding", {})
+    await shared.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {
+            "branding": branding,
+            "config_applied_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+
+    await _log_admin_audit("global_config_applied", user, request, target_tenant_id=tenant_id)
+    return {"success": True, "tenant_id": tenant_id, "message": "Global config applied"}

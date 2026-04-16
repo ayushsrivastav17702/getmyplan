@@ -2863,24 +2863,24 @@ app.add_middleware(
 # ==================== STARTUP / SHUTDOWN ====================
 
 async def _ensure_default_tenant():
-    """Create a default 'demo' tenant so existing data keeps working."""
+    """Ensure at least one tenant and super admin exist."""
     shared = client[get_shared_db_name()]
-    existing = await shared.tenants.find_one({"tenant_id": "demo"})
-    if existing:
+    # If any tenant exists, skip seeding
+    tenant_count = await shared.tenants.count_documents({})
+    if tenant_count > 0:
         return
-    logger.info("Creating default 'demo' tenant…")
+    logger.info("No tenants found — seeding default 'production' tenant…")
     now_iso = datetime.now(timezone.utc).isoformat()
     await shared.tenants.insert_one({
-        "tenant_id": "demo",
-        "company_name": "Demo Company",
-        "db_name": _default_db_name,   # point demo tenant at existing DB
-        "subdomain": "demo",
+        "tenant_id": "production",
+        "company_name": "GetMyPlan",
+        "db_name": "merch_production",
+        "subdomain": "production",
         "plan_type": "enterprise",
         "status": "active",
         "created_at": now_iso,
         "updated_at": now_iso,
     })
-    # Create demo admin user
     import bcrypt
     hashed = bcrypt.hashpw(b"demo1234", bcrypt.gensalt()).decode()
     await shared.users.update_one(
@@ -2889,24 +2889,25 @@ async def _ensure_default_tenant():
             "email": "admin@demo.com",
             "username": "admin",
             "hashed_password": hashed,
-            "full_name": "Demo Admin",
+            "full_name": "Platform Admin",
             "created_at": now_iso,
         }},
         upsert=True,
     )
+    admin_user = await shared.users.find_one({"email": "admin@demo.com"})
     await shared.user_tenants.update_one(
-        {"email": "admin@demo.com", "tenant_id": "demo"},
+        {"email": "admin@demo.com", "tenant_id": "production"},
         {"$set": {
             "email": "admin@demo.com",
-            "user_id": "demo_admin",
-            "tenant_id": "demo",
-            "role": "admin",
+            "user_id": str(admin_user["_id"]) if admin_user else "admin",
+            "tenant_id": "production",
+            "role": "super_admin",
             "is_active": True,
             "assigned_at": now_iso,
         }},
         upsert=True,
     )
-    logger.info("Default 'demo' tenant created (DB: %s)", _default_db_name)
+    logger.info("Default 'production' tenant + super admin seeded")
 
 
 async def _ensure_enterprise_indexes():

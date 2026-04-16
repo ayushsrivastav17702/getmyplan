@@ -59,6 +59,7 @@ const UserManagementAdmin = lazy(() => import("./pages/admin/UserManagementAdmin
 const AuditLogs = lazy(() => import("./pages/admin/AuditLogs"));
 const PlatformAnalytics = lazy(() => import("./pages/admin/PlatformAnalytics"));
 const FeatureFlags = lazy(() => import("./pages/admin/FeatureFlags"));
+const GlobalConfig = lazy(() => import("./pages/admin/GlobalConfig"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -193,8 +194,9 @@ const AuthenticatedApp = () => {
     }).catch(() => setOnboardingChecked(true));
   }, []);
 
-  // Show full-page wizard for brand-new tenants
-  if (onboardingChecked && needsOnboarding) {
+  // Show full-page wizard for brand-new tenants (skip for super admin pages)
+  const isAdminPage = window.location.pathname.startsWith("/admin");
+  if (onboardingChecked && needsOnboarding && !isAdminPage) {
     return (
       <Suspense fallback={<PageLoader />}>
         <OnboardingWizardPage onComplete={() => { setNeedsOnboarding(false); window.location.href = "/upload"; }} />
@@ -267,6 +269,7 @@ const AuthenticatedApp = () => {
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/admin/analytics" element={<PlatformAnalytics />} />
             <Route path="/admin/feature-flags" element={<FeatureFlags />} />
+            <Route path="/admin/global-config" element={<GlobalConfig />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}

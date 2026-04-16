@@ -456,6 +456,28 @@ async def _handle_upload(file: UploadFile, upload_type: str, replace_existing: b
 async def _handle_upload_inner(file, upload_type, replace_existing, validate_only, db, tenant_id, user_email, session_id):
     """Inner upload logic after acquiring the tenant lock."""
 
+    # Plan limit check for store_master uploads
+    if upload_type == "store_master" and not validate_only:
+        from multi_tenant.tenant_db import get_shared_db
+        from core.plan_access import check_plan_limit
+        shared = get_shared_db()
+        allowed, current, limit, plan = await check_plan_limit(shared, tenant_id, "stores")
+        # We check after upload since replace_existing wipes old data
+        # But we can warn if they're at the limit before uploading
+        if not allowed and not replace_existing:
+            return JSONResponse(content={
+                "success": False,
+                "errors": [{
+                    "code": "E060",
+                    "category": "plan_limit",
+                    "message": "Store limit exceeded",
+                    "user_message": f"Your {plan} plan allows {limit} stores (currently {current}). Upgrade to add more stores.",
+                    "severity": "blocking",
+                }],
+                "total_rows": 0, "valid_rows": 0,
+                "corrections": [], "warnings": [], "preview": [],
+            })
+
     file_path = os.path.join(UPLOAD_DIR, f"{session_id}_{file.filename}")
 
     try:
@@ -523,6 +545,21 @@ async def _handle_upload_inner(file, upload_type, replace_existing, validate_onl
 
         # If validation passed, save to database (skip if validate_only)
         if result["success"] and records and not validate_only:
+            # Post-save store count check
+            if upload_type == "store_master":
+                from multi_tenant.tenant_db import get_shared_db
+                from core.plan_access import check_plan_limit
+                shared_db = get_shared_db()
+                store_count = len(set(r.get("store_code") for r in records if r.get("store_code")))
+                allowed, _, limit, plan = await check_plan_limit(shared_db, tenant_id, "stores")
+                if store_count > limit:
+                    result.setdefault("warnings", []).append({
+                        "code": "W060",
+                        "category": "plan_limit",
+                        "message": f"Store limit: {store_count} stores uploaded but {plan} plan allows {limit}. Upgrade to keep all stores.",
+                        "severity": "warning",
+                    })
+
             saved = await _save_to_database(db, tenant_id, user_email, upload_type, records, replace_existing)
             result["saved"] = saved
             # Invalidate Redis caches for this tenant after successful upload

@@ -79,6 +79,7 @@ const NAV_GROUPS = [
       { path: "/admin/users",   label: "User Management",     icon: Users,           permission: null, superAdminOnly: true },
       { path: "/admin/analytics", label: "Platform Analytics", icon: BarChart3,       permission: null, superAdminOnly: true },
       { path: "/admin/feature-flags", label: "Feature Flags",  icon: Flag,            permission: null, superAdminOnly: true },
+      { path: "/admin/global-config", label: "Global Config",   icon: Settings,        permission: null, superAdminOnly: true },
       { path: "/admin/audit-logs", label: "Audit Trail",       icon: FileText,        permission: null, superAdminOnly: true },
     ],
   },
@@ -115,7 +116,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
 
   const primaryColor = branding?.primary_color || "#0176D3";
   const logoUrl = branding?.logo_url || "";
-  const isSuperAdmin = user?.role === "super_admin" || tenantId === "demo";
+  const isSuperAdmin = user?.role === "super_admin";
 
   useEffect(() => {
     axios.get(`${API}/config`).then(r => setModuleConfig(r.data)).catch(() => {});
