@@ -17,6 +17,7 @@ React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 | P1 | Axios Retry Interceptor | Deployed | iter 84 (23/23) |
 | P1 | Sidebar isSuperAdmin scoping error | Fixed | iter 86 |
 | P1 | Impersonation Frontend Flow | Deployed | iter 87 (21/21) |
+| P1 | User Management Admin Page | Deployed | iter 88 (29/29) |
 | P2 | Upload Status Cache (I-03) | Deployed | iter 84 |
 | P2 | COGS False Negative (I-04) | Deployed | iter 84 |
 | P2 | AI Onboarding Prompt (I-05) | Deployed | iter 84 |
@@ -34,24 +35,17 @@ React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA
 - FAQ Chatbot floating widget (GPT-5.2, every page)
 - Tawk.to live chat integration
 - Sample data loading UX fix (instant navigation + background load)
-- **Super Admin Panel** (Tenant CRUD, User Management, Impersonation) — iter 86
-- **Impersonation Flow** (JWT swap, amber banner, session save/restore) — iter 87
+- **Super Admin Panel** — Tenant CRUD, Impersonation (iter 86-87)
+- **User Management Admin** — Cross-tenant user CRUD, inline role edit, status toggle, password reset (iter 88)
 
 ### Super Admin Panel (April 16, 2026)
 - 7 backend endpoints: GET/POST tenants, PUT status, DELETE tenant, GET/POST users, POST impersonate
-- Frontend TenantManagement.jsx with tabs (Tenants/Users), modals (Create Tenant/Add User)
-- Role-gated sidebar navigation (super_admin role required)
-
-### Impersonation Flow (April 16, 2026)
-- Click "Login As" on tenant row → saves original super admin session to localStorage
-- JWT swap: new token with `impersonated_by` claim + target tenant context
-- Amber `ImpersonationBanner` at top: "Viewing as {company} (by {admin})"
-- "Stop Impersonating" button restores original session and redirects to /admin/tenants
-- Sidebar context switches between super admin and impersonated tenant
-
-### Upcoming Tasks
-- P1: Dedicated User Management page (/admin/users) for Super Admin
+- 3 additional user endpoints: PUT role, PUT status, POST reset-password
+- Frontend pages: TenantManagement.jsx (/admin/tenants), UserManagementAdmin.jsx (/admin/users)
+- Impersonation: JWT swap, amber banner, session save/restore
+- Role-gated sidebar navigation (SUPER ADMIN section)
 
 ### Future/Backlog
 - P3: Upload speed optimization (8.5s → <5s for 6.4k rows via chunked inserts)
 - P3: PDF Export Quality (chart label resolution, DOH legend font size)
+- P3: Audit log viewer for Super Admin panel (compliance/SOC2)
