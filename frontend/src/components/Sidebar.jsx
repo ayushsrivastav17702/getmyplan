@@ -71,6 +71,14 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: "super-admin",
+    label: "SUPER ADMIN",
+    superAdminOnly: true,
+    items: [
+      { path: "/admin/tenants", label: "Tenant Management",   icon: Building2,       permission: null, superAdminOnly: true },
+    ],
+  },
+  {
     id: "tools",
     label: "TOOLS",
     items: [
@@ -280,6 +288,8 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         {/* ─── Navigation Groups ─── */}
         <nav className="flex-1 overflow-y-auto py-2 sidebar-scrollbar">
           {NAV_GROUPS.map(group => {
+            // Hide superAdminOnly groups for non-super-admins
+            if (group.superAdminOnly && !isSuperAdmin) return null;
             const visibleItems = group.items.filter(isItemVisible);
             if (visibleItems.length === 0) return null;
 

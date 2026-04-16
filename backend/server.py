@@ -49,6 +49,7 @@ from routes.debug import router as debug_router
 from routes.upload import router as upload_v2_router
 from routes.demo import router as demo_router
 from routes.health import router as health_router
+from routes.super_admin import router as super_admin_router, init_super_admin
 from routes.backup import router as backup_router
 from routes.funnel_analytics import router as funnel_router
 from routes.drip_campaigns import router as drip_router
@@ -2781,6 +2782,7 @@ app.include_router(drip_router)
 app.include_router(invoice_router)
 app.include_router(data_ops_router)
 app.include_router(health_router, prefix="/api")
+app.include_router(super_admin_router, prefix="/api")
 
 # ==================== MIDDLEWARE STACK (Starlette LIFO: last added = first to run) ====================
 
@@ -2995,6 +2997,7 @@ async def startup():
     init_ai_demand(client, get_cached_data, get_db, get_current_user, require_role)
     init_buy_plan(client, get_db, get_current_user, require_role)
     init_onboarding(client, get_db, get_current_user)
+    init_super_admin(client, get_current_user, require_role)
     init_tenant_provider(get_cached_data, get_db)
 
     # Start daily drip campaign background task

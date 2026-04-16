@@ -1,0 +1,227 @@
+"""Super Admin tenant & user management APIs."""
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime, timezone
+import secrets
+import bcrypt
+
+router = APIRouter(prefix="/admin/platform", tags=["super-admin"])
+
+_client = None
+_get_current_user = None
+_require_role = None
+
+
+def init_super_admin(mongo_client, get_current_user_func, require_role_func):
+    global _client, _get_current_user, _require_role
+    _client = mongo_client
+    _get_current_user = get_current_user_func
+    _require_role = require_role_func
+
+
+def _shared():
+    import os
+    return _client[os.environ["DB_NAME"]]
+
+
+def _super_admin_only(user: dict):
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super Admin access required")
+
+
+class CreateTenantReq(BaseModel):
+    tenant_id: str
+    company_name: str
+    admin_email: str
+    admin_name: str
+    plan: str = "professional"
+
+
+class CreateUserReq(BaseModel):
+    email: str
+    name: str
+    tenant_id: str
+    role: str = "viewer"
+
+
+# ── Tenant CRUD ──
+
+@router.get("/tenants")
+async def list_tenants(user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    shared = _shared()
+    tenants = []
+    async for t in shared.tenants.find({}, {"_id": 0}):
+        t["user_count"] = await shared.user_tenants.count_documents({"tenant_id": t["tenant_id"]})
+        tenants.append(t)
+    return {"tenants": tenants}
+
+
+@router.post("/tenants")
+async def create_tenant(body: CreateTenantReq, user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    shared = _shared()
+
+    existing = await shared.tenants.find_one({"tenant_id": body.tenant_id})
+    if existing:
+        raise HTTPException(400, f"Tenant '{body.tenant_id}' already exists")
+
+    # Create tenant record
+    await shared.tenants.insert_one({
+        "tenant_id": body.tenant_id,
+        "company_name": body.company_name,
+        "plan": body.plan,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("email"),
+    })
+
+    # Create admin user
+    temp_password = secrets.token_urlsafe(12)
+    hashed = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
+
+    existing_user = await shared.users.find_one({"email": body.admin_email})
+    if not existing_user:
+        await shared.users.insert_one({
+            "email": body.admin_email,
+            "name": body.admin_name,
+            "password": hashed,
+            "role": "admin",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    # Map user to tenant
+    await shared.user_tenants.update_one(
+        {"email": body.admin_email, "tenant_id": body.tenant_id},
+        {"$set": {
+            "email": body.admin_email,
+            "tenant_id": body.tenant_id,
+            "role": "admin",
+            "active": True,
+            "assigned_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+    # Create tenant database with basic indexes
+    import os
+    db_name = f"merch_{body.tenant_id}"
+    tdb = _client[db_name]
+    for coll in ["daily_sales", "store_inventory", "sku_master", "style_master", "store_master"]:
+        await tdb[coll].create_index("tenant_id", sparse=True)
+
+    return {
+        "success": True,
+        "tenant_id": body.tenant_id,
+        "admin_email": body.admin_email,
+        "temp_password": temp_password,
+        "message": f"Tenant created. Share credentials with admin: {body.admin_email} / {temp_password}",
+    }
+
+
+@router.put("/tenants/{tenant_id}/status")
+async def update_tenant_status(tenant_id: str, body: dict, user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    shared = _shared()
+    status = body.get("status", "active")
+    result = await shared.tenants.update_one({"tenant_id": tenant_id}, {"$set": {"status": status}})
+    if result.matched_count == 0:
+        raise HTTPException(404, "Tenant not found")
+    return {"success": True, "tenant_id": tenant_id, "status": status}
+
+
+@router.delete("/tenants/{tenant_id}")
+async def delete_tenant(tenant_id: str, user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    if tenant_id == "demo":
+        raise HTTPException(400, "Cannot delete the demo tenant")
+    shared = _shared()
+    await shared.tenants.delete_one({"tenant_id": tenant_id})
+    await shared.user_tenants.delete_many({"tenant_id": tenant_id})
+    return {"success": True, "message": f"Tenant '{tenant_id}' deleted"}
+
+
+# ── User management across tenants ──
+
+@router.get("/users")
+async def list_all_users(tenant_id: Optional[str] = None, user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    shared = _shared()
+    query = {"tenant_id": tenant_id} if tenant_id else {}
+    mappings = []
+    async for m in shared.user_tenants.find(query, {"_id": 0}):
+        u = await shared.users.find_one({"email": m["email"]}, {"_id": 0, "password": 0})
+        mappings.append({**m, "name": u.get("name", "") if u else "", "user_exists": u is not None})
+    return {"users": mappings}
+
+
+@router.post("/users")
+async def create_user(body: CreateUserReq, user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    shared = _shared()
+
+    # Verify tenant exists
+    tenant = await shared.tenants.find_one({"tenant_id": body.tenant_id})
+    if not tenant:
+        raise HTTPException(404, f"Tenant '{body.tenant_id}' not found")
+
+    temp_password = secrets.token_urlsafe(12)
+    hashed = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
+
+    existing_user = await shared.users.find_one({"email": body.email})
+    if not existing_user:
+        await shared.users.insert_one({
+            "email": body.email,
+            "name": body.name,
+            "password": hashed,
+            "role": body.role,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    await shared.user_tenants.update_one(
+        {"email": body.email, "tenant_id": body.tenant_id},
+        {"$set": {
+            "email": body.email,
+            "tenant_id": body.tenant_id,
+            "role": body.role,
+            "active": True,
+            "assigned_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+    return {"success": True, "email": body.email, "temp_password": temp_password}
+
+
+# ── Impersonation ──
+
+@router.post("/impersonate/{tenant_id}")
+async def impersonate(tenant_id: str, user: dict = Depends(lambda r: _get_current_user(r))):
+    _super_admin_only(user)
+    shared = _shared()
+
+    tenant = await shared.tenants.find_one({"tenant_id": tenant_id})
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+
+    # Find an admin user for this tenant
+    mapping = await shared.user_tenants.find_one({"tenant_id": tenant_id, "role": "admin"})
+    if not mapping:
+        mapping = await shared.user_tenants.find_one({"tenant_id": tenant_id})
+    if not mapping:
+        raise HTTPException(404, "No users found for this tenant")
+
+    target_user = await shared.users.find_one({"email": mapping["email"]}, {"_id": 0, "password": 0})
+    if not target_user:
+        raise HTTPException(404, "Target user not found")
+
+    from multi_tenant.auth import _create_token
+    token = _create_token({
+        "sub": mapping["email"],
+        "tenant_id": tenant_id,
+        "role": mapping.get("role", "admin"),
+        "impersonated_by": user.get("email"),
+    })
+
+    return {"success": True, "access_token": token, "tenant_id": tenant_id, "email": mapping["email"]}
