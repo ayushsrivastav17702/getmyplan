@@ -164,9 +164,69 @@ async def list_all_users(tenant_id: Optional[str] = None, user: dict = Depends(_
     query = {"tenant_id": tenant_id} if tenant_id else {}
     mappings = []
     async for m in shared.user_tenants.find(query, {"_id": 0}):
-        u = await shared.users.find_one({"email": m["email"]}, {"_id": 0, "password": 0})
-        mappings.append({**m, "name": u.get("name", "") if u else "", "user_exists": u is not None})
+        u = await shared.users.find_one({"email": m["email"]}, {"_id": 0, "hashed_password": 0, "password": 0, "totp_secret": 0})
+        mappings.append({
+            **m,
+            "full_name": u.get("full_name", u.get("name", "")) if u else "",
+            "username": u.get("username", "") if u else "",
+            "last_login": u.get("last_login") if u else None,
+            "mfa_enabled": u.get("mfa_enabled", False) if u else False,
+            "created_at": u.get("created_at") if u else m.get("assigned_at"),
+            "user_exists": u is not None,
+        })
     return {"users": mappings}
+
+
+class UpdateUserRoleReq(BaseModel):
+    tenant_id: str
+    role: str
+
+
+@router.put("/users/{email}/role")
+async def update_user_role(email: str, body: UpdateUserRoleReq, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.user_tenants.update_one(
+        {"email": email, "tenant_id": body.tenant_id},
+        {"$set": {"role": body.role}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "User-tenant mapping not found")
+    return {"success": True, "email": email, "tenant_id": body.tenant_id, "role": body.role}
+
+
+class UpdateUserStatusReq(BaseModel):
+    tenant_id: str
+    is_active: bool
+
+
+@router.put("/users/{email}/status")
+async def update_user_status(email: str, body: UpdateUserStatusReq, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.user_tenants.update_one(
+        {"email": email, "tenant_id": body.tenant_id},
+        {"$set": {"is_active": body.is_active}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "User-tenant mapping not found")
+    return {"success": True, "email": email, "tenant_id": body.tenant_id, "is_active": body.is_active}
+
+
+@router.post("/users/{email}/reset-password")
+async def reset_user_password(email: str, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    existing = await shared.users.find_one({"email": email})
+    if not existing:
+        raise HTTPException(404, "User not found")
+    temp_password = secrets.token_urlsafe(12)
+    hashed = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
+    await shared.users.update_one(
+        {"email": email},
+        {"$set": {"hashed_password": hashed, "must_change_password": True}},
+    )
+    return {"success": True, "email": email, "temp_password": temp_password}
 
 
 @router.post("/users")
