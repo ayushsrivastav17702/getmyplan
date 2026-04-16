@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import secrets
 import bcrypt
 import uuid
@@ -47,8 +47,149 @@ async def _log_admin_audit(action: str, actor: dict, request: Request = None, **
             entry["ip_address"] = request.headers.get("x-forwarded-for", request.client.host if request.client else "")
             entry["user_agent"] = request.headers.get("user-agent", "")[:200]
         await shared.audit_logs.insert_one(entry)
+        # Run anomaly detection (fire-and-forget, never blocks)
+        await _check_anomalies(shared, action, actor.get("email", ""), kwargs)
     except Exception:
         pass  # Audit logging never blocks the request
+
+
+# ── Anomaly Detection Engine ──
+
+_ANOMALY_RULES = {
+    "excessive_impersonations": {
+        "severity": "critical",
+        "title": "Excessive impersonations",
+        "description": "{actor} performed {count} impersonations in the last hour (threshold: 5)",
+        "action": "impersonation_start",
+        "window_hours": 1,
+        "threshold": 5,
+    },
+    "role_flip_flop": {
+        "severity": "warning",
+        "title": "Role flip-flop detected",
+        "description": "{target}'s role in {tenant} was changed {count} times in 24h (threshold: 3)",
+        "action": "user_role_changed",
+        "window_hours": 24,
+        "threshold": 3,
+    },
+    "bulk_status_changes": {
+        "severity": "warning",
+        "title": "Bulk user deactivations",
+        "description": "{actor} changed {count} user statuses in the last hour (threshold: 10)",
+        "action": "user_status_changed",
+        "window_hours": 1,
+        "threshold": 10,
+    },
+    "off_hours_activity": {
+        "severity": "warning",
+        "title": "Off-hours admin activity",
+        "description": "{actor} performed '{action_name}' at {time} UTC (outside 06:00–22:00)",
+    },
+    "rapid_password_resets": {
+        "severity": "critical",
+        "title": "Rapid password resets",
+        "description": "{actor} reset {count} passwords in the last hour (threshold: 5)",
+        "action": "user_password_reset",
+        "window_hours": 1,
+        "threshold": 5,
+    },
+}
+
+
+async def _check_anomalies(shared, action: str, actor_email: str, details: dict):
+    """Run anomaly detection rules against recent audit logs."""
+    try:
+        now = datetime.now(timezone.utc)
+
+        # Rule 1: Excessive impersonations
+        if action == "impersonation_start":
+            await _check_count_rule(shared, "excessive_impersonations", actor_email, now, details)
+
+        # Rule 2: Role flip-flop
+        if action == "user_role_changed":
+            await _check_role_flip_flop(shared, actor_email, now, details)
+
+        # Rule 3: Bulk status changes
+        if action == "user_status_changed":
+            await _check_count_rule(shared, "bulk_status_changes", actor_email, now, details)
+
+        # Rule 4: Off-hours activity
+        if now.hour < 6 or now.hour >= 22:
+            await _create_alert(shared, "off_hours_activity", "warning",
+                _ANOMALY_RULES["off_hours_activity"]["title"],
+                _ANOMALY_RULES["off_hours_activity"]["description"].format(
+                    actor=actor_email, action_name=action, time=now.strftime("%H:%M")),
+                actor_email, details)
+
+        # Rule 5: Rapid password resets
+        if action == "user_password_reset":
+            await _check_count_rule(shared, "rapid_password_resets", actor_email, now, details)
+    except Exception:
+        pass
+
+
+async def _check_count_rule(shared, rule_id: str, actor_email: str, now, details: dict):
+    rule = _ANOMALY_RULES[rule_id]
+    window_start = (now - timedelta(hours=rule["window_hours"])).isoformat()
+    count = await shared.audit_logs.count_documents({
+        "source": "super_admin",
+        "action": rule["action"],
+        "actor_email": actor_email,
+        "timestamp": {"$gte": window_start},
+    })
+    if count >= rule["threshold"]:
+        # Check if we already alerted for this rule + actor in the last hour
+        existing = await shared.admin_alerts.find_one({
+            "rule_id": rule_id,
+            "actor_email": actor_email,
+            "created_at": {"$gte": window_start},
+            "status": {"$ne": "dismissed"},
+        })
+        if not existing:
+            desc = rule["description"].format(actor=actor_email, count=count,
+                target=details.get("target_email", ""), tenant=details.get("target_tenant_id", ""))
+            await _create_alert(shared, rule_id, rule["severity"], rule["title"], desc, actor_email, details)
+
+
+async def _check_role_flip_flop(shared, actor_email: str, now, details: dict):
+    rule = _ANOMALY_RULES["role_flip_flop"]
+    target_email = details.get("target_email", "")
+    target_tenant = details.get("target_tenant_id", "")
+    if not target_email or not target_tenant:
+        return
+    window_start = (now - timedelta(hours=rule["window_hours"])).isoformat()
+    count = await shared.audit_logs.count_documents({
+        "source": "super_admin",
+        "action": "user_role_changed",
+        "target_email": target_email,
+        "target_tenant_id": target_tenant,
+        "timestamp": {"$gte": window_start},
+    })
+    if count >= rule["threshold"]:
+        existing = await shared.admin_alerts.find_one({
+            "rule_id": "role_flip_flop",
+            "details.target_email": target_email,
+            "created_at": {"$gte": window_start},
+            "status": {"$ne": "dismissed"},
+        })
+        if not existing:
+            desc = rule["description"].format(target=target_email, tenant=target_tenant, count=count)
+            await _create_alert(shared, "role_flip_flop", rule["severity"], rule["title"], desc, actor_email,
+                {**details, "target_email": target_email, "target_tenant_id": target_tenant})
+
+
+async def _create_alert(shared, rule_id: str, severity: str, title: str, description: str, actor_email: str, details: dict):
+    await shared.admin_alerts.insert_one({
+        "alert_id": str(uuid.uuid4()),
+        "rule_id": rule_id,
+        "severity": severity,
+        "title": title,
+        "description": description,
+        "actor_email": actor_email,
+        "details": {k: v for k, v in details.items() if v is not None},
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 def _shared():
@@ -473,3 +614,65 @@ async def get_audit_action_types(user: dict = Depends(_dep_get_current_user)):
     shared = _shared()
     actions = await shared.audit_logs.distinct("action", {"source": "super_admin"})
     return {"actions": sorted(actions)}
+
+
+# ── Security Alerts ──
+
+@router.get("/alerts")
+async def get_alerts(
+    severity: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    user: dict = Depends(_dep_get_current_user),
+):
+    _super_admin_only(user)
+    shared = _shared()
+    query = {}
+    if severity:
+        query["severity"] = severity
+    if status:
+        query["status"] = status
+    else:
+        query["status"] = {"$ne": "dismissed"}
+
+    total = await shared.admin_alerts.count_documents(query)
+    alerts = []
+    async for doc in shared.admin_alerts.find(query, {"_id": 0}).sort("created_at", -1).limit(limit):
+        alerts.append(doc)
+    return {"alerts": alerts, "total": total}
+
+
+@router.get("/alerts/unread-count")
+async def get_alerts_unread_count(user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    count = await shared.admin_alerts.count_documents({"status": "active"})
+    return {"count": count}
+
+
+@router.put("/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(alert_id: str, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.admin_alerts.update_one(
+        {"alert_id": alert_id},
+        {"$set": {"status": "acknowledged", "acknowledged_by": user.get("email"),
+                  "acknowledged_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Alert not found")
+    return {"success": True, "alert_id": alert_id, "status": "acknowledged"}
+
+
+@router.put("/alerts/{alert_id}/dismiss")
+async def dismiss_alert(alert_id: str, user: dict = Depends(_dep_get_current_user)):
+    _super_admin_only(user)
+    shared = _shared()
+    result = await shared.admin_alerts.update_one(
+        {"alert_id": alert_id},
+        {"$set": {"status": "dismissed", "dismissed_by": user.get("email"),
+                  "dismissed_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Alert not found")
+    return {"success": True, "alert_id": alert_id, "status": "dismissed"}

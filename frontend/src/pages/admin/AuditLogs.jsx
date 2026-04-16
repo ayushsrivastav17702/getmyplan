@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   FileText, RefreshCw, Search, Download, Filter,
   Shield, LogIn, LogOut, UserPlus, Trash2, KeyRound, UserCog,
+  AlertTriangle, CheckCircle, XCircle, Bell,
 } from "lucide-react";
 
 const ACTION_ICONS = {
@@ -48,6 +49,9 @@ export default function AuditLogs() {
   const [filterActor, setFilterActor] = useState("");
   const [page, setPage] = useState(0);
   const [expandedRow, setExpandedRow] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [alertsTotal, setAlertsTotal] = useState(0);
+  const [showAlerts, setShowAlerts] = useState(true);
   const PAGE_SIZE = 50;
 
   const fetchLogs = useCallback(async () => {
@@ -76,7 +80,32 @@ export default function AuditLogs() {
   useEffect(() => {
     axios.get(`${API}/admin/platform/audit-logs/actions`).then(r => setActionTypes(r.data.actions || [])).catch(() => {});
     axios.get(`${API}/admin/platform/tenants`).then(r => setTenants(r.data.tenants || [])).catch(() => {});
+    fetchAlerts();
   }, []);
+
+  const fetchAlerts = async () => {
+    try {
+      const res = await axios.get(`${API}/admin/platform/alerts`);
+      setAlerts(res.data.alerts || []);
+      setAlertsTotal(res.data.total || 0);
+    } catch {}
+  };
+
+  const acknowledgeAlert = async (alertId) => {
+    try {
+      await axios.put(`${API}/admin/platform/alerts/${alertId}/acknowledge`);
+      toast.success("Alert acknowledged");
+      fetchAlerts();
+    } catch { toast.error("Failed to acknowledge alert"); }
+  };
+
+  const dismissAlert = async (alertId) => {
+    try {
+      await axios.put(`${API}/admin/platform/alerts/${alertId}/dismiss`);
+      toast.success("Alert dismissed");
+      fetchAlerts();
+    } catch { toast.error("Failed to dismiss alert"); }
+  };
 
   const exportCSV = async () => {
     try {
@@ -125,6 +154,81 @@ export default function AuditLogs() {
           <Download className="h-4 w-4" /> Export CSV
         </button>
       </div>
+
+      {/* Security Alerts Panel */}
+      {alerts.length > 0 && showAlerts && (
+        <div data-testid="alerts-panel" className="border border-red-200 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-red-50 border-b border-red-200">
+            <div className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-red-600" />
+              <span className="text-sm font-semibold text-red-800">Security Alerts</span>
+              <span className="px-1.5 py-0.5 bg-red-200 text-red-800 rounded-full text-xs font-bold">{alertsTotal}</span>
+            </div>
+            <button onClick={() => setShowAlerts(false)} className="text-xs text-red-400 hover:text-red-600">Hide</button>
+          </div>
+          <div className="divide-y divide-red-100 max-h-[280px] overflow-y-auto">
+            {alerts.map(a => (
+              <div key={a.alert_id} data-testid={`alert-${a.alert_id}`} className={`px-4 py-3 flex items-start gap-3 ${a.status === "acknowledged" ? "bg-white" : "bg-red-50/50"}`}>
+                <div className="mt-0.5 shrink-0">
+                  {a.severity === "critical" ? (
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${a.severity === "critical" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                      {a.severity}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">{a.title}</span>
+                    {a.status === "acknowledged" && (
+                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-medium">Acknowledged</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-0.5">{a.description}</p>
+                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-400">
+                    <span>{a.created_at ? new Date(a.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                    <span>Rule: {a.rule_id}</span>
+                    {a.actor_email && <span>Actor: {a.actor_email}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  {a.status === "active" && (
+                    <button
+                      data-testid={`ack-alert-${a.alert_id}`}
+                      onClick={() => acknowledgeAlert(a.alert_id)}
+                      title="Acknowledge"
+                      className="p-1.5 hover:bg-blue-50 rounded text-blue-500"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    data-testid={`dismiss-alert-${a.alert_id}`}
+                    onClick={() => dismissAlert(a.alert_id)}
+                    title="Dismiss"
+                    className="p-1.5 hover:bg-gray-100 rounded text-gray-400"
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Collapsed alerts indicator */}
+      {alerts.length > 0 && !showAlerts && (
+        <button
+          onClick={() => setShowAlerts(true)}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        >
+          <Bell className="h-4 w-4" />
+          <span>{alertsTotal} security alert{alertsTotal !== 1 ? "s" : ""} — click to view</span>
+        </button>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

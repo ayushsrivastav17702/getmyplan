@@ -109,13 +109,18 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
     catch { return {}; }
   });
   const [moduleConfig, setModuleConfig] = useState(null);
+  const [alertCount, setAlertCount] = useState(0);
 
   const primaryColor = branding?.primary_color || "#0176D3";
   const logoUrl = branding?.logo_url || "";
+  const isSuperAdmin = user?.role === "super_admin" || tenantId === "demo";
 
   useEffect(() => {
     axios.get(`${API}/config`).then(r => setModuleConfig(r.data)).catch(() => {});
-  }, []);
+    if (isSuperAdmin) {
+      axios.get(`${API}/admin/platform/alerts/unread-count`).then(r => setAlertCount(r.data.count || 0)).catch(() => {});
+    }
+  }, [isSuperAdmin]);
 
   /* ─── Keyboard shortcut: Cmd/Ctrl + B ─── */
   useEffect(() => {
@@ -150,8 +155,6 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   }, []);
 
   const isSectionExpanded = (id) => expandedSections[id] !== false; // default open
-
-  const isSuperAdmin = user?.role === "super_admin" || tenantId === "demo";
 
   /* ─── Permission & module toggle filtering ─── */
   const isItemVisible = useCallback((item) => {
@@ -354,6 +357,9 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
                           {!collapsed && (
                             <>
                               <span className="flex-1 truncate">{item.label}</span>
+                              {item.path === "/admin/audit-logs" && alertCount > 0 && (
+                                <span data-testid="alert-badge" className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-bold leading-none">{alertCount}</span>
+                              )}
                               {isLocked && <Lock size={12} className="text-slate-600 shrink-0" />}
                               {isViewOnly && (
                                 <span className="text-[8px] px-1 py-0.5 bg-amber-500/20 text-amber-400 rounded font-semibold uppercase">View</span>
