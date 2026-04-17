@@ -3,7 +3,7 @@ import axios from "axios";
 import { API } from "../App";
 import { toast } from "sonner";
 import {
-  BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3,
+  BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -42,6 +42,9 @@ export default function BuyPlanning() {
   const [displayMins, setDisplayMins] = useState([]);
   const [loading, setLoading] = useState({});
   const [tab, setTab] = useState("overview");
+  const [overrideModal, setOverrideModal] = useState(null); // { type: 'store'|'sku', id, current }
+  const [overrideValue, setOverrideValue] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
 
   const fetchAll = useCallback(async () => {
     try {
@@ -81,6 +84,35 @@ export default function BuyPlanning() {
     setLoading(prev => ({ ...prev, [type]: false }));
   };
 
+  const submitOverride = async () => {
+    if (!overrideModal || !overrideValue) return;
+    try {
+      if (overrideModal.type === "store") {
+        await axios.post(`${API}/buy-planning/overrides/store-wedge`, {
+          store_code: overrideModal.id, wedge_class: overrideValue, reason: overrideReason,
+        });
+      } else {
+        await axios.post(`${API}/buy-planning/overrides/style-mix`, {
+          style: overrideModal.id, style_mix: overrideValue, reason: overrideReason,
+        });
+      }
+      toast.success("Override applied");
+      setOverrideModal(null); setOverrideValue(""); setOverrideReason("");
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Override failed"); }
+  };
+
+  const exportCSV = async () => {
+    try {
+      const res = await axios.get(`${API}/buy-planning/buy-formula/export/csv`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a"); a.href = url;
+      a.download = `buy_plan_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click(); window.URL.revokeObjectURL(url);
+      toast.success("Buy plan exported to CSV");
+    } catch { toast.error("Export failed"); }
+  };
+
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
   const mixSummary = mix?.summary || { Core: 0, Fashion: 0, Test: 0 };
   const totalStyles = mixSummary.Core + mixSummary.Fashion + mixSummary.Test;
@@ -93,9 +125,15 @@ export default function BuyPlanning() {
           <h1 data-testid="page-title" className="text-2xl font-bold text-gray-900">Buy Planning</h1>
           <p className="text-sm text-gray-500 mt-1">Store Wedge Classification + Style Mix Tagging</p>
         </div>
-        <button onClick={fetchAll} className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        <div className="flex gap-2">
+          <button data-testid="export-csv-btn" onClick={exportCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
+          <button onClick={fetchAll} className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -205,6 +243,7 @@ export default function BuyPlanning() {
                 <th className="text-left p-3 font-medium text-gray-600">Area (sqft)</th>
                 <th className="text-left p-3 font-medium text-gray-600">Wedge</th>
                 <th className="text-right p-3 font-medium text-gray-600">Revenue</th>
+                <th className="w-12"></th>
               </tr>
             </thead>
             <tbody>
@@ -218,6 +257,12 @@ export default function BuyPlanning() {
                   <td className="p-3"><WedgeBadge wedge={s.wedge_class} /></td>
                   <td className="p-3 text-right text-gray-700 font-medium">
                     {s.total_revenue ? `₹${Math.round(s.total_revenue).toLocaleString()}` : "—"}
+                  </td>
+                  <td className="p-3 text-right">
+                    <button onClick={() => { setOverrideModal({ type: "store", id: s.store_code, current: s.wedge_class }); setOverrideValue(s.wedge_class || "C"); }}
+                      className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override wedge">
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -243,6 +288,7 @@ export default function BuyPlanning() {
                 <th className="text-left p-3 font-medium text-gray-600">Weeks Active</th>
                 <th className="text-left p-3 font-medium text-gray-600">Peak:Avg</th>
                 <th className="text-left p-3 font-medium text-gray-600">Presence</th>
+                <th className="w-12"></th>
               </tr>
             </thead>
             <tbody>
@@ -255,6 +301,12 @@ export default function BuyPlanning() {
                   <td className="p-3 text-gray-600">{s.stats?.weeks_active ?? "—"}</td>
                   <td className="p-3 text-gray-600">{s.stats?.peak_to_avg != null ? `${s.stats.peak_to_avg}x` : "—"}</td>
                   <td className="p-3 text-gray-600">{s.stats?.week_presence_pct != null ? `${s.stats.week_presence_pct}%` : "—"}</td>
+                  <td className="p-3">
+                    <button onClick={() => { setOverrideModal({ type: "sku", id: s.style, current: s.style_mix }); setOverrideValue(s.style_mix || "Test"); }}
+                      className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override mix">
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {(mix?.styles || []).length === 0 && (
@@ -411,6 +463,36 @@ export default function BuyPlanning() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Override Modal */}
+      {overrideModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setOverrideModal(null)}>
+          <div data-testid="override-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">
+              Override {overrideModal.type === "store" ? "Store Wedge" : "Style Mix"}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {overrideModal.type === "store" ? "Store" : "Style"}: <code className="bg-gray-100 px-1 rounded">{overrideModal.id}</code>
+              &nbsp;(current: <strong>{overrideModal.current || "—"}</strong>)
+            </p>
+            <select data-testid="override-value" value={overrideValue} onChange={e => setOverrideValue(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              {overrideModal.type === "store"
+                ? ["A", "B", "C"].map(v => <option key={v} value={v}>{v} — {v === "A" ? "Full assortment" : v === "B" ? "Standard" : "Core only"}</option>)
+                : ["Core", "Fashion", "Test"].map(v => <option key={v} value={v}>{v}</option>)
+              }
+            </select>
+            <input data-testid="override-reason" placeholder="Reason (e.g., new flagship store)" value={overrideReason}
+              onChange={e => setOverrideReason(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setOverrideModal(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button data-testid="submit-override" onClick={submitOverride}
+                className="px-4 py-2 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">Apply Override</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

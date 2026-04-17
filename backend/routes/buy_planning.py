@@ -1,8 +1,11 @@
 """Buy Planning module: Store Wedge Classification + Style Mix Tagging."""
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone, timedelta
+import io
+import csv
 
 router = APIRouter(prefix="/buy-planning", tags=["buy-planning"])
 
@@ -840,3 +843,217 @@ async def get_attribution_matrix(user: dict = Depends(_dep_user)):
         "store_counts": wedge_counts,
         "rules": WEDGE_RULES,
     }
+
+# ═══════════════════════════════════════════════════
+# FEATURE B: Manual Overrides with Audit
+# ═══════════════════════════════════════════════════
+
+class WedgeOverrideReq(BaseModel):
+    store_code: str
+    wedge_class: str  # A, B, C
+    reason: str = ""
+
+
+class MixOverrideReq(BaseModel):
+    style: str
+    style_mix: str  # Core, Fashion, Test
+    reason: str = ""
+
+
+@router.post("/overrides/store-wedge")
+async def override_store_wedge(body: WedgeOverrideReq, user: dict = Depends(_dep_user)):
+    """Manually override a store's wedge class with audit trail."""
+    if body.wedge_class not in ("A", "B", "C"):
+        raise HTTPException(400, "wedge_class must be A, B, or C")
+    db = _db_func()
+    store = await db.store_master.find_one({"store_code": body.store_code}, {"_id": 0, "wedge_class": 1})
+    if not store:
+        raise HTTPException(404, f"Store '{body.store_code}' not found")
+    old = store.get("wedge_class")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.store_master.update_one(
+        {"store_code": body.store_code},
+        {"$set": {
+            "wedge_class": body.wedge_class,
+            "wedge_manual_override": True,
+            "wedge_classified_at": now,
+            "wedge_classified_by": user.get("email", "manual"),
+        }},
+    )
+    await db.buy_planning_overrides.insert_one({
+        "entity_type": "store", "entity_id": body.store_code,
+        "field": "wedge_class", "old_value": old, "new_value": body.wedge_class,
+        "reason": body.reason, "created_by": user.get("email", ""),
+        "created_at": now, "is_active": True,
+    })
+    return {"success": True, "store_code": body.store_code, "old": old, "new": body.wedge_class}
+
+
+@router.delete("/overrides/store-wedge/{store_code}")
+async def revert_store_wedge_override(store_code: str, user: dict = Depends(_dep_user)):
+    """Remove manual override — store will be reclassified on next auto-run."""
+    db = _db_func()
+    await db.store_master.update_one(
+        {"store_code": store_code},
+        {"$set": {"wedge_manual_override": False}, "$unset": {"wedge_classified_by": ""}},
+    )
+    await db.buy_planning_overrides.update_many(
+        {"entity_type": "store", "entity_id": store_code, "is_active": True},
+        {"$set": {"is_active": False, "reverted_at": datetime.now(timezone.utc).isoformat(), "reverted_by": user.get("email", "")}},
+    )
+    return {"success": True, "message": f"Override removed for {store_code}"}
+
+
+@router.post("/overrides/style-mix")
+async def override_style_mix(body: MixOverrideReq, user: dict = Depends(_dep_user)):
+    """Manually override a style's mix classification with audit trail."""
+    if body.style_mix not in ("Core", "Fashion", "Test"):
+        raise HTTPException(400, "style_mix must be Core, Fashion, or Test")
+    db = _db_func()
+    sku = await db.sku_ean_master.find_one({"style": body.style}, {"_id": 0, "style_mix": 1})
+    if not sku:
+        raise HTTPException(404, f"Style '{body.style}' not found")
+    old = sku.get("style_mix")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.sku_ean_master.update_many(
+        {"style": body.style},
+        {"$set": {
+            "style_mix": body.style_mix,
+            "style_mix_manual_override": True,
+            "style_mix_classified_at": now,
+            "style_mix_classified_by": user.get("email", "manual"),
+        }},
+    )
+    await db.buy_planning_overrides.insert_one({
+        "entity_type": "sku", "entity_id": body.style,
+        "field": "style_mix", "old_value": old, "new_value": body.style_mix,
+        "reason": body.reason, "created_by": user.get("email", ""),
+        "created_at": now, "is_active": True,
+    })
+    return {"success": True, "style": body.style, "old": old, "new": body.style_mix}
+
+
+@router.delete("/overrides/style-mix/{style}")
+async def revert_style_mix_override(style: str, user: dict = Depends(_dep_user)):
+    """Remove manual override — style will be reclassified on next auto-run."""
+    db = _db_func()
+    await db.sku_ean_master.update_many(
+        {"style": style},
+        {"$set": {"style_mix_manual_override": False}, "$unset": {"style_mix_classified_by": ""}},
+    )
+    await db.buy_planning_overrides.update_many(
+        {"entity_type": "sku", "entity_id": style, "is_active": True},
+        {"$set": {"is_active": False, "reverted_at": datetime.now(timezone.utc).isoformat(), "reverted_by": user.get("email", "")}},
+    )
+    return {"success": True, "message": f"Override removed for {style}"}
+
+
+@router.get("/overrides/history")
+async def get_override_history(entity_type: Optional[str] = None, limit: int = 50, user: dict = Depends(_dep_user)):
+    """Get history of manual overrides."""
+    db = _db_func()
+    query = {}
+    if entity_type:
+        query["entity_type"] = entity_type
+    overrides = []
+    async for doc in db.buy_planning_overrides.find(query, {"_id": 0}).sort("created_at", -1).limit(limit):
+        overrides.append(doc)
+    return {"overrides": overrides, "total": len(overrides)}
+
+
+# ═══════════════════════════════════════════════════
+# FEATURE C: Export Buy Plan to CSV
+# ═══════════════════════════════════════════════════
+
+@router.get("/buy-formula/export/csv")
+async def export_buy_plan_csv(cover_days: int = 30, safety_days: int = 7, user: dict = Depends(_dep_user)):
+    """Export the full buy plan to CSV."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+
+    # Reuse the calculate logic inline for export
+    from fastapi.testclient import TestClient
+    # Build buy plan data directly
+    sell_targets = DEFAULT_SELL_THROUGH
+
+    wedge_counts = {"A": 0, "B": 0, "C": 0}
+    async for doc in db.store_master.aggregate([
+        {"$match": _tenant_match(tenant_id)},
+        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}}},
+    ]):
+        if doc["_id"] in wedge_counts:
+            wedge_counts[doc["_id"]] = doc["count"]
+
+    disp_mins = {}
+    async for doc in db.display_minimums_config.find({}, {"_id": 0}):
+        disp_mins[(doc["category"], doc["store_wedge"])] = doc.get("total_display_min_units", 4)
+
+    soh_map = {}
+    async for doc in db.store_inventory.aggregate([
+        {"$match": _tenant_match(tenant_id)},
+        {"$group": {"_id": "$sku", "total_soh": {"$sum": {"$toInt": {"$ifNull": ["$closing_stock", 0]}}}}},
+    ]):
+        soh_map[doc["_id"]] = doc["total_soh"]
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=cover_days)).strftime("%Y-%m-%d")
+    ros_map = {}
+    async for doc in db.daily_sales.aggregate([
+        {"$match": {**_tenant_match(tenant_id), "day": {"$gte": cutoff}}},
+        {"$group": {"_id": "$sku", "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
+                    "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}}, "days": {"$addToSet": "$day"}}},
+    ]):
+        days = len(doc.get("days", []))
+        ros_map[doc["_id"]] = {"daily_ros": doc["total_qty"] / max(days, 1), "revenue": doc["total_revenue"]}
+
+    sku_meta = {}
+    async for doc in db.sku_ean_master.find(_tenant_match(tenant_id), {"_id": 0}):
+        sku_meta[doc.get("ean", "")] = doc
+
+    rows = []
+    for sku, meta in sku_meta.items():
+        mix = meta.get("style_mix", "Test")
+        category = meta.get("category", "")
+        ros_data = ros_map.get(sku, {"daily_ros": 0, "revenue": 0})
+        current_soh = soh_map.get(sku, 0)
+        daily_ros = ros_data["daily_ros"]
+        forecasted_demand = daily_ros * cover_days
+        sell_through = sell_targets.get(mix, 0.8)
+        demand_buy = max(0, (sell_through * forecasted_demand) - current_soh)
+        display_qty = 0
+        eligible = {"Core": ["A", "B", "C"], "Fashion": ["A", "B"], "Test": ["A"]}.get(mix, ["A"])
+        for w in eligible:
+            display_qty += disp_mins.get((category, w), disp_mins.get(("ALL", w), 4)) * wedge_counts.get(w, 0)
+        safety_qty = daily_ros * safety_days
+        buy_qty = round(max(demand_buy, display_qty, safety_qty))
+        constraint = "demand" if demand_buy >= max(display_qty, safety_qty) else "display_min" if display_qty >= safety_qty else "safety_stock"
+        rows.append({
+            "SKU": sku, "Style": meta.get("style", ""), "Category": category,
+            "Sub Category": meta.get("sub_category", ""), "Style Mix": mix,
+            "MRP": meta.get("mrp", 0), "Daily ROS": round(daily_ros, 2),
+            "Current SOH": current_soh, "Forecasted Demand": round(forecasted_demand),
+            "Sell-Through Target": sell_through, "Demand Buy": round(demand_buy),
+            "Display Minimum": round(display_qty), "Safety Stock": round(safety_qty),
+            "Buy Qty": buy_qty, "Buy Value": round(buy_qty * meta.get("mrp", 0), 2),
+            "Binding Constraint": constraint,
+            "Flow Rank": meta.get("flow_rank"), "Lifecycle": meta.get("lifecycle_stage", ""),
+            "Launch Date": meta.get("launch_date", ""),
+        })
+
+    rows.sort(key=lambda x: x["Buy Value"], reverse=True)
+
+    buf = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(buf, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    else:
+        buf.write("No data available\n")
+    buf.seek(0)
+
+    filename = f"buy_plan_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.csv"
+    return StreamingResponse(
+        io.BytesIO(buf.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
