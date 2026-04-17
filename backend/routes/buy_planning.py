@@ -94,6 +94,12 @@ async def classify_store_wedge(user: dict = Depends(_dep_user)):
     if total_rev == 0:
         raise HTTPException(400, "All stores have zero revenue.")
 
+    # Fetch current wedge classes for audit logging
+    old_wedges = {}
+    async for sd in db.store_master.find(_tenant_match(tenant_id), {"_id": 0, "store_code": 1, "wedge_class": 1}):
+        old_wedges[sd.get("store_code")] = sd.get("wedge_class")
+    audit_entries = []
+
     cumulative = 0
     classifications = {"A": [], "B": [], "C": []}
 
@@ -117,12 +123,28 @@ async def classify_store_wedge(user: dict = Depends(_dep_user)):
                       "wedge_classified_at": datetime.now(timezone.utc).isoformat()}},
         )
 
+        # Track change for audit
+        old_w = old_wedges.get(s["store_code"])
+        if old_w != wedge:
+            audit_entries.append({
+                "tenant_id": tenant_id, "action": "classify", "entity_type": "store",
+                "entity_id": s["store_code"], "field": "wedge_class",
+                "old_value": old_w, "new_value": wedge,
+                "reason": f"Revenue-based: {s['revenue_pct']}% of total",
+                "source": "auto", "created_by": user.get("email", "system"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+    if audit_entries:
+        await db.buy_planning_audit_log.insert_many(audit_entries)
+
     return {
         "success": True,
         "method": "revenue_based",
         "total_revenue": round(total_rev, 2),
         "summary": {k: len(v) for k, v in classifications.items()},
         "stores": stores_revenue,
+        "audit_changes": len(audit_entries),
     }
 
 
@@ -240,6 +262,15 @@ async def classify_style_mix(user: dict = Depends(_dep_user)):
     classifications = {"Core": [], "Fashion": [], "Test": []}
     results = []
 
+    # Fetch current style mixes for audit logging
+    old_mixes = {}
+    async for sd in db.sku_ean_master.aggregate([
+        {"$match": {**_tenant_match(tenant_id), "style_mix": {"$exists": True}}},
+        {"$group": {"_id": "$style", "mix": {"$first": "$style_mix"}}},
+    ]):
+        old_mixes[sd["_id"]] = sd.get("mix")
+    audit_entries = []
+
     for s in style_stats:
         style = s["_id"]
         weeks_active = s.get("weeks_active", 0)
@@ -276,6 +307,18 @@ async def classify_style_mix(user: dict = Depends(_dep_user)):
             }},
         )
 
+        # Track change for audit
+        old_m = old_mixes.get(style)
+        if old_m != mix:
+            audit_entries.append({
+                "tenant_id": tenant_id, "action": "classify", "entity_type": "style",
+                "entity_id": style, "field": "style_mix",
+                "old_value": old_m, "new_value": mix,
+                "reason": f"Avg {round(avg_weekly, 1)}/wk, {weeks_active}w active, {round(peak_to_avg, 1)}x peak",
+                "source": "auto", "created_by": user.get("email", "system"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
         results.append({
             "style": style,
             "style_mix": mix,
@@ -287,6 +330,9 @@ async def classify_style_mix(user: dict = Depends(_dep_user)):
             "week_presence_pct": round(week_presence * 100, 1),
         })
 
+    if audit_entries:
+        await db.buy_planning_audit_log.insert_many(audit_entries)
+
     results.sort(key=lambda x: x["total_revenue"], reverse=True)
 
     return {
@@ -296,6 +342,7 @@ async def classify_style_mix(user: dict = Depends(_dep_user)):
         "date_range": {"from": min_day, "to": max_day},
         "summary": {k: len(v) for k, v in classifications.items()},
         "styles": results,
+        "audit_changes": len(audit_entries),
     }
 
 
@@ -493,6 +540,10 @@ async def set_sell_through_config(body: SellThroughConfigReq, user: dict = Depen
     if body.target_multiplier < 0 or body.target_multiplier > 5:
         raise HTTPException(400, "target_multiplier must be between 0 and 5")
     db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    # Get old value for audit
+    old_doc = await db.sell_through_config.find_one({"style_mix": body.style_mix}, {"_id": 0, "target_multiplier": 1})
+    old_val = old_doc.get("target_multiplier") if old_doc else DEFAULT_SELL_THROUGH.get(body.style_mix)
     await db.sell_through_config.update_one(
         {"style_mix": body.style_mix},
         {"$set": {
@@ -503,6 +554,15 @@ async def set_sell_through_config(body: SellThroughConfigReq, user: dict = Depen
         }},
         upsert=True,
     )
+    if old_val != body.target_multiplier:
+        await db.buy_planning_audit_log.insert_one({
+            "tenant_id": tenant_id, "action": "config_update", "entity_type": "config",
+            "entity_id": body.style_mix, "field": "target_multiplier",
+            "old_value": str(old_val), "new_value": str(body.target_multiplier),
+            "reason": f"Sell-through target changed for {body.style_mix}",
+            "source": "manual", "created_by": user.get("email", ""),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
     return {"success": True, "style_mix": body.style_mix, "target_multiplier": body.target_multiplier}
 
 
@@ -936,6 +996,7 @@ async def override_store_wedge(body: WedgeOverrideReq, user: dict = Depends(_dep
     if body.wedge_class not in ("A", "B", "C"):
         raise HTTPException(400, "wedge_class must be A, B, or C")
     db = _db_func()
+    tenant_id = user.get("tenant_id", "")
     store = await db.store_master.find_one({"store_code": body.store_code}, {"_id": 0, "wedge_class": 1})
     if not store:
         raise HTTPException(404, f"Store '{body.store_code}' not found")
@@ -955,6 +1016,13 @@ async def override_store_wedge(body: WedgeOverrideReq, user: dict = Depends(_dep
         "field": "wedge_class", "old_value": old, "new_value": body.wedge_class,
         "reason": body.reason, "created_by": user.get("email", ""),
         "created_at": now, "is_active": True,
+    })
+    await db.buy_planning_audit_log.insert_one({
+        "tenant_id": tenant_id, "action": "override", "entity_type": "store",
+        "entity_id": body.store_code, "field": "wedge_class",
+        "old_value": old, "new_value": body.wedge_class,
+        "reason": body.reason, "source": "manual",
+        "created_by": user.get("email", ""), "created_at": now,
     })
     return {"success": True, "store_code": body.store_code, "old": old, "new": body.wedge_class}
 
@@ -980,6 +1048,7 @@ async def override_style_mix(body: MixOverrideReq, user: dict = Depends(_dep_use
     if body.style_mix not in ("Core", "Fashion", "Test"):
         raise HTTPException(400, "style_mix must be Core, Fashion, or Test")
     db = _db_func()
+    tenant_id = user.get("tenant_id", "")
     sku = await db.sku_ean_master.find_one({"style": body.style}, {"_id": 0, "style_mix": 1})
     if not sku:
         raise HTTPException(404, f"Style '{body.style}' not found")
@@ -999,6 +1068,13 @@ async def override_style_mix(body: MixOverrideReq, user: dict = Depends(_dep_use
         "field": "style_mix", "old_value": old, "new_value": body.style_mix,
         "reason": body.reason, "created_by": user.get("email", ""),
         "created_at": now, "is_active": True,
+    })
+    await db.buy_planning_audit_log.insert_one({
+        "tenant_id": tenant_id, "action": "override", "entity_type": "style",
+        "entity_id": body.style, "field": "style_mix",
+        "old_value": old, "new_value": body.style_mix,
+        "reason": body.reason, "source": "manual",
+        "created_by": user.get("email", ""), "created_at": now,
     })
     return {"success": True, "style": body.style, "old": old, "new": body.style_mix}
 
@@ -1029,6 +1105,27 @@ async def get_override_history(entity_type: Optional[str] = None, limit: int = 5
     async for doc in db.buy_planning_overrides.find(query, {"_id": 0}).sort("created_at", -1).limit(limit):
         overrides.append(doc)
     return {"overrides": overrides, "total": len(overrides)}
+
+
+@router.get("/audit-log")
+async def get_audit_log(
+    entity_type: Optional[str] = None,
+    source: Optional[str] = None,
+    limit: int = 100,
+    user: dict = Depends(_dep_user),
+):
+    """Get comprehensive audit log for all buy planning changes."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    query = {"tenant_id": tenant_id}
+    if entity_type:
+        query["entity_type"] = entity_type
+    if source:
+        query["source"] = source
+    entries = []
+    async for doc in db.buy_planning_audit_log.find(query, {"_id": 0}).sort("created_at", -1).limit(limit):
+        entries.append(doc)
+    return {"entries": entries, "total": len(entries)}
 
 
 # ═══════════════════════════════════════════════════

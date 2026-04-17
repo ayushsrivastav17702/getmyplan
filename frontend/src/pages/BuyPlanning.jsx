@@ -4,7 +4,7 @@ import { API } from "../App";
 import { toast } from "sonner";
 import {
   BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2, Settings, RotateCcw, Save,
-  Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin,
+  Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin, ClipboardList,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -60,6 +60,8 @@ export default function BuyPlanning() {
   const [editingQty, setEditingQty] = useState("");
   const [detailItem, setDetailItem] = useState(null);
   const [planCoverDays, setPlanCoverDays] = useState(30);
+  const [auditLog, setAuditLog] = useState([]);
+  const [auditFilter, setAuditFilter] = useState({ entity_type: "", source: "" });
 
   const fetchAll = useCallback(async () => {
     try {
@@ -87,6 +89,9 @@ export default function BuyPlanning() {
       setSellThroughConfigs(stc.data?.configs || []);
       setSavedPlans(plansRes.data?.plans || []);
       setEditingMultipliers({});
+      // Fetch audit log
+      const auditRes = await axios.get(`${API}/buy-planning/audit-log`).catch(() => ({ data: { entries: [] } }));
+      setAuditLog(auditRes.data?.entries || []);
     } catch {}
   }, []);
 
@@ -298,6 +303,7 @@ export default function BuyPlanning() {
           { id: "dna", label: "DNA Tags", icon: Zap },
           { id: "attribution", label: "Attribution", icon: Grid3X3 },
           { id: "config", label: "Config", icon: Settings },
+          { id: "audit", label: "Audit Log", icon: ClipboardList },
         ].map(t => (
           <button
             key={t.id}
@@ -1009,6 +1015,105 @@ export default function BuyPlanning() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit Log Tab */}
+      {tab === "audit" && (
+        <div className="space-y-4">
+          {/* Filters */}
+          <div data-testid="audit-filters" className="flex items-center gap-3">
+            <select data-testid="audit-entity-filter" value={auditFilter.entity_type}
+              onChange={e => {
+                const f = { ...auditFilter, entity_type: e.target.value };
+                setAuditFilter(f);
+                axios.get(`${API}/buy-planning/audit-log`, { params: { entity_type: f.entity_type || undefined, source: f.source || undefined, limit: 100 } })
+                  .then(r => setAuditLog(r.data?.entries || [])).catch(() => {});
+              }}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Types</option>
+              <option value="store">Store Wedge</option>
+              <option value="style">Style Mix</option>
+              <option value="config">Config</option>
+            </select>
+            <select data-testid="audit-source-filter" value={auditFilter.source}
+              onChange={e => {
+                const f = { ...auditFilter, source: e.target.value };
+                setAuditFilter(f);
+                axios.get(`${API}/buy-planning/audit-log`, { params: { entity_type: f.entity_type || undefined, source: f.source || undefined, limit: 100 } })
+                  .then(r => setAuditLog(r.data?.entries || [])).catch(() => {});
+              }}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">All Sources</option>
+              <option value="auto">Auto Classification</option>
+              <option value="manual">Manual Override</option>
+            </select>
+            <span className="text-xs text-gray-400">{auditLog.length} entries</span>
+          </div>
+
+          {/* Audit Table */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table data-testid="audit-log-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3 font-medium text-gray-600">Timestamp</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Action</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Type</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Entity</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Field</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Change</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Source</th>
+                  <th className="text-left p-3 font-medium text-gray-600">User</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLog.map((e, i) => (
+                  <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="p-3 text-xs text-gray-500 whitespace-nowrap">
+                      {e.created_at ? new Date(e.created_at).toLocaleString() : "\u2014"}
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        e.action === "classify" ? "bg-blue-50 text-blue-700" :
+                        e.action === "override" ? "bg-orange-50 text-orange-700" :
+                        e.action === "config_update" ? "bg-purple-50 text-purple-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>{e.action}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        e.entity_type === "store" ? "bg-emerald-50 text-emerald-700" :
+                        e.entity_type === "style" ? "bg-indigo-50 text-indigo-700" :
+                        "bg-gray-50 text-gray-600"
+                      }`}>{e.entity_type}</span>
+                    </td>
+                    <td className="p-3 font-mono text-xs font-medium">{e.entity_id}</td>
+                    <td className="p-3 text-xs text-gray-500">{e.field}</td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-red-500 line-through">{e.old_value || "none"}</span>
+                        <span className="text-gray-400">{"\u2192"}</span>
+                        <span className="text-emerald-700 font-medium">{e.new_value}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        e.source === "auto" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
+                      }`}>{e.source === "auto" ? "AUTO" : "MANUAL"}</span>
+                    </td>
+                    <td className="p-3 text-xs text-gray-500">{e.created_by || "\u2014"}</td>
+                    <td className="p-3 text-xs text-gray-500 max-w-[200px] truncate" title={e.reason}>{e.reason || "\u2014"}</td>
+                  </tr>
+                ))}
+                {auditLog.length === 0 && (
+                  <tr><td colSpan={9} className="p-12 text-center text-gray-400">
+                    No audit entries yet. Run classifications or make manual overrides to generate audit logs.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
