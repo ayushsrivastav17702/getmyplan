@@ -689,8 +689,18 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
             dm = disp_mins.get((category, w), disp_mins.get(("ALL", w), 4))
             display_qty += dm * wedge_counts.get(w, 0)
 
-        # Safety stock
-        safety_qty = daily_ros * body.safety_days
+        # Safety stock (statistical: z × MAD × √(LT/RP))
+        safety_cfg = await db.safety_stock_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
+        if not safety_cfg:
+            safety_cfg = {"service_level": 0.95, "review_period_days": 7, "max_safety_weeks": 12}
+        z = {0.80: 0.842, 0.85: 1.036, 0.90: 1.282, 0.95: 1.645, 0.98: 2.054, 0.99: 2.326}.get(safety_cfg.get("service_level", 0.95), 1.645)
+        rp = safety_cfg.get("review_period_days", 7)
+        lead_time = 14  # default lead time days
+        import math
+        mad = daily_ros * 0.3 if daily_ros > 0 else 0.5  # approximate MAD from ROS volatility
+        safety_qty = z * mad * math.sqrt(lead_time / max(rp, 1))
+        safety_qty = min(safety_qty, safety_cfg.get("max_safety_weeks", 12) * mad)
+        safety_method = "statistical"
 
         # Full formula: MAX of the three
         buy_qty = max(demand_buy, display_qty, safety_qty)
@@ -714,6 +724,7 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
             "demand_buy": round(demand_buy),
             "display_minimum": round(display_qty),
             "safety_stock": round(safety_qty),
+            "safety_method": safety_method,
             "current_soh": current_soh,
             "buy_qty": buy_qty,
             "buy_value": round(buy_value, 2),
@@ -1644,3 +1655,207 @@ async def list_exclusions(user: dict = Depends(_dep_user)):
     async for doc in db.buy_planning_exclusions.find({"tenant_id": tenant_id}, {"_id": 0}):
         exclusions.append(doc)
     return {"exclusions": exclusions, "total": len(exclusions)}
+
+
+# ═══════════════════════════════════════════════════
+# INVENTORY INGESTION
+# ═══════════════════════════════════════════════════
+
+class InventoryRecordModel(BaseModel):
+    store_code: str
+    sku: str
+    date: str  # ISO date string
+    soh: int = 0
+    in_transit: int = 0
+    open_po_qty: int = 0
+
+
+class BulkInventoryUploadReq(BaseModel):
+    records: list
+    source: str = "api"
+
+
+@router.post("/inventory/bulk")
+async def bulk_upload_inventory(body: BulkInventoryUploadReq, user: dict = Depends(_dep_user)):
+    """Bulk upload store-level inventory data (SOH, in-transit, open PO)."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    if not body.records:
+        raise HTTPException(400, "No records provided")
+    if len(body.records) > 100000:
+        raise HTTPException(400, "Maximum 100,000 records per request")
+    inserted = 0
+    updated = 0
+    failed = 0
+    errors = []
+    for rec in body.records:
+        try:
+            sc = rec.get("store_code", rec.get("store_id", ""))
+            sku = rec.get("sku", rec.get("sku_id", ""))
+            dt = rec.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+            result = await db.store_inventory.update_one(
+                {"tenant_id": tenant_id, "store_code": sc, "sku": sku, "date": dt},
+                {"$set": {
+                    "tenant_id": tenant_id, "store_code": sc, "sku": sku, "date": dt,
+                    "soh": rec.get("soh", 0), "in_transit": rec.get("in_transit", 0),
+                    "open_po_qty": rec.get("open_po_qty", 0),
+                    "source": body.source, "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "uploaded_by": user.get("email", ""),
+                }},
+                upsert=True,
+            )
+            if result.upserted_id:
+                inserted += 1
+            elif result.modified_count > 0:
+                updated += 1
+        except Exception as e:
+            failed += 1
+            if len(errors) < 10:
+                errors.append(f"{rec}: {str(e)}")
+    await db.inventory_sync_log.insert_one({
+        "tenant_id": tenant_id, "synced_at": datetime.now(timezone.utc).isoformat(),
+        "synced_by": user.get("email", ""), "source": body.source,
+        "total": len(body.records), "inserted": inserted, "updated": updated, "failed": failed,
+    })
+    return {"success": failed == 0, "total": len(body.records), "inserted": inserted, "updated": updated, "failed": failed, "errors": errors}
+
+
+@router.get("/inventory")
+async def list_inventory(store_code: Optional[str] = None, sku: Optional[str] = None, limit: int = 200, user: dict = Depends(_dep_user)):
+    """List inventory records, optionally filtered by store/sku."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    query = {"tenant_id": tenant_id}
+    if store_code:
+        query["store_code"] = store_code
+    if sku:
+        query["sku"] = sku
+    records = []
+    async for doc in db.store_inventory.find(query, {"_id": 0}).sort("date", -1).limit(limit):
+        records.append(doc)
+    return {"records": records, "total": len(records)}
+
+
+@router.get("/inventory/summary")
+async def inventory_summary(user: dict = Depends(_dep_user)):
+    """Get inventory summary stats."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    total = await db.store_inventory.count_documents({"tenant_id": tenant_id})
+    pipeline = [
+        {"$match": {"tenant_id": tenant_id}},
+        {"$group": {
+            "_id": None,
+            "total_soh": {"$sum": "$soh"},
+            "total_in_transit": {"$sum": "$in_transit"},
+            "total_open_po": {"$sum": "$open_po_qty"},
+            "unique_stores": {"$addToSet": "$store_code"},
+            "unique_skus": {"$addToSet": "$sku"},
+        }},
+    ]
+    result = await db.store_inventory.aggregate(pipeline).to_list(1)
+    if result:
+        r = result[0]
+        return {
+            "total_records": total,
+            "total_soh": r.get("total_soh", 0),
+            "total_in_transit": r.get("total_in_transit", 0),
+            "total_open_po": r.get("total_open_po", 0),
+            "unique_stores": len(r.get("unique_stores", [])),
+            "unique_skus": len(r.get("unique_skus", [])),
+        }
+    return {"total_records": 0, "total_soh": 0, "total_in_transit": 0, "total_open_po": 0, "unique_stores": 0, "unique_skus": 0}
+
+
+# Last sync info
+@router.get("/inventory/sync-status")
+async def inventory_sync_status(user: dict = Depends(_dep_user)):
+    """Get last inventory sync info."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    last = await db.inventory_sync_log.find_one({"tenant_id": tenant_id}, {"_id": 0}, sort=[("synced_at", -1)])
+    return {"last_sync": last}
+
+
+# ═══════════════════════════════════════════════════
+# SAFETY STOCK CONFIGURATION & CALCULATION
+# ═══════════════════════════════════════════════════
+
+DEFAULT_SAFETY_CONFIG = {"service_level": 0.95, "review_period_days": 7, "max_safety_weeks": 12}
+
+Z_SCORES = {0.80: 0.842, 0.85: 1.036, 0.90: 1.282, 0.95: 1.645, 0.98: 2.054, 0.99: 2.326, 0.999: 3.09}
+
+
+class SafetyStockConfigReq(BaseModel):
+    service_level: float = 0.95
+    review_period_days: int = 7
+    max_safety_weeks: int = 12
+
+
+@router.get("/safety-stock/config")
+async def get_safety_stock_config(user: dict = Depends(_dep_user)):
+    """Get safety stock config for the tenant."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    doc = await db.safety_stock_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        return {**DEFAULT_SAFETY_CONFIG, "is_default": True, "z_score": Z_SCORES.get(0.95, 1.645)}
+    return {**doc, "is_default": False, "z_score": Z_SCORES.get(doc.get("service_level", 0.95), 1.645)}
+
+
+@router.put("/safety-stock/config")
+async def set_safety_stock_config(body: SafetyStockConfigReq, user: dict = Depends(_dep_user)):
+    """Update safety stock config."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    if body.service_level not in Z_SCORES:
+        raise HTTPException(400, f"service_level must be one of: {list(Z_SCORES.keys())}")
+    if body.review_period_days < 1 or body.review_period_days > 30:
+        raise HTTPException(400, "review_period_days must be 1-30")
+    if body.max_safety_weeks < 1 or body.max_safety_weeks > 52:
+        raise HTTPException(400, "max_safety_weeks must be 1-52")
+    await db.safety_stock_config.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {
+            "tenant_id": tenant_id, "service_level": body.service_level,
+            "review_period_days": body.review_period_days, "max_safety_weeks": body.max_safety_weeks,
+            "updated_by": user.get("email", ""), "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"success": True, "z_score": Z_SCORES[body.service_level], **body.model_dump()}
+
+
+@router.post("/safety-stock/config/reset")
+async def reset_safety_stock_config(user: dict = Depends(_dep_user)):
+    """Reset to default safety stock config."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    await db.safety_stock_config.delete_one({"tenant_id": tenant_id})
+    return {"success": True, "defaults": DEFAULT_SAFETY_CONFIG}
+
+
+@router.get("/safety-stock/calculate")
+async def calculate_safety_stock(sku: str, lead_time_days: int = 14, user: dict = Depends(_dep_user)):
+    """Calculate statistical safety stock for a single SKU."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    cfg = await db.safety_stock_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not cfg:
+        cfg = DEFAULT_SAFETY_CONFIG
+    z = Z_SCORES.get(cfg.get("service_level", 0.95), 1.645)
+    rp = cfg.get("review_period_days", 7)
+    max_weeks = cfg.get("max_safety_weeks", 12)
+    # Fetch forecast errors (last 90 days)
+    errors = []
+    async for doc in db.forecast_errors.find({"tenant_id": tenant_id, "sku": sku}, {"_id": 0, "error": 1}).sort("date", -1).limit(52):
+        errors.append(doc.get("error", 0))
+    mad = sum(errors) / len(errors) if errors else 0.5
+    import math
+    ss = z * mad * math.sqrt(lead_time_days / rp)
+    ss = min(ss, max_weeks * mad)
+    return {
+        "sku": sku, "safety_stock_units": round(ss, 2), "mad": round(mad, 2),
+        "z_score": z, "lead_time_days": lead_time_days, "review_period_days": rp,
+        "forecast_errors_used": len(errors), "formula": "z * MAD * sqrt(LT/RP)",
+    }

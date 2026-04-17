@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2, Settings, RotateCcw, Save,
   Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin, ClipboardList,
-  Ban, Plus, X, Send, History,
+  Ban, Plus, X, Send, History, Upload, Package,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -73,6 +73,11 @@ export default function BuyPlanning() {
   const [approvalComment, setApprovalComment] = useState("");
   const [approvalHistory, setApprovalHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [inventorySummary, setInventorySummary] = useState(null);
+  const [inventoryRecords, setInventoryRecords] = useState([]);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [safetyConfig, setSafetyConfig] = useState(null);
+  const [editingSafetyConfig, setEditingSafetyConfig] = useState(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -106,6 +111,15 @@ export default function BuyPlanning() {
       // Fetch exclusions
       const exclRes = await axios.get(`${API}/buy-planning/exclusions`).catch(() => ({ data: { exclusions: [] } }));
       setExclusions(exclRes.data?.exclusions || []);
+      // Fetch inventory & safety config
+      const [invSum, invSync, safeRes] = await Promise.all([
+        axios.get(`${API}/buy-planning/inventory/summary`).catch(() => ({ data: null })),
+        axios.get(`${API}/buy-planning/inventory/sync-status`).catch(() => ({ data: { last_sync: null } })),
+        axios.get(`${API}/buy-planning/safety-stock/config`).catch(() => ({ data: null })),
+      ]);
+      setInventorySummary(invSum.data);
+      setSyncStatus(invSync.data?.last_sync);
+      setSafetyConfig(safeRes.data);
     } catch {}
   }, []);
 
@@ -315,6 +329,59 @@ export default function BuyPlanning() {
     return map[status] || [];
   };
 
+  const handleInventoryUpload = async (file) => {
+    if (!file) return;
+    setLoading(p => ({ ...p, inventory: true }));
+    try {
+      const text = await file.text();
+      const lines = text.trim().split("\n");
+      const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+      const records = lines.slice(1).filter(l => l.trim()).map(line => {
+        const vals = line.split(",").map(v => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
+        return {
+          store_code: obj.store_code || obj.store_id || "",
+          sku: obj.sku || obj.sku_id || "",
+          date: obj.date || new Date().toISOString().split("T")[0],
+          soh: parseInt(obj.soh) || 0,
+          in_transit: parseInt(obj.in_transit) || 0,
+          open_po_qty: parseInt(obj.open_po_qty) || 0,
+        };
+      }).filter(r => r.store_code && r.sku);
+      const res = await axios.post(`${API}/buy-planning/inventory/bulk`, { records, source: "csv" });
+      toast.success(`Uploaded: ${res.data.inserted} new, ${res.data.updated} updated`);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Upload failed"); }
+    setLoading(p => ({ ...p, inventory: false }));
+  };
+
+  const saveSafetyConfig = async () => {
+    if (!editingSafetyConfig) return;
+    try {
+      await axios.put(`${API}/buy-planning/safety-stock/config`, editingSafetyConfig);
+      toast.success("Safety stock config saved");
+      setEditingSafetyConfig(null);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Save failed"); }
+  };
+
+  const resetSafetyConfig = async () => {
+    try {
+      await axios.post(`${API}/buy-planning/safety-stock/config/reset`);
+      toast.success("Reset to defaults");
+      fetchAll();
+    } catch { toast.error("Reset failed"); }
+  };
+
+  const SL_OPTIONS = [
+    { val: 0.80, label: "80% - Low stock, low cost" },
+    { val: 0.90, label: "90% - Moderate" },
+    { val: 0.95, label: "95% - Standard (Recommended)" },
+    { val: 0.98, label: "98% - High availability" },
+    { val: 0.99, label: "99% - Critical items" },
+  ];
+
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
   const mixSummary = mix?.summary || { Core: 0, Fashion: 0, Test: 0 };
   const totalStyles = mixSummary.Core + mixSummary.Fashion + mixSummary.Test;
@@ -412,6 +479,7 @@ export default function BuyPlanning() {
           { id: "attribution", label: "Attribution", icon: Grid3X3 },
           { id: "config", label: "Config", icon: Settings },
           { id: "audit", label: "Audit Log", icon: ClipboardList },
+          { id: "inventory", label: "Inventory", icon: Package },
         ].map(t => (
           <button
             key={t.id}
@@ -1239,6 +1307,122 @@ export default function BuyPlanning() {
                   <p><strong>Test (0.4x)</strong> &mdash; Minimal investment for unproven styles</p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory & Safety Stock Tab */}
+      {tab === "inventory" && (
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-gray-500">Total Records</div>
+              <div className="text-xl font-bold text-gray-900">{(inventorySummary?.total_records || 0).toLocaleString()}</div>
+            </div>
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-gray-500">Total SOH</div>
+              <div className="text-xl font-bold text-emerald-700">{(inventorySummary?.total_soh || 0).toLocaleString()}</div>
+            </div>
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-gray-500">In Transit</div>
+              <div className="text-xl font-bold text-blue-700">{(inventorySummary?.total_in_transit || 0).toLocaleString()}</div>
+            </div>
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-gray-500">Stores</div>
+              <div className="text-xl font-bold text-gray-900">{inventorySummary?.unique_stores || 0}</div>
+            </div>
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-gray-500">SKUs</div>
+              <div className="text-xl font-bold text-gray-900">{inventorySummary?.unique_skus || 0}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Upload Panel */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+              <h3 className="text-base font-bold text-gray-900">Upload Inventory</h3>
+              <p className="text-xs text-gray-500">Upload CSV with columns: store_code, sku, date, soh, in_transit, open_po_qty</p>
+              <div data-testid="inventory-upload-area" className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center">
+                <Upload className="h-8 w-8 mx-auto text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500 mb-3">Drag & drop or click to upload CSV</p>
+                <label className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C] cursor-pointer">
+                  <Upload className="h-4 w-4" />
+                  {loading.inventory ? "Uploading..." : "Select File"}
+                  <input type="file" accept=".csv" className="hidden" data-testid="inventory-file-input"
+                    onChange={e => handleInventoryUpload(e.target.files[0])} disabled={loading.inventory} />
+                </label>
+              </div>
+              {syncStatus && (
+                <div className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3">
+                  <p>Last sync: {syncStatus.synced_at ? new Date(syncStatus.synced_at).toLocaleString() : "Never"}</p>
+                  <p>By: {syncStatus.synced_by} | Source: {syncStatus.source} | Records: {syncStatus.total}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Safety Stock Config */}
+            <div data-testid="safety-stock-config" className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-gray-900">Safety Stock Configuration</h3>
+                <button onClick={resetSafetyConfig} className="text-xs text-gray-400 hover:text-gray-600 underline">Reset Defaults</button>
+              </div>
+              <p className="text-xs text-gray-500">Formula: SS = z {"\u00D7"} MAD {"\u00D7"} {"\u221A"}(LT / RP)</p>
+
+              {safetyConfig && (() => {
+                const cfg = editingSafetyConfig || safetyConfig;
+                const isEditing = !!editingSafetyConfig;
+                return (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Service Level (z-score)</label>
+                      <select data-testid="safety-service-level"
+                        value={cfg.service_level}
+                        onChange={e => setEditingSafetyConfig({ ...(editingSafetyConfig || safetyConfig), service_level: parseFloat(e.target.value) })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        {SL_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Review Period: {cfg.review_period_days} days</label>
+                      <input type="range" data-testid="safety-review-period" min={1} max={30} value={cfg.review_period_days}
+                        onChange={e => setEditingSafetyConfig({ ...(editingSafetyConfig || safetyConfig), review_period_days: parseInt(e.target.value) })}
+                        className="w-full" />
+                      <div className="flex justify-between text-[10px] text-gray-400"><span>1 day</span><span>30 days</span></div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Max Safety: {cfg.max_safety_weeks} weeks of MAD</label>
+                      <input type="range" data-testid="safety-max-weeks" min={1} max={26} value={cfg.max_safety_weeks}
+                        onChange={e => setEditingSafetyConfig({ ...(editingSafetyConfig || safetyConfig), max_safety_weeks: parseInt(e.target.value) })}
+                        className="w-full" />
+                      <div className="flex justify-between text-[10px] text-gray-400"><span>1 week</span><span>26 weeks</span></div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
+                      <p><strong>z-score:</strong> {cfg.z_score || {0.80: 0.842, 0.90: 1.282, 0.95: 1.645, 0.98: 2.054, 0.99: 2.326}[cfg.service_level] || 1.645}</p>
+                      <p>Higher service level = more safety stock = lower OOS risk but higher cost</p>
+                    </div>
+
+                    {isEditing && (
+                      <div className="flex gap-2">
+                        <button data-testid="save-safety-config-btn" onClick={saveSafetyConfig}
+                          className="flex-1 px-4 py-2 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">
+                          <Save className="h-3.5 w-3.5 inline mr-1" /> Save Configuration
+                        </button>
+                        <button onClick={() => setEditingSafetyConfig(null)}
+                          className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                      </div>
+                    )}
+                    {!isEditing && !safetyConfig.is_default && (
+                      <p className="text-[10px] text-emerald-600">Custom config active. Updated by {safetyConfig.updated_by}</p>
+                    )}
+                    {!isEditing && safetyConfig.is_default && (
+                      <p className="text-[10px] text-gray-400">Using system defaults</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
