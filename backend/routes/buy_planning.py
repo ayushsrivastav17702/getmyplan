@@ -452,6 +452,75 @@ async def delete_display_minimum(category: str, store_wedge: str, user: dict = D
 DEFAULT_SELL_THROUGH = {"Core": 1.2, "Fashion": 0.8, "Test": 0.4}
 
 
+class SellThroughConfigReq(BaseModel):
+    style_mix: str  # Core, Fashion, Test
+    target_multiplier: float
+
+
+@router.get("/sell-through-config")
+async def get_sell_through_config(user: dict = Depends(_dep_user)):
+    """Get sell-through multiplier config (tenant-specific + defaults)."""
+    db = _db_func()
+    stored = {}
+    async for doc in db.sell_through_config.find({}, {"_id": 0}):
+        stored[doc["style_mix"]] = doc
+
+    configs = []
+    for mix in ["Core", "Fashion", "Test"]:
+        if mix in stored:
+            configs.append({
+                "style_mix": mix,
+                "target_multiplier": stored[mix]["target_multiplier"],
+                "is_default": False,
+                "updated_at": stored[mix].get("updated_at"),
+                "updated_by": stored[mix].get("updated_by"),
+            })
+        else:
+            configs.append({
+                "style_mix": mix,
+                "target_multiplier": DEFAULT_SELL_THROUGH[mix],
+                "is_default": True,
+            })
+    return {"configs": configs}
+
+
+@router.put("/sell-through-config")
+async def set_sell_through_config(body: SellThroughConfigReq, user: dict = Depends(_dep_user)):
+    """Set sell-through multiplier for a style mix."""
+    if body.style_mix not in ("Core", "Fashion", "Test"):
+        raise HTTPException(400, "style_mix must be Core, Fashion, or Test")
+    if body.target_multiplier < 0 or body.target_multiplier > 5:
+        raise HTTPException(400, "target_multiplier must be between 0 and 5")
+    db = _db_func()
+    await db.sell_through_config.update_one(
+        {"style_mix": body.style_mix},
+        {"$set": {
+            "style_mix": body.style_mix,
+            "target_multiplier": body.target_multiplier,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": user.get("email", ""),
+        }},
+        upsert=True,
+    )
+    return {"success": True, "style_mix": body.style_mix, "target_multiplier": body.target_multiplier}
+
+
+@router.post("/sell-through-config/reset")
+async def reset_sell_through_config(user: dict = Depends(_dep_user)):
+    """Reset all multipliers to system defaults."""
+    db = _db_func()
+    await db.sell_through_config.delete_many({})
+    return {"success": True, "defaults": DEFAULT_SELL_THROUGH}
+
+
+async def _get_sell_through_targets(db) -> dict:
+    """Load sell-through targets from DB, falling back to defaults."""
+    targets = dict(DEFAULT_SELL_THROUGH)
+    async for doc in db.sell_through_config.find({}, {"_id": 0}):
+        targets[doc["style_mix"]] = doc["target_multiplier"]
+    return targets
+
+
 class BuyFormulaReq(BaseModel):
     cover_days: int = 30
     safety_days: int = 7
