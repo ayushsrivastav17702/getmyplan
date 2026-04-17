@@ -33,40 +33,37 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 - Sell-Through Config: Configurable target multipliers per style mix
 
 ### Phase A UI Enhancements (COMPLETED 2026-04-17)
-- Store Wedge tab: Distribution summary cards, search/filter, Auto/Manual type column
-- Style Mix tab: Search filter with live style count
-- Attribution tab: Clickable detail panel with wedge allocation bars
-- Config tab: Impact indicators, Impact Summary panel, live Example Calculation
+- Store Wedge: Distribution cards, search/filter, Auto/Manual type column
+- Style Mix: Search filter with live count
+- Attribution: Clickable detail panel with wedge allocation bars
+- Config: Impact indicators, Impact Summary, live Example Calculation
 
 ### Phase B: Buy Plan Persistence & Approval (COMPLETED 2026-04-17)
-Backend endpoints:
-- POST /api/buy-planning/buy-plans/generate - Generate & save plan to DB
-- GET /api/buy-planning/buy-plans - List saved plans (without items for perf)
-- GET /api/buy-planning/buy-plans/{plan_id} - Get full plan with items
-- PUT /api/buy-planning/buy-plans/{plan_id}/items - Edit item quantity (draft only)
-- POST /api/buy-planning/buy-plans/{plan_id}/approve - Approve plan
-- DELETE /api/buy-planning/buy-plans/{plan_id} - Delete draft plan
+- Backend: Generate/list/get/update-item/approve/delete buy plans
+- Frontend: Plan generation controls, selector, status badges, editable quantities, approve/delete workflow, calculation breakdown modal
 
-Frontend Buy Plan tab:
-- Plan generation controls (cover period 30/60/90 days)
-- Plan selector dropdown with saved plans
-- Status badges (DRAFT/APPROVED)
-- Approve & Delete buttons (draft only)
-- Editable quantities with save/cancel
-- Calculation breakdown modal per SKU (ROS, forecast, sell-through, constraints)
-- Totals recalculation on qty edit
+### P1: Audit Logging for Wedge/Mix Changes (COMPLETED 2026-04-17)
+Backend audit logging added to:
+- Store wedge auto-classification (action=classify, source=auto)
+- Style mix auto-classification (action=classify, source=auto)
+- Manual store wedge overrides (action=override, source=manual)
+- Manual style mix overrides (action=override, source=manual)
+- Sell-through config updates (action=config_update, source=manual)
+- GET /api/buy-planning/audit-log endpoint with entity_type + source filters
+
+Frontend Audit Log tab:
+- Filter by entity type (Store/Style/Config) and source (Auto/Manual)
+- Table: timestamp, action badge, type badge, entity ID, field, old→new change, AUTO/MANUAL source badge, user, reason
+- Live filtering via API calls
 
 ### Database (MongoDB)
-- Collections: buy_plans, display_minimums_config, sku_store_attribution, sell_through_config, buy_planning_overrides
-- buy_plans schema: tenant_id, plan_name, status (draft/approved/ordered/archived), items[], totals, parameters, generated_at/by, approved_at/by
+- Collections: buy_plans, buy_planning_audit_log, buy_planning_overrides, display_minimums_config, sell_through_config, sku_store_attribution
+- buy_planning_audit_log schema: tenant_id, action, entity_type, entity_id, field, old_value, new_value, reason, source, created_by, created_at
 
 ## Backlog
 
-### P1
-- Audit logging for wedge/mix changes (Option A - user requested)
-
 ### P2
-- Phase C: Component restructuring (break BuyPlanning.jsx into components)
+- Phase C: Component restructuring (break BuyPlanning.jsx ~1000 lines into components)
 - Payment integration (Stripe/Razorpay) for tenant billing
 - Full SAML/OIDC SSO (Okta, Azure AD)
 - Subdomain-based tenant routing
