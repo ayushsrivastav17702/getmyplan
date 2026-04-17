@@ -19,49 +19,41 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 - Trial Expiration, Plan Limits, Platform Analytics, Feature Flags, Global Config, IP Whitelisting
 
 ### Buy Planning Module
-- Store Wedge (A/B/C) + Style Mix (Core/Fashion/Test) classification
-- Display Minimums + Full Buy Formula + DNA Tagging + Attribution Matrix
-- Manual Overrides with Audit Trail, CSV Export, Scheduled Jobs
-- Sell-Through Config (configurable multipliers)
-- Phase A: Enhanced UI (distribution cards, search/filters, detail panels, impact indicators)
+- Store Wedge + Style Mix classification, Display Minimums, DNA Tagging, Attribution Matrix
+- Manual Overrides, CSV Export, Scheduled Jobs, Sell-Through Config
+- Phase A: Enhanced UI (distribution cards, search/filters, detail panels)
 - Phase B: Buy Plan Persistence (generate/save/load/edit)
 - P1: Comprehensive Audit Logging
+- Batch 1: Store Attributes (format/tier/region) + Exclusion List
+- Batch 2: Multi-Level Approval (6-stage workflow)
+- Batch 3: Inventory Ingestion + Statistical Safety Stock
 
-### Batch 1: Store Attributes + Exclusion List (COMPLETED)
-- store_format, city_tier fields + filter dropdowns + edit modal
-- Exclusion CRUD + buy formula integration
+### Operational Features (COMPLETED 2026-04-17)
 
-### Batch 2: Multi-Level Approval Workflow (COMPLETED)
-- Status chain: draft → submitted → category_approved → senior_approved → head_approved → ordered
-- Role-based approval actions, comment validation, audit trail
-- Timeline UI, action buttons, history modal, rejection banner
+**Order Consolidation:**
+- POST /api/buy-planning/orders/consolidate - groups plan items by category into POs
+- GET/GET/{po_number} - list/detail POs
+- PUT /api/buy-planning/orders/{po_number}/status - workflow: draft→sent→confirmed→shipped→received/cancelled
+- Frontend: Orders tab with consolidate button, PO table with status dropdown, item detail expansion
 
-### Batch 3: Inventory Ingestion + Statistical Safety Stock (COMPLETED 2026-04-17)
-**Inventory:**
-- POST /api/buy-planning/inventory/bulk - bulk upload (upsert by store+sku+date)
-- GET /api/buy-planning/inventory/summary - total SOH, in-transit, open PO, unique stores/SKUs
-- GET /api/buy-planning/inventory/sync-status - last sync info
-- GET /api/buy-planning/inventory - list with store/sku filters
+**Phased Replenishment:**
+- POST /api/buy-planning/orders/phase - split PO into phased shipments (configurable weeks + percentages summing to 100)
+- GET /api/buy-planning/orders/phased - list phased POs
+- Frontend: Phase modal with weeks/percentages inputs, phased badge on POs
 
-**Safety Stock:**
-- GET/PUT /api/buy-planning/safety-stock/config - service level (z-score), review period, max weeks
-- POST /api/buy-planning/safety-stock/config/reset - reset to defaults
-- GET /api/buy-planning/safety-stock/calculate - statistical SS = z × MAD × √(LT/RP)
-- Buy formula now uses statistical safety stock (safety_method=statistical in output)
-
-**Frontend Inventory Tab:**
-- Summary cards (records, SOH, in-transit, stores, SKUs)
-- CSV upload area with drag & drop
-- Safety stock config panel (service level dropdown, review period slider, max weeks slider)
-- Last sync status display
+**Promotion Calendar + Lift Factors:**
+- POST/GET/PUT/DELETE /api/buy-planning/promotions - full CRUD
+- GET /api/buy-planning/promotions/active-lift - active promotions for buy formula
+- Buy formula applies lift_factor to demand for matching categories/SKUs
+- Frontend: Promotions tab with calendar table, create modal (name, type, dates, discount, lift factor, categories)
 
 ### Database (MongoDB)
-- Collections: buy_plans, buy_planning_audit_log, buy_planning_approval_audit, buy_planning_overrides, buy_planning_exclusions, display_minimums_config, sell_through_config, store_master, store_inventory, inventory_sync_log, safety_stock_config, forecast_errors
+- Collections: buy_plans, buy_planning_audit_log, buy_planning_approval_audit, buy_planning_overrides, buy_planning_exclusions, display_minimums_config, sell_through_config, store_master, store_inventory, inventory_sync_log, safety_stock_config, forecast_errors, consolidated_pos, phased_pos, promotions
 
 ## Backlog
 
 ### Phase C (Refactoring)
-- Component restructuring (BuyPlanning.jsx ~1700 lines → separate components)
+- Component restructuring (BuyPlanning.jsx ~2000+ lines → separate components)
 
 ### P2 (Enterprise)
 - Payment integration (Stripe/Razorpay)
@@ -70,6 +62,7 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 
 ### P3
 - Buy Plan Readiness Dashboard & Reports
+- Forecast Accuracy Dashboard
 
 ## Credentials
 - Super Admin: admin@demo.com / demo1234 (tenant: production)
