@@ -8,7 +8,7 @@ import {
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
-  HelpCircle, FileText, Flag, Blocks
+  HelpCircle, FileText, Flag, Blocks, ClipboardCheck, Target
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -56,6 +56,14 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: "insights",
+    label: "INSIGHTS",
+    items: [
+      { path: "/readiness",         label: "Buy Plan Readiness", icon: ClipboardCheck, permission: null },
+      { path: "/forecast-accuracy", label: "Forecast Accuracy",  icon: Target,         permission: null },
+    ],
+  },
+  {
     id: "admin",
     label: "ADMIN",
     items: [
@@ -100,9 +108,14 @@ const NAV_GROUPS = [
   },
 ];
 
-/* MODULE_NAV_MAP: hide paths when module toggle is OFF */
+/* MODULE_NAV_MAP: map module_definition module_ids → sidebar paths.
+   When a module is disabled for the tenant, these paths are hidden. */
 const MODULE_NAV_MAP = {
-  replenishment_enabled: ["/replenishment"],
+  core_classification: ["/buy-planning"],
+  buy_planning: ["/buy-plan", "/buy-planning"],
+  inventory_management: ["/doh", "/stock-out"],
+  space_planning: ["/planogram"],
+  ai_insights: ["/ai-demand"],
 };
 
 const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
@@ -115,6 +128,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
     catch { return {}; }
   });
   const [moduleConfig, setModuleConfig] = useState(null);
+  const [tenantModules, setTenantModules] = useState(null);
   const [alertCount, setAlertCount] = useState(0);
 
   const primaryColor = branding?.primary_color || "#0176D3";
@@ -123,6 +137,13 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
 
   useEffect(() => {
     axios.get(`${API}/config`).then(r => setModuleConfig(r.data)).catch(() => {});
+    // Fetch tenant module configuration for sidebar visibility
+    axios.get(`${API}/tenant-admin/modules`).then(r => {
+      const mods = r.data?.modules || [];
+      const modMap = {};
+      mods.forEach(m => { modMap[m.module_id] = m.enabled; });
+      setTenantModules(modMap);
+    }).catch(() => {});
     if (isSuperAdmin) {
       axios.get(`${API}/admin/platform/alerts/unread-count`).then(r => setAlertCount(r.data.count || 0)).catch(() => {});
     }
@@ -168,13 +189,18 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
     if (item.superAdminOnly) {
       if (!isSuperAdmin) return false;
     }
-    if (moduleConfig) {
-      for (const [toggleKey, paths] of Object.entries(MODULE_NAV_MAP)) {
-        if (paths.includes(item.path) && moduleConfig[toggleKey] === false) return false;
+    // Module system gating: hide paths when their module is disabled
+    if (tenantModules) {
+      for (const [moduleId, paths] of Object.entries(MODULE_NAV_MAP)) {
+        if (paths.includes(item.path) && tenantModules[moduleId] === false) return false;
       }
     }
+    // Legacy config toggle gating
+    if (moduleConfig) {
+      if (item.path === "/replenishment" && moduleConfig.replenishment_enabled === false) return false;
+    }
     return true;
-  }, [hasPermission, moduleConfig, isSuperAdmin]);
+  }, [hasPermission, moduleConfig, tenantModules, isSuperAdmin]);
 
   const getPlanAccess = (path) => {
     const modKey = NAV_PLAN_MODULE_MAP[path];

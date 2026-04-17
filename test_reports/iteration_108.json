@@ -1,0 +1,133 @@
+{
+  "summary": "Iteration 108: Dashboard APIs and Module System Sidebar Integration fully tested. All 22 backend API tests passed. All frontend UI tests passed. New features: Buy Plan Readiness Dashboard (/readiness), Forecast Accuracy Dashboard (/forecast-accuracy), Module System wired into sidebar visibility.",
+
+  "test_case_matrix": {
+    "BACKEND_READINESS_API": {
+      "TEST_01_readiness_returns_200": {"status": "PASS", "notes": "GET /api/dashboards/readiness returns 200 OK"},
+      "TEST_02_readiness_has_score": {"status": "PASS", "notes": "readiness_score = 40 (0-100 range)"},
+      "TEST_03_readiness_has_8_checks": {"status": "PASS", "notes": "checks array has 8 items"},
+      "TEST_04_check_structure": {"status": "PASS", "notes": "Each check has id, label, description, current, total, passed, weight, category"},
+      "TEST_05_check_ids": {"status": "PASS", "notes": "All expected IDs: store_wedge, style_mix, daily_sales, sku_master, sell_through, inventory, display_minimums, promotions"},
+      "TEST_06_has_recommendations": {"status": "PASS", "notes": "recommendations array present"},
+      "TEST_07_recommendation_structure": {"status": "PASS", "notes": "Each recommendation has priority (high/medium/low) and message"},
+      "TEST_08_passed_total": {"status": "PASS", "notes": "passed=3, total=8"}
+    },
+    "BACKEND_FORECAST_ACCURACY_API": {
+      "TEST_09_forecast_accuracy_returns_200": {"status": "PASS", "notes": "GET /api/dashboards/forecast-accuracy returns 200 OK"},
+      "TEST_10_has_overall": {"status": "PASS", "notes": "overall metrics object present"},
+      "TEST_11_overall_fields": {"status": "PASS", "notes": "overall has mape, accuracy, bias, months_compared, confidence_score"},
+      "TEST_12_has_monthly_comparison": {"status": "PASS", "notes": "monthly_comparison array present"},
+      "TEST_13_has_category_accuracy": {"status": "PASS", "notes": "category_accuracy array present"},
+      "TEST_14_counts": {"status": "PASS", "notes": "forecast_count=0, actual_months=4"},
+      "TEST_15_empty_state": {"status": "PASS", "notes": "Empty state handled - overall metrics are None when no forecasts"}
+    },
+    "BACKEND_MODULE_TOGGLE_API": {
+      "TEST_16_ai_insights_disabled": {"status": "PASS", "notes": "ai_insights module initially disabled for production tenant"},
+      "TEST_17_space_planning_enabled": {"status": "PASS", "notes": "space_planning module enabled for production tenant"},
+      "TEST_18_toggle_ai_insights_on": {"status": "PASS", "notes": "PUT /api/tenant-admin/modules/ai_insights/toggle enabled successfully"},
+      "TEST_19_verify_enabled": {"status": "PASS", "notes": "ai_insights verified as enabled after toggle"},
+      "TEST_20_toggle_ai_insights_off": {"status": "PASS", "notes": "ai_insights disabled (restored original state)"}
+    },
+    "BACKEND_AUTH": {
+      "TEST_21_readiness_requires_auth": {"status": "PASS", "notes": "Unauthenticated request returns 400"},
+      "TEST_22_forecast_accuracy_requires_auth": {"status": "PASS", "notes": "Unauthenticated request returns 400"}
+    },
+    "FRONTEND_SIDEBAR": {
+      "TEST_F01_insights_section": {"status": "PASS", "notes": "INSIGHTS section found in sidebar"},
+      "TEST_F02_readiness_nav": {"status": "PASS", "notes": "Buy Plan Readiness nav item found"},
+      "TEST_F03_forecast_nav": {"status": "PASS", "notes": "Forecast Accuracy nav item found"},
+      "TEST_F04_ai_demand_hidden": {"status": "PASS", "notes": "AI Demand Planning nav item NOT in DOM (ai_insights disabled)"},
+      "TEST_F05_planogram_visible": {"status": "PASS", "notes": "Planogram Fill Rate nav item VISIBLE (space_planning enabled)"}
+    },
+    "FRONTEND_READINESS_PAGE": {
+      "TEST_F06_page_loads": {"status": "PASS", "notes": "/readiness page loads with readiness-dashboard testid"},
+      "TEST_F07_title": {"status": "PASS", "notes": "Title 'Buy Plan Readiness' displayed"},
+      "TEST_F08_score_card": {"status": "PASS", "notes": "Score card shows 40% readiness, 3 of 8 checks passed"},
+      "TEST_F09_checks_grid": {"status": "PASS", "notes": "8 check items displayed in grid"},
+      "TEST_F10_recommendations": {"status": "PASS", "notes": "Recommendations section with HIGH priority items"}
+    },
+    "FRONTEND_FORECAST_ACCURACY_PAGE": {
+      "TEST_F11_page_loads": {"status": "PASS", "notes": "/forecast-accuracy page loads with forecast-accuracy-dashboard testid"},
+      "TEST_F12_title": {"status": "PASS", "notes": "Title 'Forecast Accuracy' displayed"},
+      "TEST_F13_empty_state": {"status": "PASS", "notes": "Empty state 'No Forecast Data Available' displayed with link to AI Demand Planning"}
+    },
+    "FRONTEND_MODULE_TOGGLE_SIDEBAR": {
+      "TEST_F14_ai_demand_initially_hidden": {"status": "PASS", "notes": "AI Demand Planning hidden when ai_insights disabled"},
+      "TEST_F15_enable_ai_insights": {"status": "PASS", "notes": "Toggled ai_insights ON via Module Configuration page"},
+      "TEST_F16_ai_demand_visible_after_enable": {"status": "PASS", "notes": "AI Demand Planning nav item VISIBLE after enabling module"},
+      "TEST_F17_disable_ai_insights": {"status": "PASS", "notes": "Toggled ai_insights OFF to restore original state"},
+      "TEST_F18_ai_demand_hidden_after_disable": {"status": "PASS", "notes": "AI Demand Planning hidden again after disabling module"}
+    },
+    "FRONTEND_MODULE_CONFIG_REGRESSION": {
+      "TEST_F19_page_loads": {"status": "PASS", "notes": "/admin/modules page loads with title 'Module Configuration'"},
+      "TEST_F20_5_module_cards": {"status": "PASS", "notes": "All 5 module cards displayed"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_APIS": "22/22 PASS",
+    "FRONTEND_UI": "20/20 PASS",
+    "TOTAL": "42/42 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "console_warnings": [
+      {
+        "warning": "CORS error for tawk.to embed script",
+        "severity": "LOW",
+        "notes": "Third-party chat widget CORS issue - does not affect app functionality"
+      }
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_dashboards_iter108.py",
+    "/app/test_reports/pytest/pytest_results_iter108.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Buy Plan Readiness Dashboard implementation is complete and working correctly",
+    "Readiness API returns 8 checks covering: store_wedge, style_mix, daily_sales, sku_master, sell_through, inventory, display_minimums, promotions",
+    "Readiness score calculation based on weighted checks (40% for production tenant with 3/8 checks passed)",
+    "Forecast Accuracy Dashboard gracefully handles empty state when no forecast_snapshots exist",
+    "Module System correctly wired into sidebar - MODULE_NAV_MAP maps module_ids to paths",
+    "ai_insights module controls /ai-demand visibility, space_planning controls /planogram visibility",
+    "Module toggle changes take effect after page reload (sidebar fetches tenantModules on mount)",
+    "All data-testid attributes properly implemented for testing"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_dashboards_iter108.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (22/22 tests passed)",
+    "frontend": "100% (20/20 UI checks passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "None - used existing data in merch_production database",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 108 verified three new features: (1) Buy Plan Readiness Dashboard at /readiness showing data completeness audit with 8 checks and recommendations, (2) Forecast Accuracy Dashboard at /forecast-accuracy showing empty state when no forecast_snapshots exist, (3) Module System wired into sidebar visibility via MODULE_NAV_MAP in Sidebar.jsx. The tenant 'production' has modules: core_classification=enabled, buy_planning=enabled, inventory_management=enabled, space_planning=enabled, ai_insights=disabled. When ai_insights is toggled ON, AI Demand Planning nav item appears in sidebar. The INSIGHTS section in sidebar contains Buy Plan Readiness and Forecast Accuracy nav items.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
