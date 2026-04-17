@@ -12,65 +12,57 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 ## Completed Features
 
 ### Core Platform
-- Multi-tenant architecture with tenant isolation
-- JWT Auth + Google OAuth SSO
-- Landing page with pricing, features, how-it-works
+- Multi-tenant architecture, JWT Auth + Google OAuth SSO, Landing page
 
 ### Super Admin Panel
 - Tenant/User CRUD, Impersonation, Audit Trail, Anomaly Detection
-- Trial Expiration Scheduler & Plan Limits Enforcement
-- Platform-wide Analytics Dashboard
-- Feature Flags & Global Config Defaults
-- IP Whitelisting, Upload speed optimization
+- Trial Expiration, Plan Limits, Platform Analytics, Feature Flags, Global Config
+- IP Whitelisting, Upload optimization
 
-### Buy Planning Module (Retail Assortment)
-- Phase 1: Store Wedge (A/B/C) + Style Mix (Core/Fashion/Test) classification
-- Phase 2: Display Minimums + Full Buy Formula calculation
-- Phase 3: DNA Tagging + Attribution Matrix
-- Feature B: Manual Overrides with Audit Trail
-- Feature C: CSV/Excel Export
-- Feature F: Scheduled auto-refresh jobs (APScheduler)
-- Sell-Through Config: Configurable target multipliers per style mix
+### Buy Planning Module
+- Store Wedge (A/B/C) + Style Mix (Core/Fashion/Test) classification
+- Display Minimums + Full Buy Formula
+- DNA Tagging + Attribution Matrix
+- Manual Overrides with Audit Trail, CSV Export, Scheduled Jobs
+- Sell-Through Config (configurable multipliers)
+- Phase A: Enhanced UI (distribution cards, search/filters, detail panels, impact indicators)
+- Phase B: Buy Plan Persistence & Approval (generate/save/load/edit/approve/delete)
+- P1: Audit Logging (auto-classify + manual overrides + config changes)
 
-### Phase A UI Enhancements (COMPLETED 2026-04-17)
-- Store Wedge: Distribution cards, search/filter, Auto/Manual type column
-- Style Mix: Search filter with live count
-- Attribution: Clickable detail panel with wedge allocation bars
-- Config: Impact indicators, Impact Summary, live Example Calculation
+### Batch 1: Store Attributes + Exclusion List (COMPLETED 2026-04-17)
+**Store Master Extension:**
+- Added store_format (hypermarket/supermarket/convenience), city_tier (tier1/tier2/tier3) fields
+- PUT /api/buy-planning/stores/{store_code}/attributes with validation + audit logging
+- Region/Tier/Format filter dropdowns in Store Wedge tab
+- Store edit modal for modifying attributes (format, tier, region, area)
 
-### Phase B: Buy Plan Persistence & Approval (COMPLETED 2026-04-17)
-- Backend: Generate/list/get/update-item/approve/delete buy plans
-- Frontend: Plan generation controls, selector, status badges, editable quantities, approve/delete workflow, calculation breakdown modal
-
-### P1: Audit Logging for Wedge/Mix Changes (COMPLETED 2026-04-17)
-Backend audit logging added to:
-- Store wedge auto-classification (action=classify, source=auto)
-- Style mix auto-classification (action=classify, source=auto)
-- Manual store wedge overrides (action=override, source=manual)
-- Manual style mix overrides (action=override, source=manual)
-- Sell-through config updates (action=config_update, source=manual)
-- GET /api/buy-planning/audit-log endpoint with entity_type + source filters
-
-Frontend Audit Log tab:
-- Filter by entity type (Store/Style/Config) and source (Auto/Manual)
-- Table: timestamp, action badge, type badge, entity ID, field, old→new change, AUTO/MANUAL source badge, user, reason
-- Live filtering via API calls
+**Exclusion List:**
+- POST/GET/DELETE /api/buy-planning/exclusions CRUD
+- Exclusions integrated into buy formula (excluded SKUs skipped, count returned)
+- "Manage Exclusions" button + modal in Buy Plan tab (add/remove store-SKU pairs)
 
 ### Database (MongoDB)
-- Collections: buy_plans, buy_planning_audit_log, buy_planning_overrides, display_minimums_config, sell_through_config, sku_store_attribution
-- buy_planning_audit_log schema: tenant_id, action, entity_type, entity_id, field, old_value, new_value, reason, source, created_by, created_at
+- Collections: buy_plans, buy_planning_audit_log, buy_planning_overrides, buy_planning_exclusions, display_minimums_config, sell_through_config, store_master
+- store_master fields: store_code, store_name, city, region, channel, area_sqft, tier, store_format, city_tier, wedge_class
 
 ## Backlog
 
-### P2
-- Phase C: Component restructuring (break BuyPlanning.jsx ~1000 lines into components)
-- Payment integration (Stripe/Razorpay) for tenant billing
+### Batch 2 (Next)
+- Multi-level approval workflow (draft → submitted → category_approved → senior_approved → head_approved → ordered)
+- Approval actions endpoint with role-based permissions
+- Status timeline + action buttons UI
+
+### Batch 3
+- Store-level inventory ingestion endpoint (bulk upload)
+- Statistical safety stock formula (z-score × MAD × √lead_time)
+
+### P2 (Enterprise)
+- Payment integration (Stripe/Razorpay)
 - Full SAML/OIDC SSO (Okta, Azure AD)
-- Subdomain-based tenant routing
-- Tenant branding, Backup/restore
+- Subdomain routing, Tenant branding, Backup/restore
 
 ### P3
-- Buy Plan Readiness Dashboard & Assortment planning reports
+- Buy Plan Readiness Dashboard & Reports
 
 ## Credentials
 - Super Admin: admin@demo.com / demo1234 (tenant: production)
