@@ -7,32 +7,12 @@ import {
   Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin, ClipboardList,
   Ban, Plus, X, Send, History, Upload, Package, Calendar, Truck,
 } from "lucide-react";
-
-function WedgeBadge({ wedge }) {
-  const s = { A: "bg-emerald-100 text-emerald-800", B: "bg-blue-100 text-blue-800", C: "bg-gray-100 text-gray-600" };
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${s[wedge] || s.C}`}>{wedge || "—"}</span>;
-}
-
-function MixBadge({ mix }) {
-  const s = { Core: "bg-emerald-100 text-emerald-800", Fashion: "bg-purple-100 text-purple-800", Test: "bg-amber-100 text-amber-800" };
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s[mix] || "bg-gray-100 text-gray-600"}`}>{mix || "—"}</span>;
-}
-
-function StatCard({ label, value, sub, icon: Icon, color = "blue" }) {
-  const c = { blue: "bg-blue-50 text-blue-600", emerald: "bg-emerald-50 text-emerald-600", purple: "bg-purple-50 text-purple-600", amber: "bg-amber-50 text-amber-600", gray: "bg-gray-50 text-gray-600" };
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${c[color]}`}><Icon className="h-5 w-5" /></div>
-        <div>
-          <div className="text-2xl font-bold text-gray-900">{value}</div>
-          <div className="text-xs text-gray-500">{label}</div>
-          {sub && <div className="text-[10px] text-gray-400">{sub}</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { WedgeBadge, MixBadge, StatCard } from "../components/BuyPlanning/shared";
+import { OverviewTab } from "../components/BuyPlanning/OverviewTab";
+import { StoreWedgeTab } from "../components/BuyPlanning/StoreWedgeTab";
+import { StyleMixTab } from "../components/BuyPlanning/StyleMixTab";
+import { DnaTagsTab } from "../components/BuyPlanning/DnaTagsTab";
+import { AttributionTab } from "../components/BuyPlanning/AttributionTab";
 
 export default function BuyPlanning() {
   const [wedge, setWedge] = useState(null);
@@ -558,246 +538,24 @@ export default function BuyPlanning() {
       </div>
 
       {/* Tab Content */}
-      {tab === "overview" && matrix?.matrix && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {["A", "B", "C"].map(w => {
-            const m = matrix.matrix[w];
-            if (!m) return null;
-            const borderColor = w === "A" ? "border-emerald-300" : w === "B" ? "border-blue-300" : "border-gray-300";
-            return (
-              <div key={w} className={`border-2 ${borderColor} rounded-xl bg-white p-5 space-y-3`}>
-                <div className="flex items-center justify-between">
-                  <WedgeBadge wedge={w} />
-                  <span className="text-xs text-gray-400">{m.stores} store{m.stores !== 1 ? "s" : ""}</span>
-                </div>
-                <h3 className="text-sm font-semibold text-gray-700">{m.assortment}</h3>
-                <div className="text-3xl font-bold text-gray-900">{m.styles} <span className="text-sm font-normal text-gray-400">styles</span></div>
-                <div className="space-y-1">
-                  {Object.entries(m.style_breakdown || {}).map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-xs">
-                      <MixBadge mix={k} />
-                      <span className="text-gray-600 font-medium">{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {tab === "overview" && <OverviewTab matrix={matrix} />}
 
       {tab === "stores" && (
-        <div className="space-y-4">
-          {/* Distribution Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Store className="h-4 w-4 text-gray-400" />
-                <span className="text-xs text-gray-500">Total Stores</span>
-              </div>
-              <div className="text-2xl font-bold text-gray-900">{wedge?.total || 0}</div>
-            </div>
-            {[
-              { w: "A", Icon: Crown, color: "amber", border: "border-l-amber-400", desc: "Full Assortment" },
-              { w: "B", Icon: Star, color: "blue", border: "border-l-blue-400", desc: "Standard" },
-              { w: "C", Icon: MapPin, color: "gray", border: "border-l-gray-300", desc: "Core Only" },
-            ].map(({ w, Icon, color, border, desc }) => {
-              const count = wedgeSummary[w];
-              const total = wedge?.total || 1;
-              const pct = Math.round((count / total) * 100);
-              return (
-                <div key={w} className={`bg-white border border-gray-200 border-l-4 ${border} rounded-xl p-4`}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Icon className={`h-3.5 w-3.5 text-${color}-500`} />
-                    <span className="text-xs text-gray-500">{w}-Stores</span>
-                    <span className="text-[10px] text-gray-400 ml-auto">{desc}</span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">{count}</div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
-                    <div className={`h-1.5 rounded-full ${w === "A" ? "bg-amber-400" : w === "B" ? "bg-blue-400" : "bg-gray-300"}`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="text-[10px] text-gray-400 mt-1">{pct}% of total</div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Search & Filter */}
-          <div data-testid="store-filters" className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                data-testid="store-search-input"
-                placeholder="Search by store ID, name, or city..."
-                value={storeSearch}
-                onChange={e => setStoreSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
-              />
-            </div>
-            <select data-testid="store-wedge-filter" value={storeWedgeFilter} onChange={e => setStoreWedgeFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
-              <option value="all">All Wedges</option>
-              <option value="A">A-Stores</option>
-              <option value="B">B-Stores</option>
-              <option value="C">C-Stores</option>
-            </select>
-            <select data-testid="store-region-filter" value={regionFilter} onChange={e => setRegionFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
-              <option value="all">All Regions</option>
-              <option value="North">North</option>
-              <option value="South">South</option>
-              <option value="East">East</option>
-              <option value="West">West</option>
-              <option value="Central">Central</option>
-            </select>
-            <select data-testid="store-tier-filter" value={tierFilter} onChange={e => setTierFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
-              <option value="all">All Tiers</option>
-              <option value="tier1">Tier 1</option>
-              <option value="tier2">Tier 2</option>
-              <option value="tier3">Tier 3</option>
-            </select>
-            <select data-testid="store-format-filter" value={formatFilter} onChange={e => setFormatFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
-              <option value="all">All Formats</option>
-              <option value="hypermarket">Hypermarket</option>
-              <option value="supermarket">Supermarket</option>
-              <option value="convenience">Convenience</option>
-            </select>
-            <span className="text-xs text-gray-400">{filteredStores.length} stores</span>
-          </div>
-
-          {/* Table */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <table data-testid="store-wedge-table" className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-3 font-medium text-gray-600">Store</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Name</th>
-                  <th className="text-left p-3 font-medium text-gray-600">City</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Region</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Format</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Tier</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Wedge</th>
-                  <th className="text-right p-3 font-medium text-gray-600">Area</th>
-                  <th className="text-right p-3 font-medium text-gray-600">Revenue</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Type</th>
-                  <th className="w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStores.map(s => (
-                  <tr key={s.store_code} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs font-medium">{s.store_code}</td>
-                    <td className="p-3 text-gray-700">{s.store_name || "\u2014"}</td>
-                    <td className="p-3 text-gray-500">{s.city || "\u2014"}</td>
-                    <td className="p-3 text-gray-500">{s.region || "\u2014"}</td>
-                    <td className="p-3">
-                      {s.store_format ? (
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.store_format === "hypermarket" ? "bg-purple-50 text-purple-700" : s.store_format === "supermarket" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
-                          {s.store_format}
-                        </span>
-                      ) : "\u2014"}
-                    </td>
-                    <td className="p-3">
-                      {s.city_tier ? (
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.city_tier === "tier1" ? "bg-amber-50 text-amber-700" : s.city_tier === "tier2" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
-                          {s.city_tier}
-                        </span>
-                      ) : "\u2014"}
-                    </td>
-                    <td className="p-3"><WedgeBadge wedge={s.wedge_class} /></td>
-                    <td className="p-3 text-right text-gray-500 text-xs">{s.area_sqft ? s.area_sqft.toLocaleString() : "\u2014"}</td>
-                    <td className="p-3 text-right text-gray-700 font-medium">
-                      {s.total_revenue ? `\u20B9${Math.round(s.total_revenue).toLocaleString()}` : "\u2014"}
-                    </td>
-                    <td className="p-3">
-                      {s.wedge_manual_override ? (
-                        <span className="px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-[10px] font-medium">Manual</span>
-                      ) : s.wedge_class ? (
-                        <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-medium">Auto</span>
-                      ) : null}
-                    </td>
-                    <td className="p-3 text-right flex gap-1">
-                      <button onClick={() => setStoreEditModal(s)} className="p-1 hover:bg-blue-50 rounded text-blue-500" title="Edit attributes">
-                        <Settings className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => { setOverrideModal({ type: "store", id: s.store_code, current: s.wedge_class }); setOverrideValue(s.wedge_class || "C"); }}
-                        className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override wedge">
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filteredStores.length === 0 && (
-                  <tr><td colSpan={11} className="p-8 text-center text-gray-400">
-                    {storeSearch || storeWedgeFilter !== "all" || regionFilter !== "all" || tierFilter !== "all" || formatFilter !== "all" ? "No stores match your filters." : "No stores found. Upload store master data first."}
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <StoreWedgeTab
+          wedge={wedge} filteredStores={filteredStores}
+          storeSearch={storeSearch} setStoreSearch={setStoreSearch}
+          storeWedgeFilter={storeWedgeFilter} setStoreWedgeFilter={setStoreWedgeFilter}
+          regionFilter={regionFilter} setRegionFilter={setRegionFilter}
+          tierFilter={tierFilter} setTierFilter={setTierFilter}
+          formatFilter={formatFilter} setFormatFilter={setFormatFilter}
+          setOverrideModal={setOverrideModal} setOverrideValue={setOverrideValue}
+          setStoreEditModal={setStoreEditModal} wedgeSummary={wedgeSummary}
+        />
       )}
 
       {tab === "styles" && (
-        <div className="space-y-4">
-          {/* Search */}
-          <div data-testid="style-filters" className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                data-testid="style-search-input"
-                placeholder="Search by style name..."
-                value={styleSearch}
-                onChange={e => setStyleSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
-              />
-            </div>
-            <span className="text-xs text-gray-400">{filteredStyles.length} styles</span>
-          </div>
-
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <table data-testid="style-mix-table" className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-3 font-medium text-gray-600">Style</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Mix</th>
-                  <th className="text-left p-3 font-medium text-gray-600">SKUs</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Avg/Wk</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Weeks Active</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Peak:Avg</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Presence</th>
-                  <th className="w-12"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStyles.map(s => (
-                  <tr key={s.style} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs font-medium">{s.style}</td>
-                    <td className="p-3"><MixBadge mix={s.style_mix} /></td>
-                    <td className="p-3 text-gray-600">{s.sku_count || "\u2014"}</td>
-                    <td className="p-3 text-gray-600">{s.stats?.avg_weekly_qty ?? "\u2014"}</td>
-                    <td className="p-3 text-gray-600">{s.stats?.weeks_active ?? "\u2014"}</td>
-                    <td className="p-3 text-gray-600">{s.stats?.peak_to_avg != null ? `${s.stats.peak_to_avg}x` : "\u2014"}</td>
-                    <td className="p-3 text-gray-600">{s.stats?.week_presence_pct != null ? `${s.stats.week_presence_pct}%` : "\u2014"}</td>
-                    <td className="p-3">
-                      <button onClick={() => { setOverrideModal({ type: "sku", id: s.style, current: s.style_mix }); setOverrideValue(s.style_mix || "Test"); }}
-                        className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override mix">
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filteredStyles.length === 0 && (
-                  <tr><td colSpan={8} className="p-8 text-center text-gray-400">
-                    {styleSearch ? "No styles match your search." : "No style mix data. Run Style Mix Classification after uploading sales data."}
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <StyleMixTab filteredStyles={filteredStyles} styleSearch={styleSearch} setStyleSearch={setStyleSearch}
+          setOverrideModal={setOverrideModal} setOverrideValue={setOverrideValue} />
       )}
 
       {/* Buy Plan Tab */}
@@ -1083,160 +841,10 @@ export default function BuyPlanning() {
       )}
 
       {/* DNA Tags Tab */}
-      {tab === "dna" && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <table data-testid="dna-table" className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3 font-medium text-gray-600">Style</th>
-                <th className="text-left p-3 font-medium text-gray-600">Mix</th>
-                <th className="text-left p-3 font-medium text-gray-600">Flow Rank</th>
-                <th className="text-left p-3 font-medium text-gray-600">Lifecycle</th>
-                <th className="text-left p-3 font-medium text-gray-600">Launch Date</th>
-                <th className="text-left p-3 font-medium text-gray-600">Expected Weeks</th>
-                <th className="text-left p-3 font-medium text-gray-600">SKUs</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(dnaTags?.styles || []).map(s => (
-                <tr key={s.style} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs font-medium">{s.style}</td>
-                  <td className="p-3"><MixBadge mix={s.style_mix} /></td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${s.flow_rank === 1 ? "bg-emerald-100 text-emerald-800" : s.flow_rank === 2 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
-                      {s.flow_rank === 1 ? "Hero" : s.flow_rank === 2 ? "Core" : "Fill-in"}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded text-xs ${s.lifecycle_stage === "Peak" ? "bg-emerald-50 text-emerald-700" : s.lifecycle_stage === "Launch" ? "bg-blue-50 text-blue-700" : s.lifecycle_stage === "Decline" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
-                      {s.lifecycle_stage || "—"}
-                    </span>
-                  </td>
-                  <td className="p-3 text-xs text-gray-500">{s.launch_date || "—"}</td>
-                  <td className="p-3 text-gray-600">{s.expected_weeks ?? "—"}w</td>
-                  <td className="p-3 text-gray-500">{s.sku_count}</td>
-                </tr>
-              ))}
-              {(dnaTags?.styles || []).length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-400">No DNA tags. Click "Auto DNA Tag" to classify.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === "dna" && <DnaTagsTab dnaTags={dnaTags} />}
 
       {/* Attribution Tab */}
-      {tab === "attribution" && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Attribution Table */}
-            <div className={`${selectedAttr ? "lg:col-span-2" : "lg:col-span-3"} border border-gray-200 rounded-xl overflow-hidden`}>
-              <table data-testid="attribution-table" className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left p-3 font-medium text-gray-600">Style</th>
-                    <th className="text-left p-3 font-medium text-gray-600">Mix</th>
-                    <th className="text-center p-3 font-medium text-gray-600">A-Stores</th>
-                    <th className="text-center p-3 font-medium text-gray-600">B-Stores</th>
-                    <th className="text-center p-3 font-medium text-gray-600">C-Stores</th>
-                    <th className="text-left p-3 font-medium text-gray-600">Coverage</th>
-                    <th className="w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(attribution?.attributions || []).map(a => (
-                    <tr key={a.style} className={`border-t border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedAttr?.style === a.style ? "bg-blue-50/50" : ""}`}
-                      onClick={() => setSelectedAttr(selectedAttr?.style === a.style ? null : a)}>
-                      <td className="p-3 font-mono text-xs font-medium">{a.style}</td>
-                      <td className="p-3"><MixBadge mix={a.style_mix} /></td>
-                      {["A", "B", "C"].map(w => (
-                        <td key={w} className="p-3 text-center">
-                          {a.wedge_allocation[w]?.eligible ? (
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">{a.wedge_allocation[w].allocation_pct}%</span>
-                          ) : (
-                            <span className="text-xs text-gray-300">{"\u2014"}</span>
-                          )}
-                        </td>
-                      ))}
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${a.coverage_pct}%` }} />
-                          </div>
-                          <span className="text-xs text-gray-500">{a.coverage_pct}%</span>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Eye className="h-3.5 w-3.5 text-gray-400" />
-                      </td>
-                    </tr>
-                  ))}
-                  {(attribution?.attributions || []).length === 0 && (
-                    <tr><td colSpan={7} className="p-8 text-center text-gray-400">No attribution data. Run classifications first.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Detail Panel */}
-            {selectedAttr && (
-              <div data-testid="attribution-detail-panel" className="border border-gray-200 rounded-xl bg-white p-5 space-y-4 h-fit">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-gray-900">Attribution Detail</h3>
-                  <button onClick={() => setSelectedAttr(null)} className="text-gray-400 hover:text-gray-600 text-xs">Close</button>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Style</span>
-                    <span className="font-mono font-medium">{selectedAttr.style}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Style Mix</span>
-                    <MixBadge mix={selectedAttr.style_mix} />
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">SKU Count</span>
-                    <span className="font-medium">{selectedAttr.sku_count}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Eligible Stores</span>
-                    <span className="font-medium">{selectedAttr.eligible_stores} / {selectedAttr.total_stores}</span>
-                  </div>
-                </div>
-                <div className="pt-3 border-t border-gray-100 space-y-3">
-                  <p className="text-xs font-medium text-gray-600">Wedge Allocation</p>
-                  {["A", "B", "C"].map(w => {
-                    const alloc = selectedAttr.wedge_allocation[w];
-                    const color = w === "A" ? "bg-amber-400" : w === "B" ? "bg-blue-400" : "bg-gray-300";
-                    return (
-                      <div key={w}>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium">{w}-Stores {alloc?.eligible ? "" : "(not eligible)"}</span>
-                          <span className={alloc?.eligible ? "text-gray-900 font-medium" : "text-gray-300"}>{alloc?.eligible ? `${alloc.allocation_pct}%` : "\u2014"}</span>
-                        </div>
-                        {alloc?.eligible && (
-                          <div className="w-full bg-gray-100 rounded-full h-2">
-                            <div className={`h-2 rounded-full ${color}`} style={{ width: `${alloc.allocation_pct}%` }} />
-                          </div>
-                        )}
-                        {alloc?.eligible && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">{alloc.stores} stores allocated</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="pt-3 border-t border-gray-100">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Coverage</span>
-                    <span className="font-bold text-emerald-700">{selectedAttr.coverage_pct}%</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {tab === "attribution" && <AttributionTab attribution={attribution} selectedAttr={selectedAttr} setSelectedAttr={setSelectedAttr} />}
 
       {/* Config Tab: Sell-Through Targets */}
       {tab === "config" && (

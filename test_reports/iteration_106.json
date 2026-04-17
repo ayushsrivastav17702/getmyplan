@@ -1,0 +1,102 @@
+{
+  "summary": "Iteration 106: REGRESSION TEST PASSED - Component restructuring of BuyPlanning.jsx verified. All 11 tabs working correctly after refactoring. BuyPlanning.jsx was split from ~2084 lines into 7 files: shared.jsx (WedgeBadge, MixBadge, StatCard), OverviewTab.jsx, StoreWedgeTab.jsx, StyleMixTab.jsx, DnaTagsTab.jsx, AttributionTab.jsx, plus main BuyPlanning.jsx (1691 lines with remaining inline tabs). No functionality broken.",
+
+  "test_case_matrix": {
+    "REFACTORED_COMPONENTS": {
+      "TEST_01_overview_tab_renders": {"status": "PASS", "notes": "OverviewTab.jsx - Three wedge cards (A/B/C) with style breakdowns visible"},
+      "TEST_02_store_wedge_tab_renders": {"status": "PASS", "notes": "StoreWedgeTab.jsx - Distribution cards (17/9/4), search filter, region/tier/format filters, store table all working"},
+      "TEST_03_style_mix_tab_renders": {"status": "PASS", "notes": "StyleMixTab.jsx - Search filter, style table with 20 styles, all columns visible"},
+      "TEST_04_dna_tags_tab_renders": {"status": "PASS", "notes": "DnaTagsTab.jsx - Table with style data, flow rank, lifecycle, launch date columns"},
+      "TEST_05_attribution_tab_renders": {"status": "PASS", "notes": "AttributionTab.jsx - Table with allocation percentages, detail panel opens on row click"},
+      "TEST_06_shared_components_work": {"status": "PASS", "notes": "shared.jsx - WedgeBadge, MixBadge, StatCard components render correctly across all tabs"}
+    },
+    "INLINE_TABS_STILL_WORKING": {
+      "TEST_07_buy_plan_tab": {"status": "PASS", "notes": "Plan generation controls, plan selector, summary cards, buy plan table all working"},
+      "TEST_08_config_tab": {"status": "PASS", "notes": "Sell-through config panel with Core/Fashion/Test multiplier inputs, impact summary"},
+      "TEST_09_audit_log_tab": {"status": "PASS", "notes": "Audit table with 31 entries, entity type and source filters working"},
+      "TEST_10_inventory_tab": {"status": "PASS", "notes": "Summary cards, upload area, safety stock config all visible"},
+      "TEST_11_orders_tab": {"status": "PASS", "notes": "Orders table with 3 POs, status dropdowns, phase buttons working"},
+      "TEST_12_promotions_tab": {"status": "PASS", "notes": "Promotions table with Summer Sale 2026, Add Promotion button working"}
+    },
+    "TAB_NAVIGATION": {
+      "TEST_13_all_tabs_visible": {"status": "PASS", "notes": "All 11 tabs visible in tab bar: Assortment Matrix, Buy Plan, Store Wedge, Style Mix, DNA Tags, Attribution, Config, Audit Log, Inventory, Orders, Promotions"},
+      "TEST_14_tab_switching_works": {"status": "PASS", "notes": "Tab switching works correctly - content changes when clicking tabs in tab bar"}
+    }
+  },
+
+  "summary_counts": {
+    "REFACTORED_COMPONENTS": "6/6 PASS",
+    "INLINE_TABS": "6/6 PASS",
+    "TAB_NAVIGATION": "2/2 PASS",
+    "TOTAL": "14/14 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "console_warnings": [
+      {
+        "warning": "In HTML, <span> cannot be a child of <option>",
+        "location": "BuyPlanning.jsx line 594 - plan selector dropdown",
+        "severity": "LOW",
+        "notes": "React hydration warning - does not affect functionality"
+      }
+    ]
+  },
+
+  "refactoring_verification": {
+    "files_extracted": [
+      "/app/frontend/src/components/BuyPlanning/shared.jsx - WedgeBadge, MixBadge, StatCard",
+      "/app/frontend/src/components/BuyPlanning/OverviewTab.jsx",
+      "/app/frontend/src/components/BuyPlanning/StoreWedgeTab.jsx",
+      "/app/frontend/src/components/BuyPlanning/StyleMixTab.jsx",
+      "/app/frontend/src/components/BuyPlanning/DnaTagsTab.jsx",
+      "/app/frontend/src/components/BuyPlanning/AttributionTab.jsx"
+    ],
+    "main_file": "/app/frontend/src/pages/BuyPlanning.jsx (1691 lines)",
+    "remaining_inline_tabs": ["Buy Plan", "Config", "Audit Log", "Inventory", "Orders", "Promotions"],
+    "imports_verified": true,
+    "data_testid_preserved": true
+  },
+
+  "test_report_links": [],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Refactoring successful - no functionality broken",
+    "All data-testid attributes preserved in extracted components",
+    "Tab state management working correctly with extracted components",
+    "Props passed correctly from BuyPlanning.jsx to child components",
+    "Minor console warning about <span> in <option> - cosmetic issue only"
+  ],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "100% (14/14 tests passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "None - used existing data from previous iterations",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 106 verified Phase C component restructuring. BuyPlanning.jsx was split into 7 files. Extracted components: shared.jsx (WedgeBadge, MixBadge, StatCard), OverviewTab.jsx, StoreWedgeTab.jsx, StyleMixTab.jsx, DnaTagsTab.jsx, AttributionTab.jsx. Remaining inline tabs in BuyPlanning.jsx: Buy Plan, Config, Audit Log, Inventory, Orders, Promotions. All 11 tabs working correctly. Tab IDs: overview, buy-plan, stores, styles, dna, attribution, config, audit, inventory, orders, promotions. Note: When testing tabs, use the tab bar selector '.flex.gap-1.border-b' to find the correct tab buttons (not the action buttons like 'Run Store Wedge Classification').",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
