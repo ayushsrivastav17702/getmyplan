@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2, Settings, RotateCcw, Save,
   Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin, ClipboardList,
-  Ban, Plus, X, Send, History, Upload, Package,
+  Ban, Plus, X, Send, History, Upload, Package, Calendar, Truck,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -78,6 +78,15 @@ export default function BuyPlanning() {
   const [syncStatus, setSyncStatus] = useState(null);
   const [safetyConfig, setSafetyConfig] = useState(null);
   const [editingSafetyConfig, setEditingSafetyConfig] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [phasedPos, setPhasedPos] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [phaseModal, setPhaseModal] = useState(null);
+  const [phaseWeeks, setPhaseWeeks] = useState("0,2,4");
+  const [phasePcts, setPhasePcts] = useState("50,30,20");
+  const [promotions, setPromotions] = useState([]);
+  const [promoModal, setPromoModal] = useState(false);
+  const [newPromo, setNewPromo] = useState({ name: "", promo_type: "national", start_date: "", end_date: "", discount_type: "percentage", discount_value: 0, affected_categories: "", lift_factor: 1.3, notes: "" });
 
   const fetchAll = useCallback(async () => {
     try {
@@ -120,6 +129,13 @@ export default function BuyPlanning() {
       setInventorySummary(invSum.data);
       setSyncStatus(invSync.data?.last_sync);
       setSafetyConfig(safeRes.data);
+      // Fetch orders & promotions
+      const [ordRes, promRes] = await Promise.all([
+        axios.get(`${API}/buy-planning/orders`).catch(() => ({ data: { orders: [] } })),
+        axios.get(`${API}/buy-planning/promotions`).catch(() => ({ data: { promotions: [] } })),
+      ]);
+      setOrders(ordRes.data?.orders || []);
+      setPromotions(promRes.data?.promotions || []);
     } catch {}
   }, []);
 
@@ -382,6 +398,54 @@ export default function BuyPlanning() {
     { val: 0.99, label: "99% - Critical items" },
   ];
 
+  const consolidateOrders = async (planId) => {
+    try {
+      const res = await axios.post(`${API}/buy-planning/orders/consolidate`, { plan_id: planId });
+      toast.success(`Created ${res.data.pos_created} consolidated POs`);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Consolidation failed"); }
+  };
+
+  const updatePOStatus = async (poNumber, status) => {
+    try {
+      await axios.put(`${API}/buy-planning/orders/${poNumber}/status`, { status });
+      toast.success(`PO ${poNumber} → ${status}`);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Update failed"); }
+  };
+
+  const createPhasedPO = async () => {
+    if (!phaseModal) return;
+    try {
+      const weeks = phaseWeeks.split(",").map(Number);
+      const pcts = phasePcts.split(",").map(Number);
+      await axios.post(`${API}/buy-planning/orders/phase`, { po_number: phaseModal, phase_weeks: weeks, phase_percentages: pcts });
+      toast.success("Phased PO created");
+      setPhaseModal(null);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Phase creation failed"); }
+  };
+
+  const createPromotion = async () => {
+    try {
+      await axios.post(`${API}/buy-planning/promotions`, {
+        ...newPromo, affected_categories: newPromo.affected_categories ? newPromo.affected_categories.split(",").map(s => s.trim()) : [],
+      });
+      toast.success("Promotion created");
+      setPromoModal(false);
+      setNewPromo({ name: "", promo_type: "national", start_date: "", end_date: "", discount_type: "percentage", discount_value: 0, affected_categories: "", lift_factor: 1.3, notes: "" });
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to create promotion"); }
+  };
+
+  const deletePromotion = async (promoId) => {
+    try {
+      await axios.delete(`${API}/buy-planning/promotions/${promoId}`);
+      toast.success("Promotion deleted");
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Delete failed"); }
+  };
+
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
   const mixSummary = mix?.summary || { Core: 0, Fashion: 0, Test: 0 };
   const totalStyles = mixSummary.Core + mixSummary.Fashion + mixSummary.Test;
@@ -480,6 +544,8 @@ export default function BuyPlanning() {
           { id: "config", label: "Config", icon: Settings },
           { id: "audit", label: "Audit Log", icon: ClipboardList },
           { id: "inventory", label: "Inventory", icon: Package },
+          { id: "orders", label: "Orders", icon: Truck },
+          { id: "promotions", label: "Promotions", icon: Calendar },
         ].map(t => (
           <button
             key={t.id}
@@ -1428,6 +1494,195 @@ export default function BuyPlanning() {
         </div>
       )}
 
+      {/* Orders Tab */}
+      {tab === "orders" && (
+        <div className="space-y-4">
+          {/* Consolidate from plan */}
+          {selectedPlan && selectedPlan.status !== "draft" && (
+            <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Generate POs from: <strong>{selectedPlan.plan_name}</strong></p>
+                <p className="text-xs text-gray-500">Groups buy plan items by category into supplier-level purchase orders</p>
+              </div>
+              <button data-testid="consolidate-orders-btn" onClick={() => consolidateOrders(selectedPlanId)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">
+                <Package className="h-4 w-4" /> Consolidate into POs
+              </button>
+            </div>
+          )}
+          {!selectedPlan && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+              Select an approved/ordered plan from the Buy Plan tab first to generate consolidated POs.
+            </div>
+          )}
+
+          {/* PO List */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table data-testid="orders-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3 font-medium text-gray-600">PO Number</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Category</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Plan</th>
+                  <th className="text-right p-3 font-medium text-gray-600">SKUs</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Units</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Value</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Status</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Phased</th>
+                  <th className="w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(o => (
+                  <tr key={o.po_number} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="p-3 font-mono text-xs font-medium">{o.po_number}</td>
+                    <td className="p-3 text-gray-600">{o.supplier_group}</td>
+                    <td className="p-3 text-xs text-gray-500">{o.plan_name}</td>
+                    <td className="p-3 text-right">{o.unique_skus}</td>
+                    <td className="p-3 text-right font-medium">{o.total_units?.toLocaleString()}</td>
+                    <td className="p-3 text-right">{"\u20B9"}{((o.total_value || 0) / 1e3).toFixed(0)}k</td>
+                    <td className="p-3">
+                      <select data-testid={`po-status-${o.po_number}`} value={o.status} onChange={e => updatePOStatus(o.po_number, e.target.value)}
+                        className={`border rounded px-2 py-0.5 text-xs font-medium ${
+                          o.status === "received" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          o.status === "shipped" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                          o.status === "confirmed" ? "bg-cyan-50 text-cyan-700 border-cyan-200" :
+                          o.status === "sent" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                          o.status === "cancelled" ? "bg-red-50 text-red-700 border-red-200" :
+                          "bg-gray-50 text-gray-600 border-gray-200"
+                        }`}>
+                        <option value="draft">Draft</option>
+                        <option value="sent">Sent</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="received">Received</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </td>
+                    <td className="p-3">
+                      {o.is_phased ? (
+                        <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-medium">Phased</span>
+                      ) : (
+                        <button data-testid={`phase-btn-${o.po_number}`} onClick={() => setPhaseModal(o.po_number)}
+                          className="text-xs text-indigo-600 hover:underline">Phase it</button>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      <button onClick={() => setSelectedOrder(selectedOrder === o.po_number ? null : o.po_number)}
+                        className="text-xs text-gray-500 hover:text-gray-800">{selectedOrder === o.po_number ? "Hide" : "Items"}</button>
+                    </td>
+                  </tr>
+                ))}
+                {orders.length === 0 && (
+                  <tr><td colSpan={9} className="p-12 text-center text-gray-400">No POs yet. Consolidate an approved buy plan to generate purchase orders.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Expanded PO Items */}
+          {selectedOrder && (() => {
+            const o = orders.find(x => x.po_number === selectedOrder);
+            if (!o) return null;
+            return (
+              <div data-testid="po-detail" className="border border-indigo-200 bg-indigo-50/30 rounded-xl p-4 space-y-2">
+                <h4 className="text-sm font-bold text-gray-900">{o.po_number} - Items ({o.items?.length})</h4>
+                <div className="border rounded-lg overflow-hidden bg-white">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50"><tr>
+                      <th className="text-left p-2">SKU</th><th className="text-left p-2">Style</th>
+                      <th className="text-left p-2">Mix</th><th className="text-right p-2">Qty</th>
+                      <th className="text-right p-2">MRP</th><th className="text-right p-2">Value</th>
+                    </tr></thead>
+                    <tbody>
+                      {(o.items || []).slice(0, 30).map((it, i) => (
+                        <tr key={i} className="border-t border-gray-50">
+                          <td className="p-2 font-mono">{it.sku}</td>
+                          <td className="p-2">{it.style}</td>
+                          <td className="p-2"><MixBadge mix={it.style_mix} /></td>
+                          <td className="p-2 text-right font-medium">{it.po_qty?.toLocaleString()}</td>
+                          <td className="p-2 text-right">{"\u20B9"}{it.mrp}</td>
+                          <td className="p-2 text-right">{"\u20B9"}{it.po_value?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Promotions Tab */}
+      {tab === "promotions" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Promotion Calendar</h2>
+              <p className="text-sm text-gray-500">Active promotions automatically apply lift factors to the buy formula</p>
+            </div>
+            <button data-testid="add-promotion-btn" onClick={() => setPromoModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">
+              <Plus className="h-4 w-4" /> Add Promotion
+            </button>
+          </div>
+
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table data-testid="promotions-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3 font-medium text-gray-600">Name</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Type</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Start</th>
+                  <th className="text-left p-3 font-medium text-gray-600">End</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Discount</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Categories</th>
+                  <th className="text-center p-3 font-medium text-gray-600">Lift Factor</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Status</th>
+                  <th className="w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {promotions.map(p => {
+                  const isActive = p.status === "active" && p.start_date <= new Date().toISOString().split("T")[0] && p.end_date >= new Date().toISOString().split("T")[0];
+                  return (
+                    <tr key={p.promo_id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="p-3 font-medium text-gray-900">{p.name}</td>
+                      <td className="p-3"><span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{p.promo_type}</span></td>
+                      <td className="p-3 text-gray-500 text-xs">{p.start_date}</td>
+                      <td className="p-3 text-gray-500 text-xs">{p.end_date}</td>
+                      <td className="p-3 text-gray-600">{p.discount_value}{p.discount_type === "percentage" ? "%" : ""} {p.discount_type}</td>
+                      <td className="p-3 text-xs text-gray-500">{(p.affected_categories || []).join(", ") || "All"}</td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${p.lift_factor > 1 ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                          {p.lift_factor}x
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {isActive ? (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">ACTIVE</span>
+                        ) : p.end_date < new Date().toISOString().split("T")[0] ? (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-bold">ENDED</span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">UPCOMING</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <button onClick={() => deletePromotion(p.promo_id)} className="text-red-400 hover:text-red-600"><X className="h-3.5 w-3.5" /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {promotions.length === 0 && (
+                  <tr><td colSpan={9} className="p-12 text-center text-gray-400">No promotions yet. Add one to apply lift factors to the buy formula.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Audit Log Tab */}
       {tab === "audit" && (
         <div className="space-y-4">
@@ -1523,6 +1778,105 @@ export default function BuyPlanning() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Phase Replenishment Modal */}
+      {phaseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setPhaseModal(null)}>
+          <div data-testid="phase-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Create Phased Replenishment</h2>
+            <p className="text-sm text-gray-500">PO: <code>{phaseModal}</code></p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Phase Weeks (comma-separated)</label>
+              <input data-testid="phase-weeks-input" value={phaseWeeks} onChange={e => setPhaseWeeks(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="0,2,4" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Phase Percentages (must sum to 100)</label>
+              <input data-testid="phase-pcts-input" value={phasePcts} onChange={e => setPhasePcts(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="50,30,20" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setPhaseModal(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button data-testid="create-phase-btn" onClick={createPhasedPO}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create Phases</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Promotion Create Modal */}
+      {promoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setPromoModal(false)}>
+          <div data-testid="promo-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-3 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-gray-900">Add Promotion</h2>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Promotion Name</label>
+              <input data-testid="promo-name" value={newPromo.name} onChange={e => setNewPromo(p => ({ ...p, name: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Summer Sale 2026" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                <select data-testid="promo-type" value={newPromo.promo_type} onChange={e => setNewPromo(p => ({ ...p, promo_type: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="national">National</option>
+                  <option value="regional">Regional</option>
+                  <option value="store">Store</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Discount Type</label>
+                <select data-testid="promo-discount-type" value={newPromo.discount_type} onChange={e => setNewPromo(p => ({ ...p, discount_type: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="percentage">Percentage</option>
+                  <option value="fixed">Fixed Amount</option>
+                  <option value="bogo">Buy One Get One</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                <input data-testid="promo-start" type="date" value={newPromo.start_date} onChange={e => setNewPromo(p => ({ ...p, start_date: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                <input data-testid="promo-end" type="date" value={newPromo.end_date} onChange={e => setNewPromo(p => ({ ...p, end_date: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Discount Value</label>
+                <input data-testid="promo-discount-val" type="number" value={newPromo.discount_value} onChange={e => setNewPromo(p => ({ ...p, discount_value: parseFloat(e.target.value) || 0 }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Lift Factor</label>
+                <input data-testid="promo-lift" type="number" step="0.1" min="0.5" max="5" value={newPromo.lift_factor}
+                  onChange={e => setNewPromo(p => ({ ...p, lift_factor: parseFloat(e.target.value) || 1 }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Affected Categories (comma-separated)</label>
+              <input data-testid="promo-categories" value={newPromo.affected_categories} onChange={e => setNewPromo(p => ({ ...p, affected_categories: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Apparel, Footwear" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+              <input value={newPromo.notes} onChange={e => setNewPromo(p => ({ ...p, notes: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Optional notes" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setPromoModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button data-testid="save-promo-btn" onClick={createPromotion}
+                className="px-4 py-2 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">Create Promotion</button>
+            </div>
           </div>
         </div>
       )}

@@ -1,0 +1,152 @@
+{
+  "summary": "Iteration 105: Multi-Store Order Consolidation, Phased Replenishment, Promotion Calendar - All backend (23/23) and frontend tests passed. Fixed route ordering bug where /orders/phased was matched by /orders/{po_number}. Backend: Order consolidation groups plan items by category into POs, PO status workflow (draft→sent→confirmed→shipped→received/cancelled), phased replenishment splits POs into shipments with configurable weeks/percentages (must sum to 100), promotions CRUD with lift_factor validation (0.5-5), active-lift endpoint for buy formula integration. Frontend: Orders tab with Truck icon, orders table with PO number/category/plan/SKUs/units/value/status dropdown/phase button, phase modal with weeks/percentages inputs, Promotions tab with Calendar icon, promotions table with name/type/dates/discount/categories/lift factor/status, Add Promotion modal with all required fields.",
+
+  "test_case_matrix": {
+    "BACKEND_ORDER_CONSOLIDATION": {
+      "TEST_01_list_orders_returns_array": {"status": "PASS", "notes": "GET /api/buy-planning/orders returns orders array with total count"},
+      "TEST_02_orders_have_required_fields": {"status": "PASS", "notes": "Orders have po_number, supplier_group, total_units, total_value, status"},
+      "TEST_03_get_single_order_by_po_number": {"status": "PASS", "notes": "GET /api/buy-planning/orders/{po_number} returns PO with items"},
+      "TEST_04_get_nonexistent_order_returns_404": {"status": "PASS", "notes": "Nonexistent PO returns 404"},
+      "TEST_20_consolidate_orders_requires_plan_id": {"status": "PASS", "notes": "POST /api/buy-planning/orders/consolidate requires plan_id"},
+      "TEST_21_consolidate_orders_invalid_plan_returns_404": {"status": "PASS", "notes": "Invalid plan_id returns 404"},
+      "TEST_22_orders_filter_by_status": {"status": "PASS", "notes": "?status=draft filters orders by status"}
+    },
+    "BACKEND_PO_STATUS_WORKFLOW": {
+      "TEST_05_update_po_status_valid": {"status": "PASS", "notes": "PUT /api/buy-planning/orders/{po_number}/status updates status"},
+      "TEST_06_update_po_status_invalid_returns_400": {"status": "PASS", "notes": "Invalid status returns 400"},
+      "TEST_07_po_status_workflow_all_valid_statuses": {"status": "PASS", "notes": "All valid statuses accepted: draft, sent, confirmed, shipped, received, cancelled"}
+    },
+    "BACKEND_PHASED_REPLENISHMENT": {
+      "TEST_08_list_phased_pos": {"status": "PASS", "notes": "GET /api/buy-planning/orders/phased returns phased POs (fixed route ordering bug)"},
+      "TEST_09_create_phased_po_percentages_must_sum_100": {"status": "PASS", "notes": "Percentages not summing to 100 returns 400"},
+      "TEST_10_create_phased_po_weeks_pcts_same_length": {"status": "PASS", "notes": "Mismatched weeks/percentages length returns 400"},
+      "TEST_11_phased_po_has_shipments": {"status": "PASS", "notes": "Phased POs have shipments array with phase, weeks_from_now, percentage, items, total_units, total_value"}
+    },
+    "BACKEND_PROMOTIONS": {
+      "TEST_12_list_promotions": {"status": "PASS", "notes": "GET /api/buy-planning/promotions returns promotions array"},
+      "TEST_13_create_promotion": {"status": "PASS", "notes": "POST /api/buy-planning/promotions creates promotion with promo_id"},
+      "TEST_14_promotion_has_required_fields": {"status": "PASS", "notes": "Promotions have name, promo_type, start_date, end_date, lift_factor, affected_categories, status"},
+      "TEST_15_create_promotion_lift_factor_validation": {"status": "PASS", "notes": "lift_factor must be between 0.5 and 5"},
+      "TEST_16_delete_promotion": {"status": "PASS", "notes": "DELETE /api/buy-planning/promotions/{promo_id} deletes promotion"},
+      "TEST_17_delete_nonexistent_promotion_returns_404": {"status": "PASS", "notes": "Delete nonexistent promotion returns 404"},
+      "TEST_18_get_active_lift_factors": {"status": "PASS", "notes": "GET /api/buy-planning/promotions/active-lift returns active promotions with lift_factor and affected_categories"}
+    },
+    "BACKEND_BUY_FORMULA_PROMO_LIFT": {
+      "TEST_19_buy_formula_includes_promo_lift": {"status": "PASS", "notes": "POST /api/buy-planning/buy-formula/calculate items have promo_lift field"}
+    },
+    "FRONTEND_ORDERS_TAB": {
+      "TEST_F01_orders_tab_visible": {"status": "PASS", "notes": "Orders tab with Truck icon visible in Buy Planning tabs"},
+      "TEST_F02_orders_table_visible": {"status": "PASS", "notes": "data-testid=orders-table present with PO number, category, plan, SKUs, units, value, status, phased columns"},
+      "TEST_F03_po_status_dropdowns": {"status": "PASS", "notes": "data-testid=po-status-{po_number} dropdowns present (3 found)"},
+      "TEST_F04_phase_buttons": {"status": "PASS", "notes": "data-testid=phase-btn-{po_number} buttons present (2 found)"},
+      "TEST_F05_status_dropdown_changes_status": {"status": "PASS", "notes": "Status dropdown changes PO status (draft→sent→draft)"}
+    },
+    "FRONTEND_PHASE_MODAL": {
+      "TEST_F06_phase_modal_opens": {"status": "PASS", "notes": "data-testid=phase-modal opens when clicking Phase button"},
+      "TEST_F07_phase_modal_fields": {"status": "PASS", "notes": "Modal has phase-weeks-input, phase-pcts-input, create-phase-btn"}
+    },
+    "FRONTEND_PROMOTIONS_TAB": {
+      "TEST_F08_promotions_tab_visible": {"status": "PASS", "notes": "Promotions tab with Calendar icon visible"},
+      "TEST_F09_promotions_table_visible": {"status": "PASS", "notes": "data-testid=promotions-table shows name, type, dates, discount, categories, lift factor, status"},
+      "TEST_F10_add_promotion_button": {"status": "PASS", "notes": "data-testid=add-promotion-btn present"},
+      "TEST_F11_promo_modal_opens": {"status": "PASS", "notes": "data-testid=promo-modal opens when clicking Add Promotion"},
+      "TEST_F12_promo_modal_fields": {"status": "PASS", "notes": "Modal has promo-name, promo-type, promo-start, promo-end, promo-lift, promo-categories, save-promo-btn"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "23/23 PASS",
+    "FRONTEND_TESTS": "12/12 PASS",
+    "TOTAL": "35/35 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "bugs_fixed": [
+    {
+      "issue": "Route ordering bug: /orders/phased was matched by /orders/{po_number}",
+      "fix": "Moved /orders/phased route before /orders/{po_number} in buy_planning.py",
+      "file": "/app/backend/routes/buy_planning.py"
+    }
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_orders_promotions_iter105.py",
+    "/app/test_reports/pytest/pytest_results_iter105.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend Order Consolidation endpoints:",
+    "- POST /api/buy-planning/orders/consolidate: Groups plan items by category into POs with po_number format PO-YYYYMMDD-CATEGORY-NNN",
+    "- GET /api/buy-planning/orders: Lists POs with optional plan_id and status filters",
+    "- GET /api/buy-planning/orders/{po_number}: Returns single PO with items",
+    "- PUT /api/buy-planning/orders/{po_number}/status: Updates status (draft/sent/confirmed/shipped/received/cancelled)",
+    "",
+    "Backend Phased Replenishment endpoints:",
+    "- POST /api/buy-planning/orders/phase: Creates phased shipments with configurable weeks and percentages (must sum to 100)",
+    "- GET /api/buy-planning/orders/phased: Lists phased POs (route moved before /{po_number} to fix matching)",
+    "",
+    "Backend Promotions endpoints:",
+    "- POST /api/buy-planning/promotions: Creates promotion with lift_factor validation (0.5-5)",
+    "- GET /api/buy-planning/promotions: Lists promotions with optional status filter",
+    "- DELETE /api/buy-planning/promotions/{promo_id}: Deletes promotion",
+    "- GET /api/buy-planning/promotions/active-lift: Returns active promotions for buy formula integration",
+    "",
+    "Buy formula promo_lift integration:",
+    "- POST /api/buy-planning/buy-formula/calculate applies promo_lift from active promotions matching by category",
+    "- Items have promo_lift field (>1 for matching categories)",
+    "",
+    "Frontend Orders tab:",
+    "- Orders tab with Truck icon",
+    "- Orders table: PO number, category, plan, SKUs, units, value, status dropdown, phase button",
+    "- Status dropdown (data-testid=po-status-{po_number}) changes PO status",
+    "- Phase button (data-testid=phase-btn-{po_number}) opens phase modal",
+    "",
+    "Frontend Phase modal:",
+    "- data-testid=phase-modal with weeks/percentages inputs",
+    "- data-testid=phase-weeks-input, phase-pcts-input, create-phase-btn",
+    "",
+    "Frontend Promotions tab:",
+    "- Promotions tab with Calendar icon",
+    "- Promotions table: name, type, dates, discount, categories, lift factor, status",
+    "- Add Promotion button (data-testid=add-promotion-btn) opens modal",
+    "- Promo modal (data-testid=promo-modal) with all required fields"
+  ],
+
+  "updated_files": [
+    "/app/backend/routes/buy_planning.py",
+    "/app/backend/tests/test_orders_promotions_iter105.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (23/23 tests passed)",
+    "frontend": "100% (12/12 tests passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "Existing data from curl testing: 3 POs (Accessories, Apparel, Footwear), 1 phased PO (Accessories-PHASED), 1 promotion (Summer Sale 2026 with lift_factor=1.3 for Apparel). Test promotions created and cleaned up during testing.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 105 verified Multi-Store Order Consolidation, Phased Replenishment, and Promotion Calendar. Fixed route ordering bug where /orders/phased was matched by /orders/{po_number}. Backend: POST /api/buy-planning/orders/consolidate, GET /api/buy-planning/orders, GET /api/buy-planning/orders/{po_number}, PUT /api/buy-planning/orders/{po_number}/status, POST /api/buy-planning/orders/phase, GET /api/buy-planning/orders/phased, POST/GET/DELETE /api/buy-planning/promotions, GET /api/buy-planning/promotions/active-lift. Buy formula applies promo_lift from active promotions. Frontend: Orders tab (orders-table, po-status-*, phase-btn-*, phase-modal, phase-weeks-input, phase-pcts-input, create-phase-btn), Promotions tab (promotions-table, add-promotion-btn, promo-modal, promo-name, promo-type, promo-start, promo-end, promo-lift, promo-categories, save-promo-btn). PO status workflow: draft→sent→confirmed→shipped→received (or cancelled). Phase percentages must sum to 100. Lift factor must be 0.5-5.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

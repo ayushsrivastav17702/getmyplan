@@ -663,6 +663,19 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
     async for doc in db.buy_planning_exclusions.find({"tenant_id": tenant_id}, {"_id": 0, "sku": 1}):
         excluded_skus.add(doc.get("sku"))
 
+    # 6b. Load active promotions for lift factors
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    promo_lifts = {}  # category -> max lift, sku -> max lift
+    async for promo in db.promotions.find({
+        "tenant_id": tenant_id, "status": "active",
+        "start_date": {"$lte": today}, "end_date": {"$gte": today},
+    }, {"_id": 0, "affected_categories": 1, "affected_skus": 1, "lift_factor": 1}):
+        lf = promo.get("lift_factor", 1.0)
+        for cat in promo.get("affected_categories", []):
+            promo_lifts[f"cat:{cat}"] = max(promo_lifts.get(f"cat:{cat}", 1.0), lf)
+        for sku in promo.get("affected_skus", []):
+            promo_lifts[f"sku:{sku}"] = max(promo_lifts.get(f"sku:{sku}", 1.0), lf)
+
     # 7. Calculate buy quantity per SKU
     buy_plan = []
     totals = {"total_buy_qty": 0, "total_buy_value": 0, "total_display_qty": 0, "total_safety_qty": 0, "excluded_skus": 0}
@@ -676,9 +689,10 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
         ros_data = ros_map.get(sku, {"total_qty": 0, "daily_ros": 0, "revenue": 0})
         current_soh = soh_map.get(sku, 0)
 
-        # Forecasted demand
+        # Forecasted demand (with promotion lift)
         daily_ros = ros_data["daily_ros"]
-        forecasted_demand = daily_ros * body.cover_days
+        lift = max(promo_lifts.get(f"sku:{sku}", 1.0), promo_lifts.get(f"cat:{category}", 1.0))
+        forecasted_demand = daily_ros * body.cover_days * lift
         sell_through_target = sell_targets.get(mix, 0.8)
         demand_buy = max(0, (sell_through_target * forecasted_demand) - current_soh)
 
@@ -725,6 +739,7 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
             "display_minimum": round(display_qty),
             "safety_stock": round(safety_qty),
             "safety_method": safety_method,
+            "promo_lift": lift,
             "current_soh": current_soh,
             "buy_qty": buy_qty,
             "buy_value": round(buy_value, 2),
@@ -1859,3 +1874,274 @@ async def calculate_safety_stock(sku: str, lead_time_days: int = 14, user: dict 
         "z_score": z, "lead_time_days": lead_time_days, "review_period_days": rp,
         "forecast_errors_used": len(errors), "formula": "z * MAD * sqrt(LT/RP)",
     }
+
+
+
+# ═══════════════════════════════════════════════════
+# PHASE 1: ORDER CONSOLIDATION & PO MANAGEMENT
+# ═══════════════════════════════════════════════════
+
+PO_STATUSES = ["draft", "sent", "confirmed", "shipped", "received", "cancelled"]
+
+
+class ConsolidateReq(BaseModel):
+    plan_id: str
+
+
+@router.post("/orders/consolidate")
+async def consolidate_orders(body: ConsolidateReq, user: dict = Depends(_dep_user)):
+    """Consolidate an approved buy plan into supplier-level POs grouped by category."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    try:
+        plan = await db.buy_plans.find_one({"_id": ObjectId(body.plan_id), "tenant_id": tenant_id})
+    except Exception:
+        raise HTTPException(404, "Invalid plan ID")
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    items = plan.get("items", [])
+    if not items:
+        raise HTTPException(400, "Plan has no items")
+
+    # Group items by category (proxy for supplier)
+    groups = {}
+    for item in items:
+        cat = item.get("category") or item.get("sub_category") or "General"
+        if cat not in groups:
+            groups[cat] = {"items": [], "total_units": 0, "total_value": 0}
+        qty = item.get("edited_qty") or item.get("buy_qty", 0)
+        val = qty * item.get("mrp", 0)
+        groups[cat]["items"].append({**item, "po_qty": qty, "po_value": round(val, 2)})
+        groups[cat]["total_units"] += qty
+        groups[cat]["total_value"] += val
+
+    # Generate POs
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    created_pos = []
+    for idx, (cat, data) in enumerate(groups.items()):
+        po_number = f"PO-{today}-{cat[:8].upper().replace(' ', '')}-{idx + 1:03d}"
+        po_doc = {
+            "tenant_id": tenant_id, "po_number": po_number, "plan_id": body.plan_id,
+            "plan_name": plan.get("plan_name", ""), "supplier_group": cat,
+            "items": data["items"], "total_units": data["total_units"],
+            "total_value": round(data["total_value"], 2),
+            "unique_skus": len(data["items"]), "status": "draft",
+            "created_by": user.get("email", ""), "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.consolidated_pos.insert_one(po_doc)
+        created_pos.append({"po_number": po_number, "supplier_group": cat,
+                            "total_units": data["total_units"], "total_value": round(data["total_value"], 2),
+                            "unique_skus": len(data["items"]), "status": "draft"})
+    return {"success": True, "plan_id": body.plan_id, "pos_created": len(created_pos), "orders": created_pos}
+
+
+@router.get("/orders")
+async def list_orders(plan_id: Optional[str] = None, status: Optional[str] = None, user: dict = Depends(_dep_user)):
+    """List consolidated POs."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    query = {"tenant_id": tenant_id}
+    if plan_id:
+        query["plan_id"] = plan_id
+    if status:
+        query["status"] = status
+    orders = []
+    async for doc in db.consolidated_pos.find(query, {"_id": 0}).sort("created_at", -1).limit(100):
+        orders.append(doc)
+    return {"orders": orders, "total": len(orders)}
+
+
+@router.get("/orders/phased")
+async def list_phased_pos(user: dict = Depends(_dep_user)):
+    """List all phased POs."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    pos = []
+    async for doc in db.phased_pos.find({"tenant_id": tenant_id}, {"_id": 0}).sort("created_at", -1).limit(50):
+        pos.append(doc)
+    return {"phased_pos": pos, "total": len(pos)}
+
+
+@router.get("/orders/{po_number}")
+async def get_order(po_number: str, user: dict = Depends(_dep_user)):
+    """Get a single PO with full item details."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    doc = await db.consolidated_pos.find_one({"tenant_id": tenant_id, "po_number": po_number}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "PO not found")
+    return doc
+
+
+class POStatusReq(BaseModel):
+    status: str
+
+
+@router.put("/orders/{po_number}/status")
+async def update_po_status(po_number: str, body: POStatusReq, user: dict = Depends(_dep_user)):
+    """Update PO status (draft → sent → confirmed → shipped → received)."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    if body.status not in PO_STATUSES:
+        raise HTTPException(400, f"Invalid status. Must be one of: {PO_STATUSES}")
+    doc = await db.consolidated_pos.find_one({"tenant_id": tenant_id, "po_number": po_number})
+    if not doc:
+        raise HTTPException(404, "PO not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.consolidated_pos.update_one(
+        {"tenant_id": tenant_id, "po_number": po_number},
+        {"$set": {"status": body.status, f"{body.status}_at": now, f"{body.status}_by": user.get("email", ""), "updated_at": now}},
+    )
+    return {"success": True, "po_number": po_number, "status": body.status}
+
+
+# ═══════════════════════════════════════════════════
+# PHASE 2: PHASED REPLENISHMENT
+# ═══════════════════════════════════════════════════
+
+DEFAULT_PHASE_SPLITS = {
+    "Core": [50, 30, 20],
+    "Fashion": [40, 35, 25],
+    "Test": [30, 30, 40],
+}
+
+
+class PhasedReq(BaseModel):
+    po_number: str
+    phase_weeks: list = [0, 2, 4]
+    phase_percentages: list = [50, 30, 20]
+
+
+@router.post("/orders/phase")
+async def create_phased_replenishment(body: PhasedReq, user: dict = Depends(_dep_user)):
+    """Split a PO into phased shipments over time."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    po = await db.consolidated_pos.find_one({"tenant_id": tenant_id, "po_number": body.po_number}, {"_id": 0})
+    if not po:
+        raise HTTPException(404, "PO not found")
+    if len(body.phase_weeks) != len(body.phase_percentages):
+        raise HTTPException(400, "phase_weeks and phase_percentages must be same length")
+    if abs(sum(body.phase_percentages) - 100) > 0.5:
+        raise HTTPException(400, f"Percentages must sum to 100 (got {sum(body.phase_percentages)})")
+
+    now = datetime.now(timezone.utc)
+    shipments = []
+    for idx, (weeks, pct) in enumerate(zip(body.phase_weeks, body.phase_percentages)):
+        ship_date = (now + timedelta(weeks=weeks)).isoformat()
+        phase_items = []
+        for item in po.get("items", []):
+            qty = round(item.get("po_qty", item.get("buy_qty", 0)) * pct / 100)
+            if qty > 0:
+                phase_items.append({"sku": item.get("sku", ""), "style": item.get("style", ""),
+                                    "qty": qty, "value": round(qty * item.get("mrp", 0), 2)})
+        shipments.append({
+            "phase": idx + 1, "weeks_from_now": weeks, "percentage": pct,
+            "expected_date": ship_date, "items": phase_items,
+            "total_units": sum(i["qty"] for i in phase_items),
+            "total_value": round(sum(i["value"] for i in phase_items), 2),
+            "status": "ready" if idx == 0 else "pending",
+        })
+
+    phased_doc = {
+        "tenant_id": tenant_id, "po_number": f"{body.po_number}-PHASED",
+        "original_po": body.po_number, "supplier_group": po.get("supplier_group", ""),
+        "shipments": shipments, "total_units": po.get("total_units", 0),
+        "total_value": po.get("total_value", 0), "phase_count": len(shipments),
+        "created_by": user.get("email", ""), "created_at": now.isoformat(),
+    }
+    await db.phased_pos.insert_one(phased_doc)
+    await db.consolidated_pos.update_one(
+        {"tenant_id": tenant_id, "po_number": body.po_number},
+        {"$set": {"is_phased": True, "phased_po": f"{body.po_number}-PHASED"}},
+    )
+    return {"success": True, "po_number": f"{body.po_number}-PHASED", "shipments": shipments}
+
+
+# ═══════════════════════════════════════════════════
+# PHASE 3: PROMOTION CALENDAR & LIFT FACTORS
+# ═══════════════════════════════════════════════════
+
+class PromotionCreateReq(BaseModel):
+    name: str
+    promo_type: str = "national"  # national, regional, store
+    start_date: str
+    end_date: str
+    discount_type: str = "percentage"  # percentage, fixed, bogo
+    discount_value: float = 0
+    affected_categories: list = []
+    affected_skus: list = []
+    affected_regions: list = []
+    lift_factor: float = 1.0
+    notes: Optional[str] = None
+
+
+@router.post("/promotions")
+async def create_promotion(body: PromotionCreateReq, user: dict = Depends(_dep_user)):
+    """Create a new promotion."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    if body.lift_factor < 0.5 or body.lift_factor > 5:
+        raise HTTPException(400, "lift_factor must be between 0.5 and 5")
+    now = datetime.now(timezone.utc).isoformat()
+    promo_id = f"PROMO-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    doc = {
+        "tenant_id": tenant_id, "promo_id": promo_id, **body.model_dump(),
+        "status": "active", "created_by": user.get("email", ""), "created_at": now,
+    }
+    await db.promotions.insert_one(doc)
+    return {"success": True, "promo_id": promo_id}
+
+
+@router.get("/promotions")
+async def list_promotions(status: Optional[str] = None, user: dict = Depends(_dep_user)):
+    """List promotions."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    query = {"tenant_id": tenant_id}
+    if status:
+        query["status"] = status
+    promos = []
+    async for doc in db.promotions.find(query, {"_id": 0}).sort("start_date", -1).limit(100):
+        promos.append(doc)
+    return {"promotions": promos, "total": len(promos)}
+
+
+@router.put("/promotions/{promo_id}")
+async def update_promotion(promo_id: str, body: PromotionCreateReq, user: dict = Depends(_dep_user)):
+    """Update a promotion."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    result = await db.promotions.update_one(
+        {"tenant_id": tenant_id, "promo_id": promo_id},
+        {"$set": {**body.model_dump(), "updated_by": user.get("email", ""), "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Promotion not found")
+    return {"success": True, "promo_id": promo_id}
+
+
+@router.delete("/promotions/{promo_id}")
+async def delete_promotion(promo_id: str, user: dict = Depends(_dep_user)):
+    """Delete a promotion."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    result = await db.promotions.delete_one({"tenant_id": tenant_id, "promo_id": promo_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Promotion not found")
+    return {"success": True, "deleted": True}
+
+
+@router.get("/promotions/active-lift")
+async def get_active_lift_factors(user: dict = Depends(_dep_user)):
+    """Get all active promotion lift factors (for buy formula integration)."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    promos = []
+    async for doc in db.promotions.find({
+        "tenant_id": tenant_id, "status": "active",
+        "start_date": {"$lte": today}, "end_date": {"$gte": today},
+    }, {"_id": 0, "promo_id": 1, "name": 1, "affected_categories": 1, "affected_skus": 1, "lift_factor": 1}):
+        promos.append(doc)
+    return {"active_promotions": promos, "total": len(promos)}
