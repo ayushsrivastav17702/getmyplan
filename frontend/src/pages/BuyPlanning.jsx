@@ -52,6 +52,14 @@ export default function BuyPlanning() {
   const [overrideModal, setOverrideModal] = useState(null);
   const [overrideValue, setOverrideValue] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
+  const [savedPlans, setSavedPlans] = useState([]);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [planItems, setPlanItems] = useState([]);
+  const [editingItemIdx, setEditingItemIdx] = useState(null);
+  const [editingQty, setEditingQty] = useState("");
+  const [detailItem, setDetailItem] = useState(null);
+  const [planCoverDays, setPlanCoverDays] = useState(30);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -64,18 +72,20 @@ export default function BuyPlanning() {
       setMix(m.data);
       setMatrix(mx.data);
       // Fetch Phase 2+3 data
-      const [bp, dna, attr, dm, stc] = await Promise.all([
+      const [bp, dna, attr, dm, stc, plansRes] = await Promise.all([
         axios.post(`${API}/buy-planning/buy-formula/calculate`, { cover_days: 30, safety_days: 7 }).catch(() => ({ data: null })),
         axios.get(`${API}/buy-planning/dna-tags`).catch(() => ({ data: { styles: [] } })),
         axios.get(`${API}/buy-planning/attribution/matrix`).catch(() => ({ data: { attributions: [] } })),
         axios.get(`${API}/buy-planning/display-minimums`).catch(() => ({ data: { configs: [] } })),
         axios.get(`${API}/buy-planning/sell-through-config`).catch(() => ({ data: { configs: [] } })),
+        axios.get(`${API}/buy-planning/buy-plans`).catch(() => ({ data: { plans: [] } })),
       ]);
       setBuyPlan(bp.data);
       setDnaTags(dna.data);
       setAttribution(attr.data);
       setDisplayMins(dm.data?.configs || []);
       setSellThroughConfigs(stc.data?.configs || []);
+      setSavedPlans(plansRes.data?.plans || []);
       setEditingMultipliers({});
     } catch {}
   }, []);
@@ -140,6 +150,59 @@ export default function BuyPlanning() {
       toast.success("Sell-through targets reset to defaults");
       fetchAll();
     } catch { toast.error("Reset failed"); }
+  };
+
+  const generatePlan = async () => {
+    setLoading(p => ({ ...p, generate: true }));
+    try {
+      const res = await axios.post(`${API}/buy-planning/buy-plans/generate`, {
+        cover_days: planCoverDays, safety_days: 7,
+        plan_name: `Buy Plan ${new Date().toLocaleDateString()} (${planCoverDays}d)`,
+      });
+      toast.success("Plan generated and saved");
+      fetchAll();
+      loadPlan(res.data.plan_id);
+    } catch (e) { toast.error(e.response?.data?.detail || "Plan generation failed"); }
+    setLoading(p => ({ ...p, generate: false }));
+  };
+
+  const loadPlan = async (planId) => {
+    if (!planId) { setSelectedPlanId(""); setSelectedPlan(null); setPlanItems([]); return; }
+    setSelectedPlanId(planId);
+    try {
+      const res = await axios.get(`${API}/buy-planning/buy-plans/${planId}`);
+      setSelectedPlan(res.data);
+      setPlanItems(res.data.items || []);
+    } catch { toast.error("Failed to load plan"); }
+  };
+
+  const updateItemQty = async () => {
+    if (editingItemIdx === null || !editingQty) return;
+    try {
+      await axios.put(`${API}/buy-planning/buy-plans/${selectedPlanId}/items`, {
+        item_index: editingItemIdx, new_qty: parseInt(editingQty),
+      });
+      toast.success("Quantity updated");
+      setEditingItemIdx(null); setEditingQty("");
+      loadPlan(selectedPlanId);
+    } catch (e) { toast.error(e.response?.data?.detail || "Update failed"); }
+  };
+
+  const approvePlan = async () => {
+    try {
+      await axios.post(`${API}/buy-planning/buy-plans/${selectedPlanId}/approve`);
+      toast.success("Plan approved");
+      loadPlan(selectedPlanId); fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Approval failed"); }
+  };
+
+  const deletePlan = async () => {
+    try {
+      await axios.delete(`${API}/buy-planning/buy-plans/${selectedPlanId}`);
+      toast.success("Plan deleted");
+      setSelectedPlanId(""); setSelectedPlan(null); setPlanItems([]);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Delete failed"); }
   };
 
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
@@ -452,60 +515,205 @@ export default function BuyPlanning() {
       )}
 
       {/* Buy Plan Tab */}
-      {tab === "buy-plan" && buyPlan && (
+      {tab === "buy-plan" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white border rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-gray-900">{buyPlan.sku_count}</div>
-              <div className="text-xs text-gray-500">SKUs</div>
+          {/* Generation Controls */}
+          <div data-testid="plan-generation-controls" className="bg-gray-50 rounded-xl p-4 flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Cover Period</label>
+              <select data-testid="plan-cover-days" value={planCoverDays} onChange={e => setPlanCoverDays(parseInt(e.target.value))}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value={30}>30 Days</option>
+                <option value={60}>60 Days</option>
+                <option value={90}>90 Days</option>
+              </select>
             </div>
-            <div className="bg-white border rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-emerald-700">{buyPlan.totals?.total_buy_qty?.toLocaleString()}</div>
-              <div className="text-xs text-gray-500">Total Buy Qty</div>
-            </div>
-            <div className="bg-white border rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-indigo-700">₹{(buyPlan.totals?.total_buy_value / 1e6)?.toFixed(1)}M</div>
-              <div className="text-xs text-gray-500">Buy Value</div>
-            </div>
-            <div className="bg-white border rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-amber-700">{buyPlan.totals?.total_display_qty?.toLocaleString()}</div>
-              <div className="text-xs text-gray-500">Display Min Qty</div>
-            </div>
+            <button data-testid="generate-plan-btn" onClick={generatePlan} disabled={loading.generate}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C] disabled:opacity-50">
+              <Zap className="h-4 w-4" />
+              {loading.generate ? "Generating..." : "Generate & Save Plan"}
+            </button>
           </div>
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <table data-testid="buy-plan-table" className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-3 font-medium text-gray-600">SKU</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Mix</th>
-                  <th className="text-right p-3 font-medium text-gray-600">ROS/day</th>
-                  <th className="text-right p-3 font-medium text-gray-600">SOH</th>
-                  <th className="text-right p-3 font-medium text-gray-600">Demand</th>
-                  <th className="text-right p-3 font-medium text-gray-600">Display Min</th>
-                  <th className="text-right p-3 font-medium text-gray-600">Safety</th>
-                  <th className="text-right p-3 font-medium text-gray-600 bg-emerald-50">Buy Qty</th>
-                  <th className="text-right p-3 font-medium text-gray-600">Value</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Constraint</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(buyPlan.buy_plan || []).slice(0, 50).map(s => (
-                  <tr key={s.sku} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="p-3 font-mono text-xs">{s.sku}</td>
-                    <td className="p-3"><MixBadge mix={s.style_mix} /></td>
-                    <td className="p-3 text-right text-gray-600">{s.daily_ros}</td>
-                    <td className="p-3 text-right text-gray-500">{s.current_soh}</td>
-                    <td className="p-3 text-right text-gray-600">{s.demand_buy?.toLocaleString()}</td>
-                    <td className="p-3 text-right text-gray-600">{s.display_minimum?.toLocaleString()}</td>
-                    <td className="p-3 text-right text-gray-600">{s.safety_stock?.toLocaleString()}</td>
-                    <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-50">{s.buy_qty?.toLocaleString()}</td>
-                    <td className="p-3 text-right text-gray-700">₹{(s.buy_value / 1000)?.toFixed(0)}k</td>
-                    <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${s.binding_constraint === "demand" ? "bg-blue-50 text-blue-700" : s.binding_constraint === "display_min" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{s.binding_constraint}</span></td>
-                  </tr>
+
+          {/* Plan Selector + Actions */}
+          <div data-testid="plan-selector-row" className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[240px]">
+              <select data-testid="plan-selector" value={selectedPlanId} onChange={e => loadPlan(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">-- Select a saved plan --</option>
+                {savedPlans.map(p => (
+                  <option key={p.plan_id} value={p.plan_id}>
+                    {p.plan_name} ({p.status}) - {p.generated_at ? new Date(p.generated_at).toLocaleDateString() : ""}
+                  </option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+            </div>
+            {selectedPlan && (
+              <span data-testid="plan-status-badge" className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                selectedPlan.status === "approved" ? "bg-emerald-100 text-emerald-800" :
+                selectedPlan.status === "ordered" ? "bg-blue-100 text-blue-800" :
+                selectedPlan.status === "archived" ? "bg-gray-100 text-gray-500" :
+                "bg-amber-100 text-amber-800"
+              }`}>
+                {(selectedPlan.status || "draft").toUpperCase()}
+              </span>
+            )}
+            {selectedPlan?.status === "draft" && (
+              <>
+                <button data-testid="approve-plan-btn" onClick={approvePlan}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                </button>
+                <button data-testid="delete-plan-btn" onClick={deletePlan}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50">
+                  Delete Draft
+                </button>
+              </>
+            )}
           </div>
+
+          {/* Summary Cards */}
+          {(() => {
+            const t = selectedPlan ? selectedPlan.totals : buyPlan?.totals;
+            const count = selectedPlan ? selectedPlan.sku_count : buyPlan?.sku_count;
+            if (!t && !count) return null;
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white border rounded-xl p-3 text-center">
+                  <div className="text-xl font-bold text-gray-900">{count || 0}</div>
+                  <div className="text-xs text-gray-500">SKUs</div>
+                </div>
+                <div className="bg-white border rounded-xl p-3 text-center">
+                  <div className="text-xl font-bold text-emerald-700">{(t?.total_buy_qty || 0).toLocaleString()}</div>
+                  <div className="text-xs text-gray-500">Total Buy Qty</div>
+                </div>
+                <div className="bg-white border rounded-xl p-3 text-center">
+                  <div className="text-xl font-bold text-indigo-700">{"\u20B9"}{((t?.total_buy_value || 0) / 1e6).toFixed(1)}M</div>
+                  <div className="text-xs text-gray-500">Buy Value</div>
+                </div>
+                <div className="bg-white border rounded-xl p-3 text-center">
+                  <div className="text-xl font-bold text-amber-700">{(t?.total_display_qty || 0).toLocaleString()}</div>
+                  <div className="text-xs text-gray-500">Display Min Qty</div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Items Table */}
+          {(() => {
+            const items = planItems.length > 0 ? planItems : (buyPlan?.buy_plan || []);
+            const isDraft = selectedPlan?.status === "draft";
+            if (items.length === 0) return (
+              <div className="border border-gray-200 rounded-xl p-12 text-center text-gray-400">
+                No plan data. Generate a new plan or select a saved one above.
+              </div>
+            );
+            return (
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <table data-testid="buy-plan-table" className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left p-3 font-medium text-gray-600">SKU</th>
+                      <th className="text-left p-3 font-medium text-gray-600">Mix</th>
+                      <th className="text-right p-3 font-medium text-gray-600">ROS/day</th>
+                      <th className="text-right p-3 font-medium text-gray-600">SOH</th>
+                      <th className="text-right p-3 font-medium text-gray-600">Demand</th>
+                      <th className="text-right p-3 font-medium text-gray-600">Display Min</th>
+                      <th className="text-right p-3 font-medium text-gray-600">Safety</th>
+                      <th className="text-right p-3 font-medium text-gray-600 bg-emerald-50">Buy Qty</th>
+                      <th className="text-right p-3 font-medium text-gray-600">Value</th>
+                      <th className="text-left p-3 font-medium text-gray-600">Constraint</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.slice(0, 50).map((s, idx) => {
+                      const qty = s.edited_qty || s.buy_qty;
+                      return (
+                        <tr key={`${s.sku}-${idx}`} className="border-t border-gray-100 hover:bg-gray-50 group">
+                          <td className="p-3 font-mono text-xs">{s.sku}</td>
+                          <td className="p-3"><MixBadge mix={s.style_mix} /></td>
+                          <td className="p-3 text-right text-gray-600">{s.daily_ros}</td>
+                          <td className="p-3 text-right text-gray-500">{s.current_soh}</td>
+                          <td className="p-3 text-right text-gray-600">{(s.demand_buy ?? 0).toLocaleString()}</td>
+                          <td className="p-3 text-right text-gray-600">{(s.display_minimum ?? 0).toLocaleString()}</td>
+                          <td className="p-3 text-right text-gray-600">{(s.safety_stock ?? 0).toLocaleString()}</td>
+                          <td className="p-3 text-right bg-emerald-50">
+                            {editingItemIdx === idx ? (
+                              <div className="flex items-center gap-1 justify-end">
+                                <input type="number" value={editingQty} onChange={e => setEditingQty(e.target.value)}
+                                  className="w-20 border rounded px-1.5 py-0.5 text-sm text-right" autoFocus />
+                                <button onClick={updateItemQty} className="text-emerald-600 hover:text-emerald-800">
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => { setEditingItemIdx(null); setEditingQty(""); }} className="text-gray-400 hover:text-gray-600 text-xs ml-0.5">{"\u2715"}</button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="font-bold text-emerald-700">{qty?.toLocaleString()}</span>
+                                {s.edited_qty && <span className="text-[9px] text-orange-500 ml-0.5">edited</span>}
+                                {isDraft && (
+                                  <button onClick={() => { setEditingItemIdx(idx); setEditingQty(String(qty)); }}
+                                    className="ml-1 p-0.5 hover:bg-emerald-100 rounded text-emerald-600 opacity-40 group-hover:opacity-100">
+                                    <Edit2 className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-right text-gray-700">{"\u20B9"}{((qty * (s.mrp || 0)) / 1000).toFixed(0)}k</td>
+                          <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${s.binding_constraint === "demand" ? "bg-blue-50 text-blue-700" : s.binding_constraint === "display_min" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{s.binding_constraint}</span></td>
+                          <td className="p-3">
+                            <button data-testid={`detail-btn-${idx}`} onClick={() => setDetailItem(s)} className="p-1 hover:bg-gray-100 rounded text-gray-400">
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          {/* Calculation Breakdown Modal */}
+          {detailItem && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDetailItem(null)}>
+              <div data-testid="calc-breakdown-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                <h2 className="text-lg font-bold text-gray-900">Calculation Breakdown</h2>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <span className="text-gray-500">SKU:</span><span className="font-mono">{detailItem.sku}</span>
+                  <span className="text-gray-500">Style:</span><span>{detailItem.style}</span>
+                  <span className="text-gray-500">Style Mix:</span><span><MixBadge mix={detailItem.style_mix} /></span>
+                  <span className="text-gray-500">Category:</span><span>{detailItem.category || "\u2014"}</span>
+                  <span className="text-gray-500">Daily ROS:</span><span>{detailItem.daily_ros} units/day</span>
+                  <span className="text-gray-500">Forecasted Demand:</span><span>{detailItem.forecasted_demand} units</span>
+                  <span className="text-gray-500">Sell-Through Target:</span><span>{detailItem.sell_through_target}x</span>
+                  <span className="text-gray-500">Current SOH:</span><span>{detailItem.current_soh} units</span>
+                  <span className="text-gray-500">Demand Buy:</span><span>{detailItem.demand_buy} units</span>
+                  <span className="text-gray-500">Display Minimum:</span><span>{detailItem.display_minimum} units</span>
+                  <span className="text-gray-500">Safety Stock:</span><span>{detailItem.safety_stock} units</span>
+                  <span className="text-gray-500">MRP:</span><span>{"\u20B9"}{detailItem.mrp}</span>
+                  <span className="text-gray-500">Constraint:</span>
+                  <span className={`px-2 py-0.5 rounded text-xs inline-block w-fit ${detailItem.binding_constraint === "demand" ? "bg-blue-50 text-blue-700" : detailItem.binding_constraint === "display_min" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{detailItem.binding_constraint}</span>
+                </div>
+                <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
+                  <div>
+                    <div className="text-gray-500 text-xs">Final Buy Qty</div>
+                    <div className="text-xl font-bold text-emerald-700">{(detailItem.edited_qty || detailItem.buy_qty)?.toLocaleString()} units</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-gray-500 text-xs">Buy Value</div>
+                    <div className="text-lg font-bold text-indigo-700">{"\u20B9"}{detailItem.buy_value?.toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <button onClick={() => setDetailItem(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Close</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

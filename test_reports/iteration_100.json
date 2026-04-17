@@ -1,0 +1,136 @@
+{
+  "summary": "Iteration 100: Buy Plan Persistence & Approval Workflow (Phase B) - All backend and frontend tests passed. Backend: 17/17 pytest tests passed for buy plan CRUD endpoints (generate, list, get, update item qty, approve, delete). Frontend: All UI elements verified - plan generation controls, plan selector, status badges, approve/delete buttons, summary cards, buy plan table with 173 SKUs, calculation breakdown modal, edit functionality with save/cancel.",
+
+  "test_case_matrix": {
+    "BACKEND_BUY_PLANS_GENERATE": {
+      "TEST_01_generate_plan_success": {"status": "PASS", "notes": "POST /api/buy-planning/buy-plans/generate returns plan_id, status=draft, totals"},
+      "TEST_02_generate_plan_60_days": {"status": "PASS", "notes": "Generate with cover_days=60 works"},
+      "TEST_03_generate_plan_with_notes": {"status": "PASS", "notes": "Generate with notes field works"}
+    },
+    "BACKEND_BUY_PLANS_LIST": {
+      "TEST_04_list_plans_success": {"status": "PASS", "notes": "GET /api/buy-planning/buy-plans returns plans array without items"},
+      "TEST_05_list_plans_filter_status": {"status": "PASS", "notes": "Filter by status=draft works"}
+    },
+    "BACKEND_BUY_PLANS_GET": {
+      "TEST_06_get_plan_success": {"status": "PASS", "notes": "GET /api/buy-planning/buy-plans/{plan_id} returns full plan with items array"},
+      "TEST_07_get_plan_invalid_id": {"status": "PASS", "notes": "Invalid ID returns 404"},
+      "TEST_08_get_plan_nonexistent": {"status": "PASS", "notes": "Nonexistent ObjectId returns 404"}
+    },
+    "BACKEND_BUY_PLANS_UPDATE_ITEM": {
+      "TEST_09_update_item_qty_success": {"status": "PASS", "notes": "PUT /api/buy-planning/buy-plans/{plan_id}/items updates qty, adds edited_qty/edited_by fields"},
+      "TEST_10_update_item_invalid_index": {"status": "PASS", "notes": "Invalid item_index returns 400"}
+    },
+    "BACKEND_BUY_PLANS_APPROVE": {
+      "TEST_11_approve_draft_success": {"status": "PASS", "notes": "POST /api/buy-planning/buy-plans/{plan_id}/approve changes status to approved"},
+      "TEST_12_approve_already_approved": {"status": "PASS", "notes": "Approving approved plan returns 400"}
+    },
+    "BACKEND_BUY_PLANS_DELETE": {
+      "TEST_13_delete_draft_success": {"status": "PASS", "notes": "DELETE /api/buy-planning/buy-plans/{plan_id} deletes draft plan"},
+      "TEST_14_delete_approved_fails": {"status": "PASS", "notes": "Deleting approved plan returns 400"},
+      "TEST_15_delete_nonexistent": {"status": "PASS", "notes": "Deleting nonexistent plan returns 404"}
+    },
+    "BACKEND_BUY_PLANS_EDIT_APPROVED": {
+      "TEST_16_update_approved_fails": {"status": "PASS", "notes": "Updating item in approved plan returns 400"}
+    },
+    "FRONTEND_BUY_PLAN_TAB": {
+      "TEST_17_cover_period_selector": {"status": "PASS", "notes": "data-testid=plan-cover-days present with 30/60/90 day options"},
+      "TEST_18_generate_button": {"status": "PASS", "notes": "data-testid=generate-plan-btn present with text 'Generate & Save Plan'"},
+      "TEST_19_plan_selector": {"status": "PASS", "notes": "data-testid=plan-selector dropdown lists saved plans"},
+      "TEST_20_status_badge_draft": {"status": "PASS", "notes": "data-testid=plan-status-badge shows DRAFT for new plans"},
+      "TEST_21_approve_button": {"status": "PASS", "notes": "data-testid=approve-plan-btn visible for draft plans"},
+      "TEST_22_delete_button": {"status": "PASS", "notes": "data-testid=delete-plan-btn visible for draft plans"},
+      "TEST_23_summary_cards": {"status": "PASS", "notes": "4 summary cards: SKUs (173), Total Buy Qty (448,201), Buy Value (₹942.6M), Display Min Qty (35,638)"},
+      "TEST_24_buy_plan_table": {"status": "PASS", "notes": "data-testid=buy-plan-table with 50 rows showing SKU, Mix, ROS/day, SOH, Demand, Display Min, Safety, Buy Qty, Value, Constraint"},
+      "TEST_25_eye_icon_buttons": {"status": "PASS", "notes": "50 eye icon buttons (data-testid=detail-btn-{idx}) for calculation breakdown"},
+      "TEST_26_calc_breakdown_modal": {"status": "PASS", "notes": "data-testid=calc-breakdown-modal shows SKU, Style, Style Mix, Category, Daily ROS, Forecasted Demand, Sell-Through Target, Current SOH, Demand Buy, Display Minimum, Safety Stock, MRP, Constraint, Final Buy Qty, Buy Value"}
+    },
+    "FRONTEND_EDIT_WORKFLOW": {
+      "TEST_27_edit_mode_activation": {"status": "PASS", "notes": "Clicking edit button on buy qty column shows input field"},
+      "TEST_28_quantity_update": {"status": "PASS", "notes": "Entering new qty and saving shows 'Quantity updated' toast, value persists with 'edited' label"},
+      "TEST_29_totals_recalculation": {"status": "PASS", "notes": "Total Buy Qty and Buy Value update after edit (452,432 qty, ₹957.4M value)"}
+    },
+    "FRONTEND_APPROVE_WORKFLOW": {
+      "TEST_30_approve_click": {"status": "PASS", "notes": "Clicking Approve button shows 'Plan approved' toast"},
+      "TEST_31_status_badge_approved": {"status": "PASS", "notes": "Status badge changes to APPROVED"},
+      "TEST_32_buttons_hidden_after_approve": {"status": "PASS", "notes": "Approve and Delete Draft buttons hidden after approval"}
+    },
+    "FRONTEND_DELETE_WORKFLOW": {
+      "TEST_33_delete_click": {"status": "PASS", "notes": "Clicking Delete Draft shows 'Plan deleted' toast"},
+      "TEST_34_plan_removed": {"status": "PASS", "notes": "Plan selector resets to '-- Select a saved plan --'"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "17/17 PASS",
+    "FRONTEND_TESTS": "18/18 PASS",
+    "TOTAL": "35/35 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Plan Selector Dropdown",
+        "issues": ["Console warning: '<span> cannot be a child of <option>' - React hydration warning. Minor issue, does not affect functionality."]
+      }
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_buy_plans_crud_iter100.py",
+    "/app/test_reports/pytest/pytest_results_iter100.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend buy plan CRUD endpoints correctly implemented at /api/buy-planning/buy-plans/*",
+    "Generate endpoint creates plan with status='draft' and stores items array with full calculation details",
+    "List endpoint excludes items array for performance (projection: {items: 0})",
+    "Get single plan endpoint returns full items array with all calculation fields",
+    "Update item endpoint correctly validates draft status, item_index bounds, and recalculates totals",
+    "Approve endpoint changes status to 'approved' and records approved_at/approved_by",
+    "Delete endpoint correctly validates draft status before deletion",
+    "Frontend Buy Plan tab has all required data-testid attributes for testing",
+    "Plan generation controls (cover period selector, generate button) work correctly",
+    "Plan selector dropdown lists saved plans with status and date",
+    "Status badge correctly shows DRAFT/APPROVED with appropriate styling",
+    "Approve/Delete buttons only visible for draft plans",
+    "Summary cards show SKUs, Total Buy Qty, Buy Value, Display Min Qty",
+    "Buy plan table shows all calculation columns with eye icon for breakdown modal",
+    "Calculation breakdown modal shows complete formula details",
+    "Edit functionality works with input field, save/cancel, and 'edited' label",
+    "Totals recalculate after quantity edit"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_buy_plans_crud_iter100.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (18/18 tests passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "Test plans created during testing were cleaned up. Database has 30 stores (17 A, 9 B, 4 C), 173 SKUs, 20 Core styles.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 100 verified Buy Plan Persistence & Approval Workflow (Phase B). Backend endpoints: POST /api/buy-planning/buy-plans/generate, GET /api/buy-planning/buy-plans, GET /api/buy-planning/buy-plans/{plan_id}, PUT /api/buy-planning/buy-plans/{plan_id}/items, POST /api/buy-planning/buy-plans/{plan_id}/approve, DELETE /api/buy-planning/buy-plans/{plan_id}. Frontend data-testid attributes: plan-cover-days, generate-plan-btn, plan-selector, plan-status-badge, approve-plan-btn, delete-plan-btn, buy-plan-table, detail-btn-{idx}, calc-breakdown-modal. Database has 173 SKUs across 30 stores. Plans can be generated, edited (draft only), approved, and deleted (draft only).",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

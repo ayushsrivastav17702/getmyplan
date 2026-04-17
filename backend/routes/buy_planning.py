@@ -6,6 +6,7 @@ from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 import io
 import csv
+from bson import ObjectId
 
 router = APIRouter(prefix="/buy-planning", tags=["buy-planning"])
 
@@ -1125,4 +1126,178 @@ async def export_buy_plan_csv(cover_days: int = 30, safety_days: int = 7, user: 
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+# ═══════════════════════════════════════════════════
+# BUY PLAN PERSISTENCE & APPROVAL WORKFLOW
+# ═══════════════════════════════════════════════════
+
+class GeneratePlanReq(BaseModel):
+    plan_name: Optional[str] = None
+    cover_days: int = 30
+    safety_days: int = 7
+    notes: Optional[str] = None
+
+
+class UpdateItemQtyReq(BaseModel):
+    item_index: int
+    new_qty: int
+
+
+@router.post("/buy-plans/generate")
+async def generate_and_save_plan(body: GeneratePlanReq, user: dict = Depends(_dep_user)):
+    """Generate a buy plan using the full formula and save to database."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+
+    # Reuse the existing calculate logic
+    calc_body = BuyFormulaReq(cover_days=body.cover_days, safety_days=body.safety_days)
+    result = await calculate_buy_formula(calc_body, user)
+
+    plan_name = body.plan_name or f"Buy Plan {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+    plan_doc = {
+        "tenant_id": tenant_id,
+        "plan_name": plan_name,
+        "cover_days": body.cover_days,
+        "safety_days": body.safety_days,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_by": user.get("email", ""),
+        "status": "draft",
+        "items": result.get("buy_plan", []),
+        "parameters": result.get("parameters", {}),
+        "totals": result.get("totals", {}),
+        "sku_count": result.get("sku_count", 0),
+        "notes": body.notes,
+    }
+    insert_result = await db.buy_plans.insert_one(plan_doc)
+    plan_id = str(insert_result.inserted_id)
+
+    return {
+        "success": True,
+        "plan_id": plan_id,
+        "plan_name": plan_name,
+        "status": "draft",
+        "sku_count": result.get("sku_count", 0),
+        "totals": result.get("totals", {}),
+    }
+
+
+@router.get("/buy-plans")
+async def list_buy_plans(status: Optional[str] = None, limit: int = 20, user: dict = Depends(_dep_user)):
+    """List saved buy plans (without items for performance)."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    query = {"tenant_id": tenant_id}
+    if status:
+        query["status"] = status
+    plans = []
+    async for doc in db.buy_plans.find(query, {"items": 0}).sort("generated_at", -1).limit(limit):
+        plans.append({
+            "plan_id": str(doc["_id"]),
+            "plan_name": doc.get("plan_name", ""),
+            "status": doc.get("status", "draft"),
+            "generated_at": doc.get("generated_at", ""),
+            "generated_by": doc.get("generated_by", ""),
+            "sku_count": doc.get("sku_count", 0),
+            "totals": doc.get("totals", {}),
+            "cover_days": doc.get("cover_days", 30),
+            "notes": doc.get("notes"),
+            "approved_at": doc.get("approved_at"),
+            "approved_by": doc.get("approved_by"),
+        })
+    return {"plans": plans, "total": len(plans)}
+
+
+@router.get("/buy-plans/{plan_id}")
+async def get_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
+    """Get a single buy plan with full item details."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    try:
+        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
+    except Exception:
+        raise HTTPException(404, "Invalid plan ID")
+    if not doc:
+        raise HTTPException(404, "Plan not found")
+    return {
+        "plan_id": str(doc["_id"]),
+        "plan_name": doc.get("plan_name", ""),
+        "status": doc.get("status", "draft"),
+        "generated_at": doc.get("generated_at", ""),
+        "generated_by": doc.get("generated_by", ""),
+        "sku_count": doc.get("sku_count", 0),
+        "totals": doc.get("totals", {}),
+        "parameters": doc.get("parameters", {}),
+        "items": doc.get("items", []),
+        "cover_days": doc.get("cover_days", 30),
+        "notes": doc.get("notes"),
+        "approved_at": doc.get("approved_at"),
+        "approved_by": doc.get("approved_by"),
+    }
+
+
+@router.put("/buy-plans/{plan_id}/items")
+async def update_plan_item(plan_id: str, body: UpdateItemQtyReq, user: dict = Depends(_dep_user)):
+    """Update quantity for a specific item in a draft plan."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    try:
+        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
+    except Exception:
+        raise HTTPException(404, "Invalid plan ID")
+    if not doc:
+        raise HTTPException(404, "Plan not found")
+    if doc.get("status") != "draft":
+        raise HTTPException(400, "Cannot edit non-draft plan")
+    items = doc.get("items", [])
+    if body.item_index < 0 or body.item_index >= len(items):
+        raise HTTPException(400, "Item index out of range")
+    items[body.item_index]["edited_qty"] = body.new_qty
+    items[body.item_index]["edited_by"] = user.get("email", "")
+    items[body.item_index]["edited_at"] = datetime.now(timezone.utc).isoformat()
+    total_qty = sum(i.get("edited_qty", i.get("buy_qty", 0)) for i in items)
+    total_val = sum(i.get("edited_qty", i.get("buy_qty", 0)) * i.get("mrp", 0) for i in items)
+    await db.buy_plans.update_one(
+        {"_id": ObjectId(plan_id)},
+        {"$set": {"items": items, "totals.total_buy_qty": total_qty, "totals.total_buy_value": round(total_val, 2)}},
+    )
+    return {"success": True, "item_index": body.item_index, "new_qty": body.new_qty, "total_buy_qty": total_qty}
+
+
+@router.post("/buy-plans/{plan_id}/approve")
+async def approve_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
+    """Approve a draft buy plan."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    try:
+        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
+    except Exception:
+        raise HTTPException(404, "Invalid plan ID")
+    if not doc:
+        raise HTTPException(404, "Plan not found")
+    if doc.get("status") != "draft":
+        raise HTTPException(400, f"Plan is already {doc.get('status')}")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.buy_plans.update_one(
+        {"_id": ObjectId(plan_id)},
+        {"$set": {"status": "approved", "approved_at": now, "approved_by": user.get("email", "")}},
+    )
+    return {"success": True, "plan_id": plan_id, "status": "approved", "approved_at": now}
+
+
+@router.delete("/buy-plans/{plan_id}")
+async def delete_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
+    """Delete a draft buy plan."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    try:
+        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
+    except Exception:
+        raise HTTPException(404, "Invalid plan ID")
+    if not doc:
+        raise HTTPException(404, "Plan not found")
+    if doc.get("status") != "draft":
+        raise HTTPException(400, "Cannot delete non-draft plan")
+    await db.buy_plans.delete_one({"_id": ObjectId(plan_id)})
+    return {"success": True, "deleted": True}
 
