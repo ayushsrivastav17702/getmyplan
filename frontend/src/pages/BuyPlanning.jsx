@@ -4,6 +4,7 @@ import { API } from "../App";
 import { toast } from "sonner";
 import {
   BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2, Settings, RotateCcw, Save,
+  Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -42,6 +43,10 @@ export default function BuyPlanning() {
   const [displayMins, setDisplayMins] = useState([]);
   const [sellThroughConfigs, setSellThroughConfigs] = useState([]);
   const [editingMultipliers, setEditingMultipliers] = useState({});
+  const [storeSearch, setStoreSearch] = useState("");
+  const [storeWedgeFilter, setStoreWedgeFilter] = useState("all");
+  const [styleSearch, setStyleSearch] = useState("");
+  const [selectedAttr, setSelectedAttr] = useState(null);
   const [loading, setLoading] = useState({});
   const [tab, setTab] = useState("overview");
   const [overrideModal, setOverrideModal] = useState(null);
@@ -140,6 +145,20 @@ export default function BuyPlanning() {
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
   const mixSummary = mix?.summary || { Core: 0, Fashion: 0, Test: 0 };
   const totalStyles = mixSummary.Core + mixSummary.Fashion + mixSummary.Test;
+
+  const filteredStores = (wedge?.stores || []).filter(s => {
+    if (storeWedgeFilter !== "all" && s.wedge_class !== storeWedgeFilter) return false;
+    if (!storeSearch) return true;
+    const term = storeSearch.toLowerCase();
+    return (s.store_code || "").toLowerCase().includes(term) || (s.store_name || "").toLowerCase().includes(term) || (s.city || "").toLowerCase().includes(term);
+  });
+
+  const filteredStyles = (mix?.styles || []).filter(s => {
+    if (!styleSearch) return true;
+    return (s.style || "").toLowerCase().includes(styleSearch.toLowerCase());
+  });
+
+  const DEFAULTS = { Core: 1.2, Fashion: 0.8, Test: 0.4 };
 
   return (
     <div data-testid="buy-planning-page" className="space-y-6">
@@ -257,90 +276,178 @@ export default function BuyPlanning() {
       )}
 
       {tab === "stores" && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <table data-testid="store-wedge-table" className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3 font-medium text-gray-600">Store</th>
-                <th className="text-left p-3 font-medium text-gray-600">Name</th>
-                <th className="text-left p-3 font-medium text-gray-600">City</th>
-                <th className="text-left p-3 font-medium text-gray-600">Channel</th>
-                <th className="text-left p-3 font-medium text-gray-600">Area (sqft)</th>
-                <th className="text-left p-3 font-medium text-gray-600">Wedge</th>
-                <th className="text-right p-3 font-medium text-gray-600">Revenue</th>
-                <th className="w-12"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(wedge?.stores || []).map(s => (
-                <tr key={s.store_code} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs font-medium">{s.store_code}</td>
-                  <td className="p-3 text-gray-700">{s.store_name || "—"}</td>
-                  <td className="p-3 text-gray-500">{s.city || "—"}</td>
-                  <td className="p-3 text-gray-500">{s.channel || "—"}</td>
-                  <td className="p-3 text-gray-500">{s.area_sqft ? s.area_sqft.toLocaleString() : "—"}</td>
-                  <td className="p-3"><WedgeBadge wedge={s.wedge_class} /></td>
-                  <td className="p-3 text-right text-gray-700 font-medium">
-                    {s.total_revenue ? `₹${Math.round(s.total_revenue).toLocaleString()}` : "—"}
-                  </td>
-                  <td className="p-3 text-right">
-                    <button onClick={() => { setOverrideModal({ type: "store", id: s.store_code, current: s.wedge_class }); setOverrideValue(s.wedge_class || "C"); }}
-                      className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override wedge">
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
+        <div className="space-y-4">
+          {/* Distribution Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Store className="h-4 w-4 text-gray-400" />
+                <span className="text-xs text-gray-500">Total Stores</span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{wedge?.total || 0}</div>
+            </div>
+            {[
+              { w: "A", Icon: Crown, color: "amber", border: "border-l-amber-400", desc: "Full Assortment" },
+              { w: "B", Icon: Star, color: "blue", border: "border-l-blue-400", desc: "Standard" },
+              { w: "C", Icon: MapPin, color: "gray", border: "border-l-gray-300", desc: "Core Only" },
+            ].map(({ w, Icon, color, border, desc }) => {
+              const count = wedgeSummary[w];
+              const total = wedge?.total || 1;
+              const pct = Math.round((count / total) * 100);
+              return (
+                <div key={w} className={`bg-white border border-gray-200 border-l-4 ${border} rounded-xl p-4`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon className={`h-3.5 w-3.5 text-${color}-500`} />
+                    <span className="text-xs text-gray-500">{w}-Stores</span>
+                    <span className="text-[10px] text-gray-400 ml-auto">{desc}</span>
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{count}</div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+                    <div className={`h-1.5 rounded-full ${w === "A" ? "bg-amber-400" : w === "B" ? "bg-blue-400" : "bg-gray-300"}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-1">{pct}% of total</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Search & Filter */}
+          <div data-testid="store-filters" className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                data-testid="store-search-input"
+                placeholder="Search by store ID, name, or city..."
+                value={storeSearch}
+                onChange={e => setStoreSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
+              />
+            </div>
+            <select
+              data-testid="store-wedge-filter"
+              value={storeWedgeFilter}
+              onChange={e => setStoreWedgeFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none"
+            >
+              <option value="all">All Wedges</option>
+              <option value="A">A-Stores</option>
+              <option value="B">B-Stores</option>
+              <option value="C">C-Stores</option>
+            </select>
+            <span className="text-xs text-gray-400">{filteredStores.length} stores</span>
+          </div>
+
+          {/* Table */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table data-testid="store-wedge-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3 font-medium text-gray-600">Store</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Name</th>
+                  <th className="text-left p-3 font-medium text-gray-600">City</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Channel</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Area (sqft)</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Wedge</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Revenue</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Type</th>
+                  <th className="w-12"></th>
                 </tr>
-              ))}
-              {(wedge?.stores || []).length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-400">
-                  No stores found. Upload store master data first.
-                </td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredStores.map(s => (
+                  <tr key={s.store_code} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="p-3 font-mono text-xs font-medium">{s.store_code}</td>
+                    <td className="p-3 text-gray-700">{s.store_name || "\u2014"}</td>
+                    <td className="p-3 text-gray-500">{s.city || "\u2014"}</td>
+                    <td className="p-3 text-gray-500">{s.channel || "\u2014"}</td>
+                    <td className="p-3 text-gray-500">{s.area_sqft ? s.area_sqft.toLocaleString() : "\u2014"}</td>
+                    <td className="p-3"><WedgeBadge wedge={s.wedge_class} /></td>
+                    <td className="p-3 text-right text-gray-700 font-medium">
+                      {s.total_revenue ? `\u20B9${Math.round(s.total_revenue).toLocaleString()}` : "\u2014"}
+                    </td>
+                    <td className="p-3">
+                      {s.wedge_manual_override ? (
+                        <span className="px-1.5 py-0.5 bg-orange-50 text-orange-600 rounded text-[10px] font-medium">Manual</span>
+                      ) : s.wedge_class ? (
+                        <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-medium">Auto</span>
+                      ) : null}
+                    </td>
+                    <td className="p-3 text-right">
+                      <button onClick={() => { setOverrideModal({ type: "store", id: s.store_code, current: s.wedge_class }); setOverrideValue(s.wedge_class || "C"); }}
+                        className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override wedge">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredStores.length === 0 && (
+                  <tr><td colSpan={9} className="p-8 text-center text-gray-400">
+                    {storeSearch || storeWedgeFilter !== "all" ? "No stores match your filters." : "No stores found. Upload store master data first."}
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {tab === "styles" && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <table data-testid="style-mix-table" className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3 font-medium text-gray-600">Style</th>
-                <th className="text-left p-3 font-medium text-gray-600">Mix</th>
-                <th className="text-left p-3 font-medium text-gray-600">SKUs</th>
-                <th className="text-left p-3 font-medium text-gray-600">Avg/Wk</th>
-                <th className="text-left p-3 font-medium text-gray-600">Weeks Active</th>
-                <th className="text-left p-3 font-medium text-gray-600">Peak:Avg</th>
-                <th className="text-left p-3 font-medium text-gray-600">Presence</th>
-                <th className="w-12"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(mix?.styles || []).map(s => (
-                <tr key={s.style} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs font-medium">{s.style}</td>
-                  <td className="p-3"><MixBadge mix={s.style_mix} /></td>
-                  <td className="p-3 text-gray-600">{s.sku_count || "—"}</td>
-                  <td className="p-3 text-gray-600">{s.stats?.avg_weekly_qty ?? "—"}</td>
-                  <td className="p-3 text-gray-600">{s.stats?.weeks_active ?? "—"}</td>
-                  <td className="p-3 text-gray-600">{s.stats?.peak_to_avg != null ? `${s.stats.peak_to_avg}x` : "—"}</td>
-                  <td className="p-3 text-gray-600">{s.stats?.week_presence_pct != null ? `${s.stats.week_presence_pct}%` : "—"}</td>
-                  <td className="p-3">
-                    <button onClick={() => { setOverrideModal({ type: "sku", id: s.style, current: s.style_mix }); setOverrideValue(s.style_mix || "Test"); }}
-                      className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override mix">
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
+        <div className="space-y-4">
+          {/* Search */}
+          <div data-testid="style-filters" className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                data-testid="style-search-input"
+                placeholder="Search by style name..."
+                value={styleSearch}
+                onChange={e => setStyleSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
+              />
+            </div>
+            <span className="text-xs text-gray-400">{filteredStyles.length} styles</span>
+          </div>
+
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table data-testid="style-mix-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3 font-medium text-gray-600">Style</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Mix</th>
+                  <th className="text-left p-3 font-medium text-gray-600">SKUs</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Avg/Wk</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Weeks Active</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Peak:Avg</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Presence</th>
+                  <th className="w-12"></th>
                 </tr>
-              ))}
-              {(mix?.styles || []).length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-400">
-                  No style mix data. Run Style Mix Classification after uploading sales data.
-                </td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredStyles.map(s => (
+                  <tr key={s.style} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="p-3 font-mono text-xs font-medium">{s.style}</td>
+                    <td className="p-3"><MixBadge mix={s.style_mix} /></td>
+                    <td className="p-3 text-gray-600">{s.sku_count || "\u2014"}</td>
+                    <td className="p-3 text-gray-600">{s.stats?.avg_weekly_qty ?? "\u2014"}</td>
+                    <td className="p-3 text-gray-600">{s.stats?.weeks_active ?? "\u2014"}</td>
+                    <td className="p-3 text-gray-600">{s.stats?.peak_to_avg != null ? `${s.stats.peak_to_avg}x` : "\u2014"}</td>
+                    <td className="p-3 text-gray-600">{s.stats?.week_presence_pct != null ? `${s.stats.week_presence_pct}%` : "\u2014"}</td>
+                    <td className="p-3">
+                      <button onClick={() => { setOverrideModal({ type: "sku", id: s.style, current: s.style_mix }); setOverrideValue(s.style_mix || "Test"); }}
+                        className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override mix">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredStyles.length === 0 && (
+                  <tr><td colSpan={8} className="p-8 text-center text-gray-400">
+                    {styleSearch ? "No styles match your search." : "No style mix data. Run Style Mix Classification after uploading sales data."}
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -447,47 +554,114 @@ export default function BuyPlanning() {
 
       {/* Attribution Tab */}
       {tab === "attribution" && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <table data-testid="attribution-table" className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3 font-medium text-gray-600">Style</th>
-                <th className="text-left p-3 font-medium text-gray-600">Mix</th>
-                <th className="text-center p-3 font-medium text-gray-600">A-Stores</th>
-                <th className="text-center p-3 font-medium text-gray-600">B-Stores</th>
-                <th className="text-center p-3 font-medium text-gray-600">C-Stores</th>
-                <th className="text-left p-3 font-medium text-gray-600">Coverage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(attribution?.attributions || []).map(a => (
-                <tr key={a.style} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs font-medium">{a.style}</td>
-                  <td className="p-3"><MixBadge mix={a.style_mix} /></td>
-                  {["A", "B", "C"].map(w => (
-                    <td key={w} className="p-3 text-center">
-                      {a.wedge_allocation[w]?.eligible ? (
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">{a.wedge_allocation[w].allocation_pct}%</span>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Attribution Table */}
+            <div className={`${selectedAttr ? "lg:col-span-2" : "lg:col-span-3"} border border-gray-200 rounded-xl overflow-hidden`}>
+              <table data-testid="attribution-table" className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left p-3 font-medium text-gray-600">Style</th>
+                    <th className="text-left p-3 font-medium text-gray-600">Mix</th>
+                    <th className="text-center p-3 font-medium text-gray-600">A-Stores</th>
+                    <th className="text-center p-3 font-medium text-gray-600">B-Stores</th>
+                    <th className="text-center p-3 font-medium text-gray-600">C-Stores</th>
+                    <th className="text-left p-3 font-medium text-gray-600">Coverage</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(attribution?.attributions || []).map(a => (
+                    <tr key={a.style} className={`border-t border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedAttr?.style === a.style ? "bg-blue-50/50" : ""}`}
+                      onClick={() => setSelectedAttr(selectedAttr?.style === a.style ? null : a)}>
+                      <td className="p-3 font-mono text-xs font-medium">{a.style}</td>
+                      <td className="p-3"><MixBadge mix={a.style_mix} /></td>
+                      {["A", "B", "C"].map(w => (
+                        <td key={w} className="p-3 text-center">
+                          {a.wedge_allocation[w]?.eligible ? (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">{a.wedge_allocation[w].allocation_pct}%</span>
+                          ) : (
+                            <span className="text-xs text-gray-300">{"\u2014"}</span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${a.coverage_pct}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-500">{a.coverage_pct}%</span>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <Eye className="h-3.5 w-3.5 text-gray-400" />
+                      </td>
+                    </tr>
                   ))}
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${a.coverage_pct}%` }} />
+                  {(attribution?.attributions || []).length === 0 && (
+                    <tr><td colSpan={7} className="p-8 text-center text-gray-400">No attribution data. Run classifications first.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Detail Panel */}
+            {selectedAttr && (
+              <div data-testid="attribution-detail-panel" className="border border-gray-200 rounded-xl bg-white p-5 space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900">Attribution Detail</h3>
+                  <button onClick={() => setSelectedAttr(null)} className="text-gray-400 hover:text-gray-600 text-xs">Close</button>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Style</span>
+                    <span className="font-mono font-medium">{selectedAttr.style}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Style Mix</span>
+                    <MixBadge mix={selectedAttr.style_mix} />
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">SKU Count</span>
+                    <span className="font-medium">{selectedAttr.sku_count}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Eligible Stores</span>
+                    <span className="font-medium">{selectedAttr.eligible_stores} / {selectedAttr.total_stores}</span>
+                  </div>
+                </div>
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <p className="text-xs font-medium text-gray-600">Wedge Allocation</p>
+                  {["A", "B", "C"].map(w => {
+                    const alloc = selectedAttr.wedge_allocation[w];
+                    const color = w === "A" ? "bg-amber-400" : w === "B" ? "bg-blue-400" : "bg-gray-300";
+                    return (
+                      <div key={w}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-medium">{w}-Stores {alloc?.eligible ? "" : "(not eligible)"}</span>
+                          <span className={alloc?.eligible ? "text-gray-900 font-medium" : "text-gray-300"}>{alloc?.eligible ? `${alloc.allocation_pct}%` : "\u2014"}</span>
+                        </div>
+                        {alloc?.eligible && (
+                          <div className="w-full bg-gray-100 rounded-full h-2">
+                            <div className={`h-2 rounded-full ${color}`} style={{ width: `${alloc.allocation_pct}%` }} />
+                          </div>
+                        )}
+                        {alloc?.eligible && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{alloc.stores} stores allocated</p>
+                        )}
                       </div>
-                      <span className="text-xs text-gray-500">{a.coverage_pct}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(attribution?.attributions || []).length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-gray-400">No attribution data. Run classifications first.</td></tr>
-              )}
-            </tbody>
-          </table>
+                    );
+                  })}
+                </div>
+                <div className="pt-3 border-t border-gray-100">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Coverage</span>
+                    <span className="font-bold text-emerald-700">{selectedAttr.coverage_pct}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -506,61 +680,126 @@ export default function BuyPlanning() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {sellThroughConfigs.map(c => {
-                const isEditing = editingMultipliers[c.style_mix] !== undefined;
-                const mixColors = { Core: "border-emerald-300 bg-emerald-50/30", Fashion: "border-purple-300 bg-purple-50/30", Test: "border-amber-300 bg-amber-50/30" };
-                const mixDesc = { Core: "High-velocity staples with consistent demand", Fashion: "Trend-driven styles with seasonal peaks", Test: "New introductions with limited history" };
-                return (
-                  <div key={c.style_mix} className={`border-2 ${mixColors[c.style_mix] || "border-gray-200"} rounded-xl p-5 space-y-3`}>
-                    <div className="flex items-center justify-between">
-                      <MixBadge mix={c.style_mix} />
-                      {c.is_default && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">DEFAULT</span>}
-                      {!c.is_default && <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">CUSTOM</span>}
-                    </div>
-                    <p className="text-xs text-gray-500">{mixDesc[c.style_mix]}</p>
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-600">Target Multiplier</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          data-testid={`sell-through-input-${c.style_mix.toLowerCase()}`}
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="5"
-                          value={isEditing ? editingMultipliers[c.style_mix] : c.target_multiplier}
-                          onChange={e => setEditingMultipliers(p => ({ ...p, [c.style_mix]: e.target.value }))}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
-                        />
-                        {isEditing && (
-                          <button
-                            data-testid={`save-sell-through-${c.style_mix.toLowerCase()}`}
-                            onClick={() => saveSellThrough(c.style_mix)}
-                            className="p-2 bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C] shrink-0"
-                          >
-                            <Save className="h-4 w-4" />
-                          </button>
-                        )}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left: Multiplier Cards */}
+              <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {sellThroughConfigs.map(c => {
+                  const isEditing = editingMultipliers[c.style_mix] !== undefined;
+                  const currentVal = isEditing ? parseFloat(editingMultipliers[c.style_mix]) || 0 : c.target_multiplier;
+                  const defaultVal = DEFAULTS[c.style_mix] || 1;
+                  const mixColors = { Core: "border-emerald-300 bg-emerald-50/30", Fashion: "border-purple-300 bg-purple-50/30", Test: "border-amber-300 bg-amber-50/30" };
+                  const mixDesc = { Core: "High-velocity staples with consistent demand", Fashion: "Trend-driven styles with seasonal peaks", Test: "New introductions with limited history" };
+                  return (
+                    <div key={c.style_mix} className={`border-2 ${mixColors[c.style_mix] || "border-gray-200"} rounded-xl p-5 space-y-3`}>
+                      <div className="flex items-center justify-between">
+                        <MixBadge mix={c.style_mix} />
+                        <div className="flex items-center gap-1.5">
+                          {currentVal > defaultVal ? (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-medium">
+                              <TrendingUp className="h-3 w-3" /> Aggressive
+                            </span>
+                          ) : currentVal < defaultVal ? (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-medium">
+                              <TrendingDown className="h-3 w-3" /> Conservative
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">
+                              <CheckCircle2 className="h-3 w-3" /> Balanced
+                            </span>
+                          )}
+                          {c.is_default && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">DEFAULT</span>}
+                          {!c.is_default && <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">CUSTOM</span>}
+                        </div>
                       </div>
-                      <p className="text-[10px] text-gray-400">
-                        Buy = {c.target_multiplier}x forecasted demand &minus; SOH
+                      <p className="text-xs text-gray-500">{mixDesc[c.style_mix]}</p>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-gray-600">Target Multiplier</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            data-testid={`sell-through-input-${c.style_mix.toLowerCase()}`}
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="5"
+                            value={isEditing ? editingMultipliers[c.style_mix] : c.target_multiplier}
+                            onChange={e => setEditingMultipliers(p => ({ ...p, [c.style_mix]: e.target.value }))}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
+                          />
+                          {isEditing && (
+                            <button
+                              data-testid={`save-sell-through-${c.style_mix.toLowerCase()}`}
+                              onClick={() => saveSellThrough(c.style_mix)}
+                              className="p-2 bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C] shrink-0"
+                            >
+                              <Save className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-400">
+                          Buy = {c.target_multiplier}x forecasted demand &minus; SOH
+                        </p>
+                      </div>
+                      {c.updated_by && (
+                        <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100">
+                          Last updated by {c.updated_by} {c.updated_at ? `on ${new Date(c.updated_at).toLocaleDateString()}` : ""}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right: Impact Summary */}
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                  <h3 className="text-sm font-bold text-gray-700">Impact Summary</h3>
+                  {sellThroughConfigs.map(c => {
+                    const val = editingMultipliers[c.style_mix] !== undefined ? parseFloat(editingMultipliers[c.style_mix]) || 0 : c.target_multiplier;
+                    const def = DEFAULTS[c.style_mix] || 1;
+                    const isHigh = val > def;
+                    const isLow = val < def;
+                    const impactText = {
+                      Core: isHigh ? "Better availability, higher carrying cost" : isLow ? "Lower stock levels, potential OOS risk" : "Standard approach for high-velocity items",
+                      Fashion: isHigh ? "More markdown risk, better availability" : isLow ? "Lower risk, may miss trend winners" : "Standard approach for seasonal items",
+                      Test: isHigh ? "More test units = higher learning, higher risk" : isLow ? "Cautious testing, limited market learning" : "Standard approach for new items",
+                    };
+                    return (
+                      <div key={c.style_mix} className="p-3 bg-white rounded-lg border border-gray-100">
+                        <div className="flex items-center justify-between mb-1">
+                          <MixBadge mix={c.style_mix} />
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isHigh ? "bg-red-50 text-red-600" : isLow ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>
+                            {isHigh ? "Higher Inventory" : isLow ? "Lower Inventory" : "Balanced"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">{impactText[c.style_mix]}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Example Calculation */}
+                <div data-testid="config-example-calc" className="bg-[#0B2545]/5 rounded-xl p-4 space-y-2">
+                  <h3 className="text-sm font-bold text-gray-700">Example Calculation</h3>
+                  <div className="bg-white rounded-lg p-3 text-xs font-mono space-y-1 border">
+                    <p className="text-gray-500">Forecast: <span className="text-gray-900 font-bold">100 units</span></p>
+                    <p className="text-gray-500">Current Stock: <span className="text-gray-900 font-bold">20 units</span></p>
+                    <p className="text-gray-500">Core Multiplier: <span className="text-gray-900 font-bold">{sellThroughConfigs.find(c => c.style_mix === "Core")?.target_multiplier || 1.2}x</span></p>
+                    <div className="border-t border-dashed border-gray-200 pt-1 mt-1">
+                      <p className="text-emerald-700 font-bold">
+                        Buy Qty = ({sellThroughConfigs.find(c => c.style_mix === "Core")?.target_multiplier || 1.2} x 100) - 20 = {Math.max(0, (sellThroughConfigs.find(c => c.style_mix === "Core")?.target_multiplier || 1.2) * 100 - 20)} units
                       </p>
                     </div>
-                    {c.updated_by && (
-                      <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100">
-                        Last updated by {c.updated_by} {c.updated_at ? `on ${new Date(c.updated_at).toLocaleDateString()}` : ""}
-                      </p>
-                    )}
                   </div>
-                );
-              })}
-            </div>
+                </div>
 
-            <div className="bg-gray-50 rounded-lg p-4 text-xs text-gray-500 space-y-1">
-              <p className="font-medium text-gray-600">How multipliers affect the buy formula:</p>
-              <p><strong>Core (default 1.2x)</strong> &mdash; Overbuy by 20% to prevent stockouts on high-velocity items</p>
-              <p><strong>Fashion (default 0.8x)</strong> &mdash; Conservative buy to manage markdown risk on trend items</p>
-              <p><strong>Test (default 0.4x)</strong> &mdash; Minimal investment for unproven styles</p>
+                {/* Info */}
+                <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500 space-y-1">
+                  <p className="font-medium text-gray-600">How multipliers work:</p>
+                  <p><strong>Core (1.2x)</strong> &mdash; Overbuy 20% to prevent stockouts</p>
+                  <p><strong>Fashion (0.8x)</strong> &mdash; Conservative to manage markdown risk</p>
+                  <p><strong>Test (0.4x)</strong> &mdash; Minimal investment for unproven styles</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
