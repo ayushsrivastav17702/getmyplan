@@ -3,33 +3,30 @@
 ## Architecture
 React 19 + Tailwind + Chart.js | FastAPI + MongoDB + Redis | JWT + MFA + Google OAuth
 
-## Buy Planning Module (Phase 1-3 Complete)
+## Buy Planning Module (Complete — Phases 1-3 + B/C/F)
 
 ### Phase 1: Store Wedge + Style Mix (iter 95)
-- Store Wedge: A (top 80% rev), B (next 15%), C (bottom 5%)
-- Style Mix: Core (>5/wk + >80% presence), Fashion (peak:avg >3x), Test (<8wk or <2/wk)
-- Assortment Matrix: A=Full, B=Standard, C=Core-only
-
 ### Phase 2: Buy Formula + Display Minimums (iter 96)
-- Display minimums config: category × wedge (e.g. Apparel/A = 4×2=8 units)
-- Full formula: MAX(sell_through × demand - SOH, display_min × stores, safety_stock)
-- Sell-through targets: Core=1.2, Fashion=0.8, Test=0.4 (configurable)
-- Binding constraint tracking (demand/display_min/safety_stock)
-
 ### Phase 3: DNA Tagging + Attribution (iter 96)
-- Auto DNA: flow_rank (Hero/Core/Fill-in by revenue), lifecycle_stage (Launch/Peak/Decline/Exit)
-- Single SKU + bulk style tagging endpoints
-- Attribution: Core→ALL stores, Fashion→A+B, Test→A only
 
-### Frontend: /buy-planning (6 tabs)
-- Assortment Matrix, Buy Plan, Store Wedge, Style Mix, DNA Tags, Attribution
+### Feature B: Manual Overrides (iter 97)
+- Store wedge override: POST/DELETE with audit trail
+- Style mix override: POST/DELETE with audit trail
+- Override history endpoint, manual_override flag skips auto-refresh
 
-## Super Admin Suite (7 pages, iters 86-94)
-- Tenant/User CRUD, Analytics, Feature Flags, Global Config, Audit Trail, IP Whitelisting
+### Feature C: CSV Export (iter 97)
+- GET /buy-planning/buy-formula/export/csv — full buy plan with 19 columns
+- Includes SKU, Style, Category, Mix, ROS, SOH, Demand, Display Min, Safety, Buy Qty, Value, Constraint, DNA
 
-## Credentials
-- admin@demo.com / demo1234 (super_admin, tenant: production)
+### Feature F: Weekly Auto-Refresh (iter 97)
+- asyncio scheduler runs Sundays 2 AM UTC
+- Reclassifies store wedges (skips manual overrides)
+- Integrated into server.py startup
+
+## Super Admin Suite (7 pages, iter 86-94)
+## Security: JWT + MFA + Google OAuth + IP whitelisting + Anomaly Detection
+## Credentials: admin@demo.com / demo1234 (super_admin, production)
 
 ## Remaining Backlog
 - P2: Payment integration (Stripe/Razorpay)
-- P2: Full SAML/OIDC SSO (Okta, Azure AD)
+- P2: Full SAML/OIDC SSO
