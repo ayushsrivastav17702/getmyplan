@@ -3,7 +3,7 @@ import axios from "axios";
 import { API } from "../App";
 import { toast } from "sonner";
 import {
-  BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2,
+  BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2, Settings, RotateCcw, Save,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -40,9 +40,11 @@ export default function BuyPlanning() {
   const [dnaTags, setDnaTags] = useState(null);
   const [attribution, setAttribution] = useState(null);
   const [displayMins, setDisplayMins] = useState([]);
+  const [sellThroughConfigs, setSellThroughConfigs] = useState([]);
+  const [editingMultipliers, setEditingMultipliers] = useState({});
   const [loading, setLoading] = useState({});
   const [tab, setTab] = useState("overview");
-  const [overrideModal, setOverrideModal] = useState(null); // { type: 'store'|'sku', id, current }
+  const [overrideModal, setOverrideModal] = useState(null);
   const [overrideValue, setOverrideValue] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
 
@@ -57,16 +59,19 @@ export default function BuyPlanning() {
       setMix(m.data);
       setMatrix(mx.data);
       // Fetch Phase 2+3 data
-      const [bp, dna, attr, dm] = await Promise.all([
+      const [bp, dna, attr, dm, stc] = await Promise.all([
         axios.post(`${API}/buy-planning/buy-formula/calculate`, { cover_days: 30, safety_days: 7 }).catch(() => ({ data: null })),
         axios.get(`${API}/buy-planning/dna-tags`).catch(() => ({ data: { styles: [] } })),
         axios.get(`${API}/buy-planning/attribution/matrix`).catch(() => ({ data: { attributions: [] } })),
         axios.get(`${API}/buy-planning/display-minimums`).catch(() => ({ data: { configs: [] } })),
+        axios.get(`${API}/buy-planning/sell-through-config`).catch(() => ({ data: { configs: [] } })),
       ]);
       setBuyPlan(bp.data);
       setDnaTags(dna.data);
       setAttribution(attr.data);
       setDisplayMins(dm.data?.configs || []);
+      setSellThroughConfigs(stc.data?.configs || []);
+      setEditingMultipliers({});
     } catch {}
   }, []);
 
@@ -111,6 +116,25 @@ export default function BuyPlanning() {
       a.click(); window.URL.revokeObjectURL(url);
       toast.success("Buy plan exported to CSV");
     } catch { toast.error("Export failed"); }
+  };
+
+  const saveSellThrough = async (styleMix) => {
+    const val = parseFloat(editingMultipliers[styleMix]);
+    if (isNaN(val) || val < 0 || val > 5) { toast.error("Multiplier must be between 0 and 5"); return; }
+    try {
+      await axios.put(`${API}/buy-planning/sell-through-config`, { style_mix: styleMix, target_multiplier: val });
+      toast.success(`${styleMix} multiplier updated to ${val}`);
+      setEditingMultipliers(p => { const n = { ...p }; delete n[styleMix]; return n; });
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Update failed"); }
+  };
+
+  const resetSellThrough = async () => {
+    try {
+      await axios.post(`${API}/buy-planning/sell-through-config/reset`);
+      toast.success("Sell-through targets reset to defaults");
+      fetchAll();
+    } catch { toast.error("Reset failed"); }
   };
 
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
@@ -191,6 +215,7 @@ export default function BuyPlanning() {
           { id: "styles", label: "Style Mix", icon: Tag },
           { id: "dna", label: "DNA Tags", icon: Zap },
           { id: "attribution", label: "Attribution", icon: Grid3X3 },
+          { id: "config", label: "Config", icon: Settings },
         ].map(t => (
           <button
             key={t.id}
@@ -463,6 +488,81 @@ export default function BuyPlanning() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Config Tab: Sell-Through Targets */}
+      {tab === "config" && (
+        <div data-testid="sell-through-config-panel" className="space-y-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Sell-Through Targets</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Configure target sell-through multipliers per style mix used in the buy formula</p>
+              </div>
+              <button data-testid="reset-sell-through-btn" onClick={resetSellThrough}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">
+                <RotateCcw className="h-3.5 w-3.5" /> Reset Defaults
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {sellThroughConfigs.map(c => {
+                const isEditing = editingMultipliers[c.style_mix] !== undefined;
+                const mixColors = { Core: "border-emerald-300 bg-emerald-50/30", Fashion: "border-purple-300 bg-purple-50/30", Test: "border-amber-300 bg-amber-50/30" };
+                const mixDesc = { Core: "High-velocity staples with consistent demand", Fashion: "Trend-driven styles with seasonal peaks", Test: "New introductions with limited history" };
+                return (
+                  <div key={c.style_mix} className={`border-2 ${mixColors[c.style_mix] || "border-gray-200"} rounded-xl p-5 space-y-3`}>
+                    <div className="flex items-center justify-between">
+                      <MixBadge mix={c.style_mix} />
+                      {c.is_default && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">DEFAULT</span>}
+                      {!c.is_default && <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">CUSTOM</span>}
+                    </div>
+                    <p className="text-xs text-gray-500">{mixDesc[c.style_mix]}</p>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-600">Target Multiplier</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          data-testid={`sell-through-input-${c.style_mix.toLowerCase()}`}
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="5"
+                          value={isEditing ? editingMultipliers[c.style_mix] : c.target_multiplier}
+                          onChange={e => setEditingMultipliers(p => ({ ...p, [c.style_mix]: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
+                        />
+                        {isEditing && (
+                          <button
+                            data-testid={`save-sell-through-${c.style_mix.toLowerCase()}`}
+                            onClick={() => saveSellThrough(c.style_mix)}
+                            className="p-2 bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C] shrink-0"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        Buy = {c.target_multiplier}x forecasted demand &minus; SOH
+                      </p>
+                    </div>
+                    {c.updated_by && (
+                      <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-100">
+                        Last updated by {c.updated_by} {c.updated_at ? `on ${new Date(c.updated_at).toLocaleDateString()}` : ""}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 text-xs text-gray-500 space-y-1">
+              <p className="font-medium text-gray-600">How multipliers affect the buy formula:</p>
+              <p><strong>Core (default 1.2x)</strong> &mdash; Overbuy by 20% to prevent stockouts on high-velocity items</p>
+              <p><strong>Fashion (default 0.8x)</strong> &mdash; Conservative buy to manage markdown risk on trend items</p>
+              <p><strong>Test (default 0.4x)</strong> &mdash; Minimal investment for unproven styles</p>
+            </div>
+          </div>
         </div>
       )}
 
