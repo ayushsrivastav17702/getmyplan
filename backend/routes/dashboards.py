@@ -40,14 +40,20 @@ async def get_readiness(user: dict = Depends(_dep_user)):
 
     checks = []
 
+    # Use estimated counts for large collections (instant, no full scan)
+    sales_count = await db.daily_sales.estimated_document_count()
+
+    # Get store and SKU counts from master tables (small, fast)
+    total_stores = await db.store_master.estimated_document_count()
+    if total_stores == 0:
+        total_stores = len(await db.daily_sales.distinct("store_code"))
+
+    total_skus = await db.sku_ean_master.estimated_document_count()
+    if total_skus == 0:
+        total_skus = len(await db.daily_sales.distinct("sku"))
+
     # 1. Store Wedge Classification
-    store_wedge_count = await db.store_wedge_results.count_documents(tmatch)
-    total_stores_doc = await db.daily_sales.aggregate([
-        {"$match": tmatch},
-        {"$group": {"_id": "$store_code"}},
-        {"$count": "total"},
-    ]).to_list(1)
-    total_stores = total_stores_doc[0]["total"] if total_stores_doc else 0
+    store_wedge_count = await db.store_wedge_results.estimated_document_count()
     checks.append({
         "id": "store_wedge",
         "label": "Store Wedge Classification",
@@ -60,13 +66,7 @@ async def get_readiness(user: dict = Depends(_dep_user)):
     })
 
     # 2. Style Mix Tagging
-    style_mix_count = await db.style_mix_results.count_documents(tmatch)
-    total_skus_doc = await db.daily_sales.aggregate([
-        {"$match": tmatch},
-        {"$group": {"_id": "$sku"}},
-        {"$count": "total"},
-    ]).to_list(1)
-    total_skus = total_skus_doc[0]["total"] if total_skus_doc else 0
+    style_mix_count = await db.style_mix_results.estimated_document_count()
     checks.append({
         "id": "style_mix",
         "label": "Style Mix Tagging",
@@ -79,7 +79,6 @@ async def get_readiness(user: dict = Depends(_dep_user)):
     })
 
     # 3. Daily Sales Data
-    sales_count = await db.daily_sales.count_documents(tmatch)
     checks.append({
         "id": "daily_sales",
         "label": "Daily Sales Data",
@@ -92,7 +91,7 @@ async def get_readiness(user: dict = Depends(_dep_user)):
     })
 
     # 4. SKU Master
-    sku_count = await db.sku_master.count_documents(tmatch)
+    sku_count = await db.sku_ean_master.estimated_document_count()
     checks.append({
         "id": "sku_master",
         "label": "SKU Master",
@@ -118,7 +117,7 @@ async def get_readiness(user: dict = Depends(_dep_user)):
     })
 
     # 6. Inventory Data
-    inv_count = await db.store_inventory.count_documents(tmatch)
+    inv_count = await db.store_inventory.estimated_document_count()
     checks.append({
         "id": "inventory",
         "label": "Store Inventory",
@@ -131,7 +130,7 @@ async def get_readiness(user: dict = Depends(_dep_user)):
     })
 
     # 7. Display Minimums
-    dm_count = await db.display_minimums.count_documents(tmatch)
+    dm_count = await db.display_minimums.estimated_document_count()
     checks.append({
         "id": "display_minimums",
         "label": "Display Minimums",
@@ -144,7 +143,7 @@ async def get_readiness(user: dict = Depends(_dep_user)):
     })
 
     # 8. Promotions
-    promo_count = await db.promotions.count_documents(tmatch)
+    promo_count = await db.promotions.estimated_document_count()
     checks.append({
         "id": "promotions",
         "label": "Promotions Calendar",

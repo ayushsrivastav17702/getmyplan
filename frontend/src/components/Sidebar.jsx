@@ -131,8 +131,12 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
     try { return JSON.parse(localStorage.getItem("sidebarSections")) || {}; }
     catch { return {}; }
   });
-  const [moduleConfig, setModuleConfig] = useState(null);
-  const [tenantModules, setTenantModules] = useState(null);
+  const [moduleConfig, setModuleConfig] = useState(() => {
+    try { const c = sessionStorage.getItem("_mc"); return c ? JSON.parse(c) : null; } catch { return null; }
+  });
+  const [tenantModules, setTenantModules] = useState(() => {
+    try { const c = sessionStorage.getItem("_tm"); return c ? JSON.parse(c) : null; } catch { return null; }
+  });
   const [alertCount, setAlertCount] = useState(0);
 
   const primaryColor = branding?.primary_color || "#0176D3";
@@ -140,14 +144,22 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
   const isSuperAdmin = user?.role === "super_admin";
 
   useEffect(() => {
-    axios.get(`${API}/config`).then(r => setModuleConfig(r.data)).catch(() => {});
-    // Fetch tenant module configuration for sidebar visibility
-    axios.get(`${API}/tenant-admin/modules`).then(r => {
-      const mods = r.data?.modules || [];
-      const modMap = {};
-      mods.forEach(m => { modMap[m.module_id] = m.enabled; });
-      setTenantModules(modMap);
-    }).catch(() => {});
+    // Only fetch if not cached in session
+    if (!moduleConfig) {
+      axios.get(`${API}/config`).then(r => {
+        setModuleConfig(r.data);
+        try { sessionStorage.setItem("_mc", JSON.stringify(r.data)); } catch {}
+      }).catch(() => {});
+    }
+    if (!tenantModules) {
+      axios.get(`${API}/tenant-admin/modules`).then(r => {
+        const mods = r.data?.modules || [];
+        const modMap = {};
+        mods.forEach(m => { modMap[m.module_id] = m.enabled; });
+        setTenantModules(modMap);
+        try { sessionStorage.setItem("_tm", JSON.stringify(modMap)); } catch {}
+      }).catch(() => {});
+    }
     if (isSuperAdmin) {
       axios.get(`${API}/admin/platform/alerts/unread-count`).then(r => setAlertCount(r.data.count || 0)).catch(() => {});
     }

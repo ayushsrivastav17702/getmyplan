@@ -133,69 +133,65 @@ async def category_health(user: dict = Depends(_dep_user)):
         # Fallback: infer from SKU patterns
         categories = ["Apparel", "Footwear", "Accessories"]
 
-    # Get recent sales (last 30 days)
+    # Get recent sales aggregated by SKU prefix (style) — single efficient pipeline
     cutoff_30d = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     sales_pipeline = [
         {"$match": {**tmatch, "day": {"$gte": cutoff_30d}}},
+        {"$addFields": {
+            "style_prefix": {"$concat": [
+                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 0]}, "-",
+                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 1]}, "-",
+                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 2]},
+            ]}
+        }},
         {"$group": {
-            "_id": "$sku",
+            "_id": "$style_prefix",
             "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
             "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
-            "days_sold": {"$addToSet": "$day"},
+            "unique_skus": {"$addToSet": "$sku"},
         }},
     ]
-    sku_sales = await db.daily_sales.aggregate(sales_pipeline).to_list(5000)
-    sku_sales_map = {s["_id"]: s for s in sku_sales}
+    style_sales = await db.daily_sales.aggregate(sales_pipeline).to_list(500)
 
-    # Map SKUs to categories via style_master (extract style from SKU: STYLE-TS-001-WHT-L -> STYLE-TS-001)
+    # Map style prefix -> category
     style_cat_map = {s["style_code"]: s["category"] for s in styles}
 
-    def sku_to_category(sku):
-        parts = sku.split("-")
-        if len(parts) >= 3:
-            style_prefix = "-".join(parts[:3])
-            return style_cat_map.get(style_prefix, "Other")
-        return "Other"
-
-    # Get all distinct SKUs from sales
-    all_skus = await db.daily_sales.distinct("sku", tmatch)
-
-    # Get inventory
-    inv_data = await db.store_inventory.find(tmatch, {"_id": 0, "sku": 1, "soh": 1}).to_list(10000)
+    # Get inventory aggregated by style prefix
+    inv_pipeline = [
+        {"$match": tmatch},
+        {"$addFields": {
+            "style_prefix": {"$concat": [
+                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 0]}, "-",
+                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 1]}, "-",
+                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 2]},
+            ]}
+        }},
+        {"$group": {"_id": "$style_prefix", "total_soh": {"$sum": "$soh"}}},
+    ]
+    inv_by_style = await db.store_inventory.aggregate(inv_pipeline).to_list(500)
+    inv_map = {i["_id"]: i["total_soh"] for i in inv_by_style}
 
     # Build per-category metrics
     cat_metrics = {}
     for cat in categories:
         cat_metrics[cat] = {
-            "category": cat,
-            "total_skus": 0,
-            "active_skus": 0,
-            "total_revenue": 0,
-            "total_qty": 0,
-            "total_soh": 0,
-            "avg_doh": 0,
+            "category": cat, "total_skus": 0, "active_skus": 0,
+            "total_revenue": 0, "total_qty": 0, "total_soh": 0,
         }
 
-    # Count SKUs per category using style prefix extraction
-    for sku in all_skus:
-        cat = sku_to_category(sku)
+    for ss in style_sales:
+        prefix = ss["_id"]
+        cat = style_cat_map.get(prefix, "Other")
         if cat not in cat_metrics:
             cat_metrics[cat] = {
                 "category": cat, "total_skus": 0, "active_skus": 0,
-                "total_revenue": 0, "total_qty": 0, "total_soh": 0, "avg_doh": 0,
+                "total_revenue": 0, "total_qty": 0, "total_soh": 0,
             }
-        cat_metrics[cat]["total_skus"] += 1
-        if sku in sku_sales_map:
-            cat_metrics[cat]["active_skus"] += 1
-            cat_metrics[cat]["total_revenue"] += sku_sales_map[sku]["total_revenue"]
-            cat_metrics[cat]["total_qty"] += sku_sales_map[sku]["total_qty"]
-
-    # Aggregate SOH per category
-    for inv in inv_data:
-        sku = inv.get("sku", "")
-        cat = sku_to_category(sku)
-        if cat in cat_metrics:
-            cat_metrics[cat]["total_soh"] += inv.get("soh", 0)
+        cat_metrics[cat]["total_skus"] += len(ss["unique_skus"])
+        cat_metrics[cat]["active_skus"] += len(ss["unique_skus"])
+        cat_metrics[cat]["total_revenue"] += ss["total_revenue"]
+        cat_metrics[cat]["total_qty"] += ss["total_qty"]
+        cat_metrics[cat]["total_soh"] += inv_map.get(prefix, 0)
 
     # Calculate derived metrics
     results = []
@@ -264,10 +260,10 @@ async def roi_dashboard(user: dict = Depends(_dep_user)):
     ]
     monthly_revenue = await db.daily_sales.aggregate(revenue_pipeline).to_list(12)
 
-    # Inventory stats
-    inv_count = await db.store_inventory.count_documents(tmatch)
-    total_stores = await db.store_master.count_documents(tmatch)
-    total_skus = await db.sku_ean_master.count_documents(tmatch)
+    # Inventory stats — use estimated counts (instant)
+    inv_count = await db.store_inventory.estimated_document_count()
+    total_stores = await db.store_master.estimated_document_count()
+    total_skus = await db.sku_ean_master.estimated_document_count()
 
     # Approval efficiency (avg time from draft to approved)
     approval_audits = await db.buy_planning_approval_audit.find(
