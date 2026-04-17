@@ -1,0 +1,105 @@
+{
+  "summary": "Iteration 95: Buy Planning Phase 1 - Store Wedge Classification + Style Mix Tagging. All 17 backend tests passed. Frontend verified: /buy-planning page loads with KPI cards, classification buttons, tabs (Assortment Matrix, Store Wedge, Style Mix), and sidebar link.",
+
+  "test_case_matrix": {
+    "BACKEND_AUTH_TESTS": {
+      "TEST_01_store_wedge_get_without_auth": {"status": "PASS", "notes": "Returns 400 without auth token"},
+      "TEST_02_store_wedge_classify_without_auth": {"status": "PASS", "notes": "Returns 400 without auth token"},
+      "TEST_03_style_mix_get_without_auth": {"status": "PASS", "notes": "Returns 400 without auth token"},
+      "TEST_04_style_mix_classify_without_auth": {"status": "PASS", "notes": "Returns 400 without auth token"},
+      "TEST_05_assortment_matrix_without_auth": {"status": "PASS", "notes": "Returns 400 without auth token"}
+    },
+    "BACKEND_STORE_WEDGE": {
+      "TEST_06_get_store_wedge_returns_stores": {"status": "PASS", "notes": "Returns stores array with summary (A/B/C counts)"},
+      "TEST_07_store_wedge_has_wedge_class": {"status": "PASS", "notes": "Stores have valid wedge_class (A/B/C)"},
+      "TEST_08_classify_store_wedge": {"status": "PASS", "notes": "POST /classify returns success with summary"},
+      "TEST_09_store_wedge_a_stores_top_80_percent": {"status": "PASS", "notes": "Distribution: A=17, B=9, C=4 (30 total)"}
+    },
+    "BACKEND_STYLE_MIX": {
+      "TEST_10_get_style_mix_returns_styles": {"status": "PASS", "notes": "Returns styles array with summary (Core/Fashion/Test)"},
+      "TEST_11_style_mix_has_stats": {"status": "PASS", "notes": "Styles have stats (avg_weekly_qty, weeks_active, peak_to_avg)"},
+      "TEST_12_classify_style_mix": {"status": "PASS", "notes": "POST /classify returns success with date_range and total_weeks"}
+    },
+    "BACKEND_ASSORTMENT_MATRIX": {
+      "TEST_13_get_assortment_matrix": {"status": "PASS", "notes": "Returns matrix with A/B/C wedges"},
+      "TEST_14_assortment_a_full_b_standard_c_core": {"status": "PASS", "notes": "A=Full, B=Standard, C=Efficiency mapping correct"},
+      "TEST_15_assortment_style_breakdown": {"status": "PASS", "notes": "Each wedge has style_breakdown with Core/Fashion/Test counts"}
+    },
+    "BACKEND_DATA_INTEGRITY": {
+      "TEST_16_store_wedge_total_matches_summary": {"status": "PASS", "notes": "Summary A+B+C matches classified stores"},
+      "TEST_17_style_mix_total_matches_summary": {"status": "PASS", "notes": "Summary Core+Fashion+Test matches total_styles"}
+    },
+    "FRONTEND_BUY_PLANNING_PAGE": {
+      "STEP_01_page_loads": {"status": "PASS", "notes": "Buy Planning page loads with title"},
+      "STEP_02_kpi_cards": {"status": "PASS", "notes": "6 KPI cards: A-Stores(17), B-Stores(9), C-Stores(4), Core(20), Fashion(0), Test(0)"},
+      "STEP_03_classification_buttons": {"status": "PASS", "notes": "Both 'Run Store Wedge Classification' and 'Run Style Mix Classification' buttons present"},
+      "STEP_04_tabs": {"status": "PASS", "notes": "3 tabs: Assortment Matrix, Store Wedge, Style Mix"},
+      "STEP_05_assortment_matrix_tab": {"status": "PASS", "notes": "Shows A/B/C cards with store counts and style breakdowns"},
+      "STEP_06_store_wedge_tab": {"status": "PASS", "notes": "Table with columns: Store, Name, City, Channel, Area, Wedge, Revenue"},
+      "STEP_07_style_mix_tab": {"status": "PASS", "notes": "Table with columns: Style, Mix, SKUs, Avg/Wk, Weeks, Peak:Avg, Presence"},
+      "STEP_08_sidebar_link": {"status": "PASS", "notes": "Buy Planning link in Operations section with data-testid='nav-buy-planning'"},
+      "STEP_09_wedge_classification_button": {"status": "PASS", "notes": "Button triggers classification and shows success toast"},
+      "STEP_10_mix_classification_button": {"status": "PASS", "notes": "Button triggers classification and shows success toast"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "17/17 PASS",
+    "FRONTEND_STEPS": "10/10 PASS",
+    "TOTAL": "27/27 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Buy Planning", "issues": ["All styles classify as Core (20 Core, 0 Fashion, 0 Test) - expected behavior per agent context: sample data has uniform weekly sales"]}
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_buy_planning_iter95.py",
+    "/app/test_reports/pytest/pytest_results_iter95.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Store Wedge classification uses cumulative revenue share: A=top 80%, B=next 15%, C=bottom 5%",
+    "Style Mix classification: Core=avg>5/wk + >80% presence, Fashion=peak/avg>3x + <26wk, Test=<8wk or <2/wk",
+    "Assortment Matrix correctly maps: A=Full (Core+Fashion+Test), B=Standard (Core+Fashion), C=Efficiency (Core only)",
+    "All endpoints properly require authentication (return 400 without token)",
+    "Frontend has proper data-testid attributes for testing",
+    "_tenant_match() helper handles sample data without tenant_id field"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_buy_planning_iter95.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (10/10 steps passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "No seed data created. Tests used existing sample data (30 stores, 173 SKUs, 185k daily sales records).",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 95 verified Buy Planning Phase 1 (Store Wedge + Style Mix). Backend endpoints: GET/POST /api/buy-planning/store-wedge, GET/POST /api/buy-planning/style-mix, GET /api/buy-planning/assortment-matrix. Current data state: 17 A-stores, 9 B-stores, 4 C-stores, 20 Core styles, 0 Fashion, 0 Test. All styles classify as Core because sample data has uniform weekly sales (expected). Frontend route: /buy-planning with tabs for Assortment Matrix, Store Wedge, Style Mix. Test file: test_buy_planning_iter95.py.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

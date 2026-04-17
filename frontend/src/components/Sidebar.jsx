@@ -52,6 +52,7 @@ const NAV_GROUPS = [
       { path: "/planogram",     label: "Planogram Fill Rate",  icon: LayoutIcon,      permission: "analytics.planogram.view" },
       { path: "/warehouse",     label: "Warehouse",            icon: Warehouse,       permission: "dashboard.warehouse.view" },
       { path: "/buy-plan",      label: "Buy Plan Generator",   icon: FileSpreadsheet, permission: null },
+      { path: "/buy-planning",  label: "Buy Planning",         icon: BarChart3,       permission: null },
     ],
   },
   {
