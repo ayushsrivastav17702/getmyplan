@@ -8,7 +8,7 @@ import {
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
-  HelpCircle, FileText, Flag
+  HelpCircle, FileText, Flag, Blocks
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -62,6 +62,7 @@ const NAV_GROUPS = [
       { path: "/config",        label: "Configuration",        icon: Settings,        permission: "data.config.manage" },
       { path: "/users",         label: "User Management",      icon: Users,           permission: "users.list.view" },
       { path: "/tenant-admin",  label: "Tenant Admin",         icon: Shield,          permission: "settings.tenant.view" },
+      { path: "/admin/modules", label: "Module Config",        icon: Blocks,          permission: "settings.tenant.view" },
       { path: "/plan-upgrade",  label: "Plan & Billing",       icon: Crown,           permission: null },
       { path: "/invoices",      label: "Invoices",             icon: FileSpreadsheet, permission: null },
       { path: "/scheduled-jobs",label: "Scheduled Jobs",       icon: Clock,           permission: null },
@@ -81,6 +82,7 @@ const NAV_GROUPS = [
       { path: "/admin/analytics", label: "Platform Analytics", icon: BarChart3,       permission: null, superAdminOnly: true },
       { path: "/admin/feature-flags", label: "Feature Flags",  icon: Flag,            permission: null, superAdminOnly: true },
       { path: "/admin/global-config", label: "Global Config",   icon: Settings,        permission: null, superAdminOnly: true },
+      { path: "/admin/modules", label: "Module Config",  icon: Blocks,          permission: null, superAdminOnly: true },
       { path: "/admin/audit-logs", label: "Audit Trail",       icon: FileText,        permission: null, superAdminOnly: true },
     ],
   },

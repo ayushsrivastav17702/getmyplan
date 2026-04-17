@@ -61,6 +61,7 @@ const AuditLogs = lazy(() => import("./pages/admin/AuditLogs"));
 const PlatformAnalytics = lazy(() => import("./pages/admin/PlatformAnalytics"));
 const FeatureFlags = lazy(() => import("./pages/admin/FeatureFlags"));
 const GlobalConfig = lazy(() => import("./pages/admin/GlobalConfig"));
+const ModuleConfiguration = lazy(() => import("./pages/admin/ModuleConfiguration"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -272,6 +273,7 @@ const AuthenticatedApp = () => {
             <Route path="/admin/analytics" element={<PlatformAnalytics />} />
             <Route path="/admin/feature-flags" element={<FeatureFlags />} />
             <Route path="/admin/global-config" element={<GlobalConfig />} />
+            <Route path="/admin/modules" element={<ModuleConfiguration />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}

@@ -621,3 +621,116 @@ async def cancel_invitation(email: str, current_user: dict = Depends(require_rol
 
     await _log_audit(current_user["email"], ctx.tenant_id, "CANCEL_INVITE", {"email": email})
     return {"message": f"Invitation for {email} cancelled"}
+
+
+# ──────────── MODULE ACCESS MANAGEMENT ────────────
+
+class ModuleAccessItem(BaseModel):
+    module_id: str
+    access: str  # full, read_only, none
+
+class ModuleAccessUpdate(BaseModel):
+    modules: List[ModuleAccessItem]
+
+class ScopeUpdate(BaseModel):
+    categories: Optional[List[str]] = None
+    regions: Optional[List[str]] = None
+    store_wedges: Optional[List[str]] = None
+    stores: Optional[List[str]] = None
+
+
+@user_router.get("/{email}/module-access")
+async def get_user_module_access(email: str, current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Get a user's module access permissions."""
+    ctx = tenant_context.get()
+    if not ctx:
+        raise HTTPException(400, "Tenant context required")
+    shared = get_shared_db()
+
+    user = await shared.users.find_one({"email": email}, {"_id": 0, "module_access": 1, "scope": 1})
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    return {
+        "success": True,
+        "email": email,
+        "module_access": user.get("module_access", {}),
+        "scope": user.get("scope", {}),
+    }
+
+
+@user_router.put("/{email}/module-access")
+async def update_user_module_access(email: str, body: ModuleAccessUpdate,
+                                    current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Update a user's module access permissions."""
+    ctx = tenant_context.get()
+    if not ctx:
+        raise HTTPException(400, "Tenant context required")
+    shared = get_shared_db()
+
+    # Verify user exists and belongs to this tenant
+    mapping = await shared.user_tenants.find_one({"email": email, "tenant_id": ctx.tenant_id, "is_active": True})
+    if not mapping:
+        raise HTTPException(404, f"User '{email}' not found in this tenant")
+
+    # Build module_access dict
+    access_dict = {}
+    for item in body.modules:
+        if item.access == "full":
+            actions = ["view", "edit", "approve"]
+        elif item.access == "read_only":
+            actions = ["view"]
+        else:
+            actions = []
+        access_dict[item.module_id] = {"access": item.access, "actions": actions}
+
+    result = await shared.users.update_one(
+        {"email": email},
+        {"$set": {"module_access": access_dict}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(404, "User not found")
+
+    await _log_audit(current_user["email"], ctx.tenant_id, "UPDATE_MODULE_ACCESS",
+                     {"target_email": email, "module_access": access_dict})
+
+    return {"success": True, "message": f"Module access updated for {email}"}
+
+
+@user_router.put("/{email}/scope")
+async def update_user_scope(email: str, body: ScopeUpdate,
+                            current_user: dict = Depends(require_role(["admin", "super_admin"]))):
+    """Update a user's data scope restrictions."""
+    ctx = tenant_context.get()
+    if not ctx:
+        raise HTTPException(400, "Tenant context required")
+    shared = get_shared_db()
+
+    # Verify user exists
+    mapping = await shared.user_tenants.find_one({"email": email, "tenant_id": ctx.tenant_id, "is_active": True})
+    if not mapping:
+        raise HTTPException(404, f"User '{email}' not found in this tenant")
+
+    scope_dict = {}
+    if body.categories is not None:
+        scope_dict["categories"] = body.categories
+    if body.regions is not None:
+        scope_dict["regions"] = body.regions
+    if body.store_wedges is not None:
+        scope_dict["store_wedges"] = body.store_wedges
+    if body.stores is not None:
+        scope_dict["stores"] = body.stores
+
+    result = await shared.users.update_one(
+        {"email": email},
+        {"$set": {"scope": scope_dict}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(404, "User not found")
+
+    await _log_audit(current_user["email"], ctx.tenant_id, "UPDATE_SCOPE",
+                     {"target_email": email, "scope": scope_dict})
+
+    return {"success": True, "message": f"Data scope updated for {email}"}
