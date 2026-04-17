@@ -1,0 +1,143 @@
+{
+  "summary": "Iteration 103: Multi-Level Approval Workflow - All backend (26/26) and frontend tests passed. Backend: Full approval chain (draft→submitted→category_approved→senior_approved→head_approved→ordered), reject/request_changes with comment validation, approval history endpoint. Frontend: Approval workflow panel, 6-stage timeline, action buttons based on status, history modal with action timeline, rejection banner.",
+
+  "test_case_matrix": {
+    "BACKEND_APPROVAL_CHAIN": {
+      "TEST_01_submit_draft_to_submitted": {"status": "PASS", "notes": "POST /api/buy-planning/buy-plans/{id}/approval action=submit moves draft→submitted"},
+      "TEST_02_approve_category": {"status": "PASS", "notes": "action=approve_category moves submitted→category_approved"},
+      "TEST_03_approve_senior": {"status": "PASS", "notes": "action=approve_senior moves category_approved→senior_approved"},
+      "TEST_04_approve_head": {"status": "PASS", "notes": "action=approve_head moves senior_approved→head_approved"},
+      "TEST_05_finance_ack": {"status": "PASS", "notes": "action=finance_ack moves head_approved→ordered"}
+    },
+    "BACKEND_REJECT_REQUEST_CHANGES": {
+      "TEST_06_reject_requires_comment": {"status": "PASS", "notes": "action=reject without comment returns 400"},
+      "TEST_07_reject_with_comment": {"status": "PASS", "notes": "action=reject with comment moves to rejected"},
+      "TEST_08_request_changes_requires_comment": {"status": "PASS", "notes": "action=request_changes without comment returns 400"},
+      "TEST_09_request_changes_with_comment": {"status": "PASS", "notes": "action=request_changes with comment moves back to draft"}
+    },
+    "BACKEND_INVALID_TRANSITIONS": {
+      "TEST_10_invalid_action_from_wrong_status": {"status": "PASS", "notes": "Cannot approve_category from draft returns 400"},
+      "TEST_11_invalid_action_approve_senior_from_submitted": {"status": "PASS", "notes": "Cannot approve_senior from submitted returns 400"},
+      "TEST_12_invalid_action_name": {"status": "PASS", "notes": "Invalid action name returns 400"}
+    },
+    "BACKEND_APPROVAL_HISTORY": {
+      "TEST_13_approval_history": {"status": "PASS", "notes": "GET /api/buy-planning/buy-plans/{id}/approval-history returns ordered list with action, from_status, to_status, performed_by, performed_at"},
+      "TEST_14_approval_history_empty_for_new_plan": {"status": "PASS", "notes": "New plan has empty approval history"},
+      "TEST_15_get_plan_returns_approval_fields": {"status": "PASS", "notes": "GET plan returns approvals, submitted_at/by, category_approved_at/by, etc."}
+    },
+    "BACKEND_E2E_AND_COMPAT": {
+      "TEST_16_full_workflow_e2e": {"status": "PASS", "notes": "Complete workflow draft→submitted→category→senior→head→ordered with 5 history entries"},
+      "TEST_17_backward_compat_approve_endpoint": {"status": "PASS", "notes": "Old POST /approve endpoint still works, sets status to ordered"}
+    },
+    "BACKEND_EDGE_CASES": {
+      "TEST_18_reject_from_category_approved": {"status": "PASS", "notes": "Can reject from category_approved"},
+      "TEST_19_reject_from_senior_approved": {"status": "PASS", "notes": "Can reject from senior_approved"},
+      "TEST_20_reject_from_head_approved": {"status": "PASS", "notes": "Can reject from head_approved"},
+      "TEST_21_cannot_reject_from_draft": {"status": "PASS", "notes": "Cannot reject from draft returns 400"},
+      "TEST_22_request_changes_from_category_approved": {"status": "PASS", "notes": "Can request_changes from category_approved"},
+      "TEST_23_request_changes_from_senior_approved": {"status": "PASS", "notes": "Can request_changes from senior_approved"},
+      "TEST_24_cannot_request_changes_from_head_approved": {"status": "PASS", "notes": "Cannot request_changes from head_approved returns 400"},
+      "TEST_25_invalid_plan_id": {"status": "PASS", "notes": "Invalid plan ID returns 404"},
+      "TEST_26_nonexistent_plan_id": {"status": "PASS", "notes": "Nonexistent plan ID returns 404"}
+    },
+    "FRONTEND_APPROVAL_WORKFLOW_PANEL": {
+      "TEST_27_approval_workflow_panel_visible": {"status": "PASS", "notes": "data-testid=approval-workflow-panel visible for non-ordered/non-rejected plans"},
+      "TEST_28_approval_timeline_visible": {"status": "PASS", "notes": "data-testid=approval-timeline shows 6 stages (Draft, Submitted, Category, Senior, Head, Ordered)"},
+      "TEST_29_approval_comment_input": {"status": "PASS", "notes": "data-testid=approval-comment input present"},
+      "TEST_30_submit_button_for_draft": {"status": "PASS", "notes": "data-testid=approval-action-submit visible for draft plans"}
+    },
+    "FRONTEND_ACTION_BUTTONS": {
+      "TEST_31_category_approval_button": {"status": "PASS", "notes": "data-testid=approval-action-approve_category visible after submit"},
+      "TEST_32_senior_approval_button": {"status": "PASS", "notes": "data-testid=approval-action-approve_senior visible after category approval"},
+      "TEST_33_reject_button": {"status": "PASS", "notes": "Reject button visible with red styling"},
+      "TEST_34_request_changes_button": {"status": "PASS", "notes": "Request Changes button visible with amber styling"}
+    },
+    "FRONTEND_STATUS_BADGE": {
+      "TEST_35_status_badge_draft": {"status": "PASS", "notes": "data-testid=plan-status-badge shows DRAFT with amber styling"},
+      "TEST_36_status_badge_submitted": {"status": "PASS", "notes": "Status badge shows SUBMITTED with blue styling"},
+      "TEST_37_status_badge_category_approved": {"status": "PASS", "notes": "Status badge shows CATEGORY APPROVED with cyan styling"},
+      "TEST_38_status_badge_rejected": {"status": "PASS", "notes": "Status badge shows REJECTED with red styling"}
+    },
+    "FRONTEND_HISTORY_MODAL": {
+      "TEST_39_history_button": {"status": "PASS", "notes": "data-testid=view-history-btn visible and clickable"},
+      "TEST_40_history_modal_opens": {"status": "PASS", "notes": "data-testid=approval-history-modal opens on button click"},
+      "TEST_41_history_shows_actions": {"status": "PASS", "notes": "History modal shows action name, from→to status, user, timestamp"}
+    },
+    "FRONTEND_REJECTION_BANNER": {
+      "TEST_42_rejection_banner": {"status": "PASS", "notes": "Rejected plan shows red banner with rejection reason and user"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "26/26 PASS",
+    "FRONTEND_TESTS": "16/16 PASS",
+    "TOTAL": "42/42 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Buy Plan tab", "issues": ["Minor: React hydration warning about <span> inside <option> - cosmetic only, doesn't affect functionality"]}
+    ]
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_approval_workflow_iter103.py",
+    "/app/test_reports/pytest/pytest_results_iter103.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend approval workflow implementation:",
+    "- APPROVAL_ACTIONS dict defines valid transitions: submit, approve_category, approve_senior, approve_head, finance_ack, reject, request_changes",
+    "- APPROVAL_ROLES dict defines which roles can perform each action (super_admin can do all)",
+    "- Status chain: draft → submitted → category_approved → senior_approved → head_approved → ordered",
+    "- reject/request_changes require comment (validated with 400 error)",
+    "- Approval audit trail stored in buy_planning_approval_audit collection",
+    "- GET /api/buy-planning/buy-plans/{id}/approval-history returns chronological list",
+    "- GET /api/buy-planning/buy-plans/{id} returns approval timestamps and approvals object",
+    "- Old /approve endpoint preserved for backward compatibility (auto-advances to ordered)",
+    "",
+    "Frontend approval workflow UI:",
+    "- Approval workflow panel (approval-workflow-panel) visible for non-ordered/non-rejected plans",
+    "- 6-stage timeline (approval-timeline) with current stage highlighted",
+    "- Action buttons change based on current status (approval-action-{action})",
+    "- Comment input (approval-comment) required for reject/request_changes",
+    "- Status badge (plan-status-badge) with color coding per status",
+    "- History button (view-history-btn) opens modal (approval-history-modal)",
+    "- History modal shows action timeline with from→to status, user, timestamp",
+    "- Rejected plans show red banner with rejection reason"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_approval_workflow_iter103.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (26/26 tests passed)",
+    "frontend": "100% (16/16 tests passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "Multiple test buy plans created during testing. Some plans progressed through approval workflow, some rejected.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 103 verified Multi-Level Approval Workflow. Backend: POST /api/buy-planning/buy-plans/{id}/approval with action parameter (submit, approve_category, approve_senior, approve_head, finance_ack, reject, request_changes). Status chain: draft→submitted→category_approved→senior_approved→head_approved→ordered. Reject/request_changes require comment. GET /api/buy-planning/buy-plans/{id}/approval-history returns audit trail. Frontend: approval-workflow-panel, approval-timeline (6 stages), approval-action-{action} buttons, approval-comment input, plan-status-badge, view-history-btn, approval-history-modal. Rejected plans show banner with reason.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

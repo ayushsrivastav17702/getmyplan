@@ -1338,6 +1338,17 @@ async def get_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
         "notes": doc.get("notes"),
         "approved_at": doc.get("approved_at"),
         "approved_by": doc.get("approved_by"),
+        "approvals": doc.get("approvals", {}),
+        "submitted_at": doc.get("submitted_at"),
+        "submitted_by": doc.get("submitted_by"),
+        "category_approved_at": doc.get("category_approved_at"),
+        "category_approved_by": doc.get("category_approved_by"),
+        "senior_approved_at": doc.get("senior_approved_at"),
+        "senior_approved_by": doc.get("senior_approved_by"),
+        "head_approved_at": doc.get("head_approved_at"),
+        "head_approved_by": doc.get("head_approved_by"),
+        "ordered_at": doc.get("ordered_at"),
+        "ordered_by": doc.get("ordered_by"),
     }
 
 
@@ -1369,9 +1380,117 @@ async def update_plan_item(plan_id: str, body: UpdateItemQtyReq, user: dict = De
     return {"success": True, "item_index": body.item_index, "new_qty": body.new_qty, "total_buy_qty": total_qty}
 
 
+# ═══════════════════════════════════════════════════
+# MULTI-LEVEL APPROVAL WORKFLOW
+# ═══════════════════════════════════════════════════
+
+PLAN_STATUS_CHAIN = ["draft", "submitted", "category_approved", "senior_approved", "head_approved", "ordered"]
+
+APPROVAL_ACTIONS = {
+    "submit":            {"from": ["draft"],              "to": "submitted"},
+    "approve_category":  {"from": ["submitted"],          "to": "category_approved"},
+    "approve_senior":    {"from": ["category_approved"],  "to": "senior_approved"},
+    "approve_head":      {"from": ["senior_approved"],    "to": "head_approved"},
+    "finance_ack":       {"from": ["head_approved"],      "to": "ordered"},
+    "reject":            {"from": ["submitted", "category_approved", "senior_approved", "head_approved"], "to": "rejected"},
+    "request_changes":   {"from": ["submitted", "category_approved", "senior_approved"], "to": "draft"},
+}
+
+APPROVAL_ROLES = {
+    "submit":            ["super_admin", "admin", "junior_planner", "category_planner", "planner"],
+    "approve_category":  ["super_admin", "admin", "category_planner"],
+    "approve_senior":    ["super_admin", "admin", "senior_planner"],
+    "approve_head":      ["super_admin", "admin", "merchandise_head"],
+    "finance_ack":       ["super_admin", "admin", "finance"],
+    "reject":            ["super_admin", "admin", "category_planner", "senior_planner", "merchandise_head"],
+    "request_changes":   ["super_admin", "admin", "category_planner", "senior_planner"],
+}
+
+
+class ApprovalActionReq(BaseModel):
+    action: str
+    comment: Optional[str] = None
+
+
+@router.post("/buy-plans/{plan_id}/approval")
+async def process_plan_approval(plan_id: str, body: ApprovalActionReq, user: dict = Depends(_dep_user)):
+    """Process a multi-level approval action on a buy plan."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    action = body.action
+    role = user.get("role", "viewer")
+
+    if action not in APPROVAL_ACTIONS:
+        raise HTTPException(400, f"Invalid action: {action}. Valid: {', '.join(APPROVAL_ACTIONS.keys())}")
+    if role not in APPROVAL_ROLES.get(action, []):
+        raise HTTPException(403, f"Role '{role}' cannot perform '{action}'")
+
+    try:
+        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
+    except Exception:
+        raise HTTPException(404, "Invalid plan ID")
+    if not doc:
+        raise HTTPException(404, "Plan not found")
+
+    current = doc.get("status", "draft")
+    rule = APPROVAL_ACTIONS[action]
+    if current not in rule["from"]:
+        raise HTTPException(400, f"Cannot '{action}' from status '{current}'. Requires: {rule['from']}")
+
+    if action in ("reject", "request_changes") and not body.comment:
+        raise HTTPException(400, "Comment is required for reject/request_changes")
+
+    new_status = rule["to"]
+    now = datetime.now(timezone.utc).isoformat()
+    email = user.get("email", "")
+
+    update = {
+        "status": new_status,
+        f"approvals.{action}": {"by": email, "at": now, "comment": body.comment},
+    }
+    # Add timestamp fields for each stage
+    stage_ts = {
+        "submit": ("submitted_at", "submitted_by"),
+        "approve_category": ("category_approved_at", "category_approved_by"),
+        "approve_senior": ("senior_approved_at", "senior_approved_by"),
+        "approve_head": ("head_approved_at", "head_approved_by"),
+        "finance_ack": ("ordered_at", "ordered_by"),
+    }
+    if action in stage_ts:
+        ts_field, by_field = stage_ts[action]
+        update[ts_field] = now
+        update[by_field] = email
+
+    await db.buy_plans.update_one({"_id": ObjectId(plan_id)}, {"$set": update})
+
+    # Audit trail
+    await db.buy_planning_approval_audit.insert_one({
+        "tenant_id": tenant_id, "plan_id": plan_id,
+        "action": action, "from_status": current, "to_status": new_status,
+        "comment": body.comment, "performed_by": email, "role": role,
+        "performed_at": now,
+    })
+
+    return {"success": True, "plan_id": plan_id, "action": action, "old_status": current, "new_status": new_status}
+
+
+@router.get("/buy-plans/{plan_id}/approval-history")
+async def get_approval_history(plan_id: str, user: dict = Depends(_dep_user)):
+    """Get the approval audit trail for a plan."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    entries = []
+    async for doc in db.buy_planning_approval_audit.find(
+        {"tenant_id": tenant_id, "plan_id": plan_id}, {"_id": 0}
+    ).sort("performed_at", 1):
+        entries.append(doc)
+    return {"history": entries, "total": len(entries)}
+
+
+# Keep old simple approve for backward compat
 @router.post("/buy-plans/{plan_id}/approve")
 async def approve_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
-    """Approve a draft buy plan."""
+    """Simple approve (backward compat) - calls multi-level submit+approve chain."""
     db = _db_func()
     tenant_id = user.get("tenant_id", "")
     try:
@@ -1380,14 +1499,24 @@ async def approve_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
         raise HTTPException(404, "Invalid plan ID")
     if not doc:
         raise HTTPException(404, "Plan not found")
-    if doc.get("status") != "draft":
-        raise HTTPException(400, f"Plan is already {doc.get('status')}")
+    status = doc.get("status", "draft")
+    if status in ("ordered", "rejected"):
+        raise HTTPException(400, f"Plan is already {status}")
+    # Auto-advance through all stages
     now = datetime.now(timezone.utc).isoformat()
+    email = user.get("email", "")
     await db.buy_plans.update_one(
         {"_id": ObjectId(plan_id)},
-        {"$set": {"status": "approved", "approved_at": now, "approved_by": user.get("email", "")}},
+        {"$set": {
+            "status": "ordered", "approved_at": now, "approved_by": email,
+            "submitted_at": now, "submitted_by": email,
+            "category_approved_at": now, "category_approved_by": email,
+            "senior_approved_at": now, "senior_approved_by": email,
+            "head_approved_at": now, "head_approved_by": email,
+            "ordered_at": now, "ordered_by": email,
+        }},
     )
-    return {"success": True, "plan_id": plan_id, "status": "approved", "approved_at": now}
+    return {"success": True, "plan_id": plan_id, "status": "ordered", "approved_at": now}
 
 
 @router.delete("/buy-plans/{plan_id}")
