@@ -393,3 +393,450 @@ async def get_assortment_matrix(user: dict = Depends(_dep_user)):
     }
 
     return {"matrix": matrix, "core_styles": core_styles, "fashion_styles": fashion_styles, "test_styles": test_styles}
+
+
+# ═══════════════════════════════════════════════════
+# PHASE 2: Display Minimums + Full Buy Formula
+# ═══════════════════════════════════════════════════
+
+class DisplayMinimumReq(BaseModel):
+    category: str
+    store_wedge: str  # A, B, C
+    min_facings: int = 2
+    display_units_per_facing: int = 2
+
+
+@router.get("/display-minimums")
+async def get_display_minimums(user: dict = Depends(_dep_user)):
+    """Get display minimum configuration per category × wedge."""
+    db = _db_func()
+    configs = []
+    async for doc in db.display_minimums_config.find({}, {"_id": 0}):
+        doc["total_display_min_units"] = doc.get("min_facings", 2) * doc.get("display_units_per_facing", 2)
+        configs.append(doc)
+    return {"configs": configs, "total": len(configs)}
+
+
+@router.post("/display-minimums")
+async def set_display_minimum(body: DisplayMinimumReq, user: dict = Depends(_dep_user)):
+    """Set display minimum for a category × wedge combination."""
+    db = _db_func()
+    total = body.min_facings * body.display_units_per_facing
+    await db.display_minimums_config.update_one(
+        {"category": body.category, "store_wedge": body.store_wedge},
+        {"$set": {
+            "category": body.category,
+            "store_wedge": body.store_wedge,
+            "min_facings": body.min_facings,
+            "display_units_per_facing": body.display_units_per_facing,
+            "total_display_min_units": total,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"success": True, "category": body.category, "store_wedge": body.store_wedge, "total_display_min_units": total}
+
+
+@router.delete("/display-minimums/{category}/{store_wedge}")
+async def delete_display_minimum(category: str, store_wedge: str, user: dict = Depends(_dep_user)):
+    result = await _db_func().display_minimums_config.delete_one({"category": category, "store_wedge": store_wedge})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Config not found")
+    return {"success": True}
+
+
+# Sell-through targets by style mix (configurable)
+DEFAULT_SELL_THROUGH = {"Core": 1.2, "Fashion": 0.8, "Test": 0.4}
+
+
+class BuyFormulaReq(BaseModel):
+    cover_days: int = 30
+    safety_days: int = 7
+    sell_through_targets: Optional[dict] = None  # override defaults
+
+
+@router.post("/buy-formula/calculate")
+async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_user)):
+    """
+    Full Buy Formula:
+    buy_qty = MAX(
+        (target_sell_through × forecasted_demand) - current_SOH,
+        display_minimum_units × store_count,
+        safety_stock_units
+    )
+    """
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    sell_targets = body.sell_through_targets or DEFAULT_SELL_THROUGH
+
+    # 1. Get store wedge counts
+    wedge_counts = {"A": 0, "B": 0, "C": 0}
+    async for doc in db.store_master.aggregate([
+        {"$match": _tenant_match(tenant_id)},
+        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}}},
+    ]):
+        if doc["_id"] in wedge_counts:
+            wedge_counts[doc["_id"]] = doc["count"]
+    total_stores = sum(wedge_counts.values())
+
+    # 2. Get display minimums
+    disp_mins = {}
+    async for doc in db.display_minimums_config.find({}, {"_id": 0}):
+        key = (doc["category"], doc["store_wedge"])
+        disp_mins[key] = doc.get("total_display_min_units", 4)
+
+    # 3. Get current SOH (stock on hand) from store_inventory
+    soh_pipeline = [
+        {"$match": _tenant_match(tenant_id)},
+        {"$group": {"_id": "$sku", "total_soh": {"$sum": {"$toInt": {"$ifNull": ["$closing_stock", 0]}}}}},
+    ]
+    soh_map = {}
+    async for doc in db.store_inventory.aggregate(soh_pipeline):
+        soh_map[doc["_id"]] = doc["total_soh"]
+
+    # 4. Get ROS per SKU (from daily_sales, last N days)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=body.cover_days)).strftime("%Y-%m-%d")
+    ros_pipeline = [
+        {"$match": {**_tenant_match(tenant_id), "day": {"$gte": cutoff}}},
+        {"$group": {
+            "_id": "$sku",
+            "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
+            "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
+            "days": {"$addToSet": "$day"},
+        }},
+    ]
+    ros_map = {}
+    async for doc in db.daily_sales.aggregate(ros_pipeline):
+        days = len(doc.get("days", []))
+        ros_map[doc["_id"]] = {
+            "total_qty": doc["total_qty"],
+            "daily_ros": doc["total_qty"] / max(days, 1),
+            "revenue": doc["total_revenue"],
+        }
+
+    # 5. Get SKU metadata (style_mix, category)
+    sku_meta = {}
+    async for doc in db.sku_ean_master.find(_tenant_match(tenant_id), {"_id": 0}):
+        sku_meta[doc.get("ean", "")] = {
+            "style": doc.get("style", ""),
+            "category": doc.get("category", ""),
+            "sub_category": doc.get("sub_category", ""),
+            "style_mix": doc.get("style_mix", "Test"),
+            "mrp": doc.get("mrp", 0),
+        }
+
+    # 6. Calculate buy quantity per SKU
+    buy_plan = []
+    totals = {"total_buy_qty": 0, "total_buy_value": 0, "total_display_qty": 0, "total_safety_qty": 0}
+
+    for sku, meta in sku_meta.items():
+        mix = meta["style_mix"]
+        category = meta["category"]
+        ros_data = ros_map.get(sku, {"total_qty": 0, "daily_ros": 0, "revenue": 0})
+        current_soh = soh_map.get(sku, 0)
+
+        # Forecasted demand
+        daily_ros = ros_data["daily_ros"]
+        forecasted_demand = daily_ros * body.cover_days
+        sell_through_target = sell_targets.get(mix, 0.8)
+        demand_buy = max(0, (sell_through_target * forecasted_demand) - current_soh)
+
+        # Display minimum across eligible stores
+        display_qty = 0
+        eligible_wedges = {"Core": ["A", "B", "C"], "Fashion": ["A", "B"], "Test": ["A"]}.get(mix, ["A"])
+        for w in eligible_wedges:
+            dm = disp_mins.get((category, w), disp_mins.get(("ALL", w), 4))
+            display_qty += dm * wedge_counts.get(w, 0)
+
+        # Safety stock
+        safety_qty = daily_ros * body.safety_days
+
+        # Full formula: MAX of the three
+        buy_qty = max(demand_buy, display_qty, safety_qty)
+        buy_qty = round(buy_qty)
+
+        buy_value = buy_qty * meta.get("mrp", 0)
+        totals["total_buy_qty"] += buy_qty
+        totals["total_buy_value"] += buy_value
+        totals["total_display_qty"] += round(display_qty)
+        totals["total_safety_qty"] += round(safety_qty)
+
+        buy_plan.append({
+            "sku": sku,
+            "style": meta["style"],
+            "category": category,
+            "sub_category": meta["sub_category"],
+            "style_mix": mix,
+            "daily_ros": round(daily_ros, 2),
+            "forecasted_demand": round(forecasted_demand),
+            "sell_through_target": sell_through_target,
+            "demand_buy": round(demand_buy),
+            "display_minimum": round(display_qty),
+            "safety_stock": round(safety_qty),
+            "current_soh": current_soh,
+            "buy_qty": buy_qty,
+            "buy_value": round(buy_value, 2),
+            "mrp": meta["mrp"],
+            "binding_constraint": "demand" if demand_buy >= max(display_qty, safety_qty) else "display_min" if display_qty >= safety_qty else "safety_stock",
+        })
+
+    buy_plan.sort(key=lambda x: x["buy_value"], reverse=True)
+
+    return {
+        "success": True,
+        "parameters": {
+            "cover_days": body.cover_days,
+            "safety_days": body.safety_days,
+            "sell_through_targets": sell_targets,
+            "store_counts": wedge_counts,
+        },
+        "totals": {k: round(v, 2) for k, v in totals.items()},
+        "sku_count": len(buy_plan),
+        "buy_plan": buy_plan,
+    }
+
+
+# ═══════════════════════════════════════════════════
+# PHASE 3: DNA Tagging + Piece-Level Attribution
+# ═══════════════════════════════════════════════════
+
+class DNATagReq(BaseModel):
+    sku: str
+    launch_date: Optional[str] = None
+    flow_rank: Optional[int] = None  # 1=Hero, 2=Core, 3=Fill-in
+    lifecycle_stage: Optional[str] = None  # Pre-launch, Launch, Peak, Decline, Exit
+    expected_weeks: Optional[int] = None
+
+
+class DNABulkTagReq(BaseModel):
+    style: str
+    launch_date: Optional[str] = None
+    flow_rank: Optional[int] = None
+    lifecycle_stage: Optional[str] = None
+    expected_weeks: Optional[int] = None
+
+
+@router.post("/dna-tag")
+async def tag_sku_dna(body: DNATagReq, user: dict = Depends(_dep_user)):
+    """Tag a single SKU with DNA attributes."""
+    db = _db_func()
+    update = {k: v for k, v in {
+        "launch_date": body.launch_date,
+        "flow_rank": body.flow_rank,
+        "lifecycle_stage": body.lifecycle_stage,
+        "expected_weeks": body.expected_weeks,
+        "dna_tagged_at": datetime.now(timezone.utc).isoformat(),
+    }.items() if v is not None}
+    result = await db.sku_ean_master.update_one({"ean": body.sku}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(404, f"SKU '{body.sku}' not found")
+    return {"success": True, "sku": body.sku}
+
+
+@router.post("/dna-tag/bulk")
+async def tag_style_dna_bulk(body: DNABulkTagReq, user: dict = Depends(_dep_user)):
+    """Tag all SKUs of a style with DNA attributes."""
+    db = _db_func()
+    update = {k: v for k, v in {
+        "launch_date": body.launch_date,
+        "flow_rank": body.flow_rank,
+        "lifecycle_stage": body.lifecycle_stage,
+        "expected_weeks": body.expected_weeks,
+        "dna_tagged_at": datetime.now(timezone.utc).isoformat(),
+    }.items() if v is not None}
+    result = await db.sku_ean_master.update_many({"style": body.style}, {"$set": update})
+    return {"success": True, "style": body.style, "skus_updated": result.modified_count}
+
+
+@router.post("/dna-tag/auto")
+async def auto_tag_dna(user: dict = Depends(_dep_user)):
+    """
+    Auto-tag DNA based on sales data:
+    - launch_date: first sale date
+    - lifecycle_stage: based on recent vs peak sales trend
+    - flow_rank: 1=Hero (top 20% revenue), 2=Core (next 30%), 3=Fill-in (bottom 50%)
+    """
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+
+    # Get first/last sale date + total revenue per style
+    pipeline = [
+        {"$match": _tenant_match(tenant_id)},
+        {"$lookup": {
+            "from": "sku_ean_master",
+            "let": {"sku": "$sku"},
+            "pipeline": [{"$match": {"$expr": {"$eq": ["$ean", "$$sku"]}}}, {"$project": {"style": 1, "_id": 0}}],
+            "as": "info",
+        }},
+        {"$unwind": {"path": "$info", "preserveNullAndEmptyArrays": True}},
+        {"$group": {
+            "_id": {"$ifNull": ["$info.style", "$sku"]},
+            "first_sale": {"$min": "$day"},
+            "last_sale": {"$max": "$day"},
+            "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
+            "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
+        }},
+        {"$sort": {"total_revenue": -1}},
+    ]
+
+    styles = []
+    async for doc in db.daily_sales.aggregate(pipeline, allowDiskUse=True):
+        styles.append(doc)
+
+    if not styles:
+        return {"success": True, "message": "No sales data for DNA tagging", "tagged": 0}
+
+    total_rev = sum(s["total_revenue"] for s in styles)
+    cumulative = 0
+    tagged = 0
+    now = datetime.now(timezone.utc)
+
+    for s in styles:
+        style = s["_id"]
+        cumulative += s["total_revenue"]
+        pct = cumulative / max(total_rev, 1)
+
+        # Flow rank
+        if pct <= 0.80:
+            flow_rank = 1  # Hero
+        elif pct <= 0.95:
+            flow_rank = 2  # Core
+        else:
+            flow_rank = 3  # Fill-in
+
+        # Lifecycle stage based on age
+        first_sale = s.get("first_sale", "")
+        last_sale = s.get("last_sale", "")
+        try:
+            first_dt = datetime.strptime(first_sale, "%Y-%m-%d") if isinstance(first_sale, str) else first_sale
+            last_dt = datetime.strptime(last_sale, "%Y-%m-%d") if isinstance(last_sale, str) else last_sale
+            age_weeks = max(1, (now.replace(tzinfo=None) - first_dt).days // 7)
+            recency_days = (now.replace(tzinfo=None) - last_dt).days
+        except Exception:
+            age_weeks = 1
+            recency_days = 0
+
+        if age_weeks <= 4:
+            lifecycle = "Launch"
+        elif recency_days > 30:
+            lifecycle = "Exit"
+        elif recency_days > 14:
+            lifecycle = "Decline"
+        elif age_weeks <= 12:
+            lifecycle = "Peak"
+        else:
+            lifecycle = "Decline"
+
+        update = {
+            "launch_date": first_sale,
+            "flow_rank": flow_rank,
+            "lifecycle_stage": lifecycle,
+            "expected_weeks": max(4, 52 - age_weeks) if lifecycle != "Exit" else 0,
+            "dna_tagged_at": now.isoformat(),
+        }
+        result = await db.sku_ean_master.update_many({"style": style}, {"$set": update})
+        tagged += result.modified_count
+
+    return {"success": True, "styles_processed": len(styles), "skus_tagged": tagged}
+
+
+@router.get("/dna-tags")
+async def get_dna_tags(user: dict = Depends(_dep_user)):
+    """Get DNA tags grouped by style."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+
+    pipeline = [
+        {"$match": {**_tenant_match(tenant_id), "dna_tagged_at": {"$exists": True}}},
+        {"$group": {
+            "_id": "$style",
+            "sku_count": {"$sum": 1},
+            "launch_date": {"$first": "$launch_date"},
+            "flow_rank": {"$first": "$flow_rank"},
+            "lifecycle_stage": {"$first": "$lifecycle_stage"},
+            "expected_weeks": {"$first": "$expected_weeks"},
+            "style_mix": {"$first": "$style_mix"},
+        }},
+        {"$project": {"_id": 0, "style": "$_id", "sku_count": 1, "launch_date": 1, "flow_rank": 1, "lifecycle_stage": 1, "expected_weeks": 1, "style_mix": 1}},
+        {"$sort": {"flow_rank": 1, "style": 1}},
+    ]
+
+    styles = []
+    async for doc in db.sku_ean_master.aggregate(pipeline):
+        styles.append(doc)
+    return {"styles": styles, "total": len(styles)}
+
+
+# ── Piece-Level Attribution Matrix ──
+
+@router.get("/attribution/matrix")
+async def get_attribution_matrix(user: dict = Depends(_dep_user)):
+    """
+    Return SKU → Store cluster attribution.
+    Core → ALL stores (proportional to store count)
+    Fashion → A + B only
+    Test → A only
+    """
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+
+    # Get store wedge counts
+    wedge_counts = {"A": 0, "B": 0, "C": 0}
+    async for doc in db.store_master.aggregate([
+        {"$match": _tenant_match(tenant_id)},
+        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}}},
+    ]):
+        if doc["_id"] in wedge_counts:
+            wedge_counts[doc["_id"]] = doc["count"]
+    total_stores = sum(wedge_counts.values())
+
+    # Get styles with mix
+    pipeline = [
+        {"$match": {**_tenant_match(tenant_id), "style_mix": {"$exists": True}}},
+        {"$group": {"_id": {"style": "$style", "mix": "$style_mix"}, "sku_count": {"$sum": 1}}},
+    ]
+    style_data = []
+    async for doc in db.sku_ean_master.aggregate(pipeline):
+        style_data.append({"style": doc["_id"]["style"], "style_mix": doc["_id"]["mix"], "sku_count": doc["sku_count"]})
+
+    # Attribution rules
+    WEDGE_RULES = {
+        "Core": {"A": True, "B": True, "C": True},
+        "Fashion": {"A": True, "B": True, "C": False},
+        "Test": {"A": True, "B": False, "C": False},
+    }
+
+    attributions = []
+    for s in style_data:
+        mix = s["style_mix"]
+        rules = WEDGE_RULES.get(mix, WEDGE_RULES["Test"])
+        eligible_stores = sum(wedge_counts[w] for w in ["A", "B", "C"] if rules.get(w))
+        wedge_alloc = {}
+        for w in ["A", "B", "C"]:
+            if rules.get(w) and eligible_stores > 0:
+                wedge_alloc[w] = {
+                    "eligible": True,
+                    "stores": wedge_counts[w],
+                    "allocation_pct": round(wedge_counts[w] / eligible_stores * 100, 1),
+                }
+            else:
+                wedge_alloc[w] = {"eligible": False, "stores": 0, "allocation_pct": 0}
+
+        attributions.append({
+            "style": s["style"],
+            "style_mix": mix,
+            "sku_count": s["sku_count"],
+            "eligible_stores": eligible_stores,
+            "total_stores": total_stores,
+            "coverage_pct": round(eligible_stores / max(total_stores, 1) * 100, 1),
+            "wedge_allocation": wedge_alloc,
+        })
+
+    attributions.sort(key=lambda x: x["coverage_pct"], reverse=True)
+
+    return {
+        "attributions": attributions,
+        "total_styles": len(attributions),
+        "store_counts": wedge_counts,
+        "rules": WEDGE_RULES,
+    }

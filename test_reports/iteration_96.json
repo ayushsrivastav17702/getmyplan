@@ -1,0 +1,110 @@
+{
+  "summary": "Iteration 96: Buy Planning Phase 2+3 - Display Minimums, Full Buy Formula, DNA Tagging, Attribution Matrix. All 24 backend tests passed. Frontend verified: 6 tabs (Assortment Matrix, Buy Plan, Store Wedge, Style Mix, DNA Tags, Attribution), Buy Plan shows 173 SKUs with ₹942.6M total buy value, DNA Tags shows Hero/Core/Fill-in flow ranks, Attribution shows A/B/C store allocation with coverage bars.",
+
+  "test_case_matrix": {
+    "BACKEND_DISPLAY_MINIMUMS": {
+      "TEST_01_get_display_minimums_returns_configs": {"status": "PASS", "notes": "Returns configs array with computed total_display_min_units"},
+      "TEST_02_post_display_minimum_creates_config": {"status": "PASS", "notes": "Creates config with category × wedge, computes total=facings×units"},
+      "TEST_03_display_minimum_computed_total_correct": {"status": "PASS", "notes": "5×4=20 computed correctly"},
+      "TEST_04_delete_display_minimum": {"status": "PASS", "notes": "Deletes config successfully"},
+      "TEST_05_delete_nonexistent_returns_404": {"status": "PASS", "notes": "Returns 404 for non-existent config"}
+    },
+    "BACKEND_BUY_FORMULA": {
+      "TEST_06_buy_formula_calculate_returns_plan": {"status": "PASS", "notes": "Returns buy_plan, totals, sku_count, parameters"},
+      "TEST_07_buy_formula_required_fields_per_sku": {"status": "PASS", "notes": "Each SKU has demand_buy, display_minimum, safety_stock, buy_qty, binding_constraint"},
+      "TEST_08_buy_formula_binding_constraint_logic": {"status": "PASS", "notes": "Constraint correctly identifies demand/display_min/safety_stock as binding"},
+      "TEST_09_buy_formula_totals_structure": {"status": "PASS", "notes": "Totals: total_buy_qty=448201, total_buy_value=₹942.6M"},
+      "TEST_10_buy_formula_custom_sell_through_targets": {"status": "PASS", "notes": "Custom targets override defaults"}
+    },
+    "BACKEND_DNA_TAGGING": {
+      "TEST_11_auto_dna_tag_tags_styles": {"status": "PASS", "notes": "Auto-tags styles with flow_rank, lifecycle_stage, launch_date"},
+      "TEST_12_get_dna_tags_returns_tagged_styles": {"status": "PASS", "notes": "Returns styles grouped by style with DNA attributes"},
+      "TEST_13_dna_tag_single_sku": {"status": "PASS", "notes": "Single SKU tagging works"},
+      "TEST_14_dna_tag_bulk_style": {"status": "PASS", "notes": "Style-level bulk tagging works"},
+      "TEST_15_dna_tag_nonexistent_sku_returns_404": {"status": "PASS", "notes": "Returns 404 for non-existent SKU"}
+    },
+    "BACKEND_ATTRIBUTION_MATRIX": {
+      "TEST_16_get_attribution_matrix_returns_allocations": {"status": "PASS", "notes": "Returns attributions, store_counts, rules"},
+      "TEST_17_attribution_rules_core_all_stores": {"status": "PASS", "notes": "Core → A=True, B=True, C=True (100% coverage)"},
+      "TEST_18_attribution_rules_fashion_a_b_only": {"status": "PASS", "notes": "Fashion → A=True, B=True, C=False"},
+      "TEST_19_attribution_rules_test_a_only": {"status": "PASS", "notes": "Test → A=True, B=False, C=False"},
+      "TEST_20_attribution_style_has_coverage_pct": {"status": "PASS", "notes": "Each style has coverage_pct and wedge_allocation"}
+    },
+    "BACKEND_AUTH_REQUIRED": {
+      "TEST_21_display_minimums_requires_auth": {"status": "PASS", "notes": "Returns 400 without auth"},
+      "TEST_22_buy_formula_requires_auth": {"status": "PASS", "notes": "Returns 400 without auth"},
+      "TEST_23_dna_tags_requires_auth": {"status": "PASS", "notes": "Returns 400 without auth"},
+      "TEST_24_attribution_matrix_requires_auth": {"status": "PASS", "notes": "Returns 400 without auth"}
+    },
+    "FRONTEND_BUY_PLANNING_PAGE": {
+      "STEP_01_page_loads": {"status": "PASS", "notes": "Buy Planning page loads with title"},
+      "STEP_02_six_tabs_present": {"status": "PASS", "notes": "All 6 tabs: Assortment Matrix, Buy Plan, Store Wedge, Style Mix, DNA Tags, Attribution"},
+      "STEP_03_buy_plan_tab_table": {"status": "PASS", "notes": "Table with SKU, Mix, ROS/day, SOH, Demand, Display Min, Safety, Buy Qty (green), Value, Constraint"},
+      "STEP_04_buy_plan_summary_cards": {"status": "PASS", "notes": "4 cards: SKUs (173), Total Buy Qty (448,201), Buy Value (₹942.6M), Display Min Qty (35,638)"},
+      "STEP_05_dna_tags_tab_table": {"status": "PASS", "notes": "Table with Style, Mix, Flow Rank, Lifecycle, Launch Date, Expected Weeks, SKUs"},
+      "STEP_06_dna_tags_flow_rank_badges": {"status": "PASS", "notes": "Hero/Core/Fill-in badges visible"},
+      "STEP_07_attribution_tab_table": {"status": "PASS", "notes": "Table with Style, Mix, A-Stores, B-Stores, C-Stores, Coverage"},
+      "STEP_08_attribution_coverage_bar": {"status": "PASS", "notes": "Coverage progress bar visible (emerald color)"},
+      "STEP_09_auto_dna_tag_button": {"status": "PASS", "notes": "Auto DNA Tag button visible and clickable"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "24/24 PASS",
+    "FRONTEND_STEPS": "9/9 PASS",
+    "TOTAL": "33/33 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_buy_planning_phase2_3_iter96.py",
+    "/app/test_reports/pytest/pytest_results_iter96.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Display minimums correctly compute total = min_facings × display_units_per_facing",
+    "Buy formula correctly implements MAX(demand_buy, display_minimum, safety_stock)",
+    "Binding constraint logic correctly identifies which factor is driving the buy quantity",
+    "DNA auto-tagging uses revenue ranking: Hero=top 80%, Core=next 15%, Fill-in=bottom 5%",
+    "Attribution rules correctly implement: Core→ALL, Fashion→A+B, Test→A only",
+    "All endpoints properly require authentication",
+    "Frontend has proper data-testid attributes for testing"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_buy_planning_phase2_3_iter96.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (24/24 tests passed)",
+    "frontend": "100% (9/9 steps passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "No seed data created. Tests used existing sample data (30 stores, 173 SKUs, 185k daily sales records). Display minimums seeded: 9 configs (Apparel/Footwear/Accessories × A/B/C).",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 96 verified Buy Planning Phase 2+3. Backend endpoints tested: POST/GET/DELETE /api/buy-planning/display-minimums, POST /api/buy-planning/buy-formula/calculate, POST /api/buy-planning/dna-tag (single), POST /api/buy-planning/dna-tag/bulk (style-level), POST /api/buy-planning/dna-tag/auto, GET /api/buy-planning/dna-tags, GET /api/buy-planning/attribution/matrix. Current data state: 17 A-stores, 9 B-stores, 4 C-stores, 20 Core styles, 173 SKUs, ₹942.6M total buy value. Frontend route: /buy-planning with 6 tabs. Test file: test_buy_planning_phase2_3_iter96.py.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

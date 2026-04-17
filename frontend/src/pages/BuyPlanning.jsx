@@ -36,6 +36,10 @@ export default function BuyPlanning() {
   const [wedge, setWedge] = useState(null);
   const [mix, setMix] = useState(null);
   const [matrix, setMatrix] = useState(null);
+  const [buyPlan, setBuyPlan] = useState(null);
+  const [dnaTags, setDnaTags] = useState(null);
+  const [attribution, setAttribution] = useState(null);
+  const [displayMins, setDisplayMins] = useState([]);
   const [loading, setLoading] = useState({});
   const [tab, setTab] = useState("overview");
 
@@ -49,6 +53,17 @@ export default function BuyPlanning() {
       setWedge(w.data);
       setMix(m.data);
       setMatrix(mx.data);
+      // Fetch Phase 2+3 data
+      const [bp, dna, attr, dm] = await Promise.all([
+        axios.post(`${API}/buy-planning/buy-formula/calculate`, { cover_days: 30, safety_days: 7 }).catch(() => ({ data: null })),
+        axios.get(`${API}/buy-planning/dna-tags`).catch(() => ({ data: { styles: [] } })),
+        axios.get(`${API}/buy-planning/attribution/matrix`).catch(() => ({ data: { attributions: [] } })),
+        axios.get(`${API}/buy-planning/display-minimums`).catch(() => ({ data: { configs: [] } })),
+      ]);
+      setBuyPlan(bp.data);
+      setDnaTags(dna.data);
+      setAttribution(attr.data);
+      setDisplayMins(dm.data?.configs || []);
     } catch {}
   }, []);
 
@@ -113,14 +128,31 @@ export default function BuyPlanning() {
           <Tag className="h-4 w-4" />
           {loading["style-mix"] ? "Classifying..." : "Run Style Mix Classification"}
         </button>
+        <button
+          data-testid="auto-dna-btn"
+          onClick={async () => {
+            setLoading(p => ({ ...p, dna: true }));
+            try { await axios.post(`${API}/buy-planning/dna-tag/auto`); toast.success("DNA tagging complete"); fetchAll(); }
+            catch (e) { toast.error(e.response?.data?.detail || "DNA tagging failed"); }
+            setLoading(p => ({ ...p, dna: false }));
+          }}
+          disabled={loading.dna}
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+        >
+          <BarChart3 className="h-4 w-4" />
+          {loading.dna ? "Tagging..." : "Auto DNA Tag"}
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {[
           { id: "overview", label: "Assortment Matrix", icon: Grid3X3 },
+          { id: "buy-plan", label: "Buy Plan", icon: BarChart3 },
           { id: "stores", label: "Store Wedge", icon: Store },
           { id: "styles", label: "Style Mix", icon: Tag },
+          { id: "dna", label: "DNA Tags", icon: Zap },
+          { id: "attribution", label: "Attribution", icon: Grid3X3 },
         ].map(t => (
           <button
             key={t.id}
@@ -229,6 +261,153 @@ export default function BuyPlanning() {
                 <tr><td colSpan={7} className="p-8 text-center text-gray-400">
                   No style mix data. Run Style Mix Classification after uploading sales data.
                 </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Buy Plan Tab */}
+      {tab === "buy-plan" && buyPlan && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white border rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-gray-900">{buyPlan.sku_count}</div>
+              <div className="text-xs text-gray-500">SKUs</div>
+            </div>
+            <div className="bg-white border rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-emerald-700">{buyPlan.totals?.total_buy_qty?.toLocaleString()}</div>
+              <div className="text-xs text-gray-500">Total Buy Qty</div>
+            </div>
+            <div className="bg-white border rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-indigo-700">₹{(buyPlan.totals?.total_buy_value / 1e6)?.toFixed(1)}M</div>
+              <div className="text-xs text-gray-500">Buy Value</div>
+            </div>
+            <div className="bg-white border rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-amber-700">{buyPlan.totals?.total_display_qty?.toLocaleString()}</div>
+              <div className="text-xs text-gray-500">Display Min Qty</div>
+            </div>
+          </div>
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table data-testid="buy-plan-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3 font-medium text-gray-600">SKU</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Mix</th>
+                  <th className="text-right p-3 font-medium text-gray-600">ROS/day</th>
+                  <th className="text-right p-3 font-medium text-gray-600">SOH</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Demand</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Display Min</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Safety</th>
+                  <th className="text-right p-3 font-medium text-gray-600 bg-emerald-50">Buy Qty</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Value</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Constraint</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(buyPlan.buy_plan || []).slice(0, 50).map(s => (
+                  <tr key={s.sku} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="p-3 font-mono text-xs">{s.sku}</td>
+                    <td className="p-3"><MixBadge mix={s.style_mix} /></td>
+                    <td className="p-3 text-right text-gray-600">{s.daily_ros}</td>
+                    <td className="p-3 text-right text-gray-500">{s.current_soh}</td>
+                    <td className="p-3 text-right text-gray-600">{s.demand_buy?.toLocaleString()}</td>
+                    <td className="p-3 text-right text-gray-600">{s.display_minimum?.toLocaleString()}</td>
+                    <td className="p-3 text-right text-gray-600">{s.safety_stock?.toLocaleString()}</td>
+                    <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-50">{s.buy_qty?.toLocaleString()}</td>
+                    <td className="p-3 text-right text-gray-700">₹{(s.buy_value / 1000)?.toFixed(0)}k</td>
+                    <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${s.binding_constraint === "demand" ? "bg-blue-50 text-blue-700" : s.binding_constraint === "display_min" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{s.binding_constraint}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* DNA Tags Tab */}
+      {tab === "dna" && (
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <table data-testid="dna-table" className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left p-3 font-medium text-gray-600">Style</th>
+                <th className="text-left p-3 font-medium text-gray-600">Mix</th>
+                <th className="text-left p-3 font-medium text-gray-600">Flow Rank</th>
+                <th className="text-left p-3 font-medium text-gray-600">Lifecycle</th>
+                <th className="text-left p-3 font-medium text-gray-600">Launch Date</th>
+                <th className="text-left p-3 font-medium text-gray-600">Expected Weeks</th>
+                <th className="text-left p-3 font-medium text-gray-600">SKUs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(dnaTags?.styles || []).map(s => (
+                <tr key={s.style} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="p-3 font-mono text-xs font-medium">{s.style}</td>
+                  <td className="p-3"><MixBadge mix={s.style_mix} /></td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${s.flow_rank === 1 ? "bg-emerald-100 text-emerald-800" : s.flow_rank === 2 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                      {s.flow_rank === 1 ? "Hero" : s.flow_rank === 2 ? "Core" : "Fill-in"}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded text-xs ${s.lifecycle_stage === "Peak" ? "bg-emerald-50 text-emerald-700" : s.lifecycle_stage === "Launch" ? "bg-blue-50 text-blue-700" : s.lifecycle_stage === "Decline" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
+                      {s.lifecycle_stage || "—"}
+                    </span>
+                  </td>
+                  <td className="p-3 text-xs text-gray-500">{s.launch_date || "—"}</td>
+                  <td className="p-3 text-gray-600">{s.expected_weeks ?? "—"}w</td>
+                  <td className="p-3 text-gray-500">{s.sku_count}</td>
+                </tr>
+              ))}
+              {(dnaTags?.styles || []).length === 0 && (
+                <tr><td colSpan={7} className="p-8 text-center text-gray-400">No DNA tags. Click "Auto DNA Tag" to classify.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Attribution Tab */}
+      {tab === "attribution" && (
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <table data-testid="attribution-table" className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left p-3 font-medium text-gray-600">Style</th>
+                <th className="text-left p-3 font-medium text-gray-600">Mix</th>
+                <th className="text-center p-3 font-medium text-gray-600">A-Stores</th>
+                <th className="text-center p-3 font-medium text-gray-600">B-Stores</th>
+                <th className="text-center p-3 font-medium text-gray-600">C-Stores</th>
+                <th className="text-left p-3 font-medium text-gray-600">Coverage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(attribution?.attributions || []).map(a => (
+                <tr key={a.style} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="p-3 font-mono text-xs font-medium">{a.style}</td>
+                  <td className="p-3"><MixBadge mix={a.style_mix} /></td>
+                  {["A", "B", "C"].map(w => (
+                    <td key={w} className="p-3 text-center">
+                      {a.wedge_allocation[w]?.eligible ? (
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">{a.wedge_allocation[w].allocation_pct}%</span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                  ))}
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${a.coverage_pct}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-500">{a.coverage_pct}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {(attribution?.attributions || []).length === 0 && (
+                <tr><td colSpan={6} className="p-8 text-center text-gray-400">No attribution data. Run classifications first.</td></tr>
               )}
             </tbody>
           </table>
