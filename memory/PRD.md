@@ -30,33 +30,47 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 - Feature B: Manual Overrides with Audit Trail
 - Feature C: CSV/Excel Export
 - Feature F: Scheduled auto-refresh jobs (APScheduler)
-- Sell-Through Config: Configurable target multipliers per style mix (Config tab UI)
+- Sell-Through Config: Configurable target multipliers per style mix
 
 ### Phase A UI Enhancements (COMPLETED 2026-04-17)
-- Store Wedge tab: Distribution summary cards (Total/A/B/C with progress bars), search by ID/name/city, wedge filter dropdown, Auto/Manual type column
+- Store Wedge tab: Distribution summary cards, search/filter, Auto/Manual type column
 - Style Mix tab: Search filter with live style count
-- Attribution tab: Clickable detail panel showing style info, wedge allocation bars, coverage %
-- Config tab: Impact indicators (Balanced/Aggressive/Conservative), Impact Summary panel, live Example Calculation
+- Attribution tab: Clickable detail panel with wedge allocation bars
+- Config tab: Impact indicators, Impact Summary panel, live Example Calculation
+
+### Phase B: Buy Plan Persistence & Approval (COMPLETED 2026-04-17)
+Backend endpoints:
+- POST /api/buy-planning/buy-plans/generate - Generate & save plan to DB
+- GET /api/buy-planning/buy-plans - List saved plans (without items for perf)
+- GET /api/buy-planning/buy-plans/{plan_id} - Get full plan with items
+- PUT /api/buy-planning/buy-plans/{plan_id}/items - Edit item quantity (draft only)
+- POST /api/buy-planning/buy-plans/{plan_id}/approve - Approve plan
+- DELETE /api/buy-planning/buy-plans/{plan_id} - Delete draft plan
+
+Frontend Buy Plan tab:
+- Plan generation controls (cover period 30/60/90 days)
+- Plan selector dropdown with saved plans
+- Status badges (DRAFT/APPROVED)
+- Approve & Delete buttons (draft only)
+- Editable quantities with save/cancel
+- Calculation breakdown modal per SKU (ROS, forecast, sell-through, constraints)
+- Totals recalculation on qty edit
 
 ### Database (MongoDB)
-- Clean production tenant only (demo tenant removed)
-- Collections: buy_plans, display_minimums_config, sku_store_attribution, wedge_override_audit, style_mix_override_audit, sell_through_config, buy_planning_overrides
+- Collections: buy_plans, display_minimums_config, sku_store_attribution, sell_through_config, buy_planning_overrides
+- buy_plans schema: tenant_id, plan_name, status (draft/approved/ordered/archived), items[], totals, parameters, generated_at/by, approved_at/by
 
 ## Backlog
 
 ### P1
 - Audit logging for wedge/mix changes (Option A - user requested)
 
-### P2 (Phase B)
-- Buy Plan persistence & approval workflow (save/load/approve/edit quantities)
-- Component restructuring (Phase C) - break BuyPlanning.jsx into components
-
-### P2 (Enterprise)
+### P2
+- Phase C: Component restructuring (break BuyPlanning.jsx into components)
 - Payment integration (Stripe/Razorpay) for tenant billing
 - Full SAML/OIDC SSO (Okta, Azure AD)
 - Subdomain-based tenant routing
-- Tenant-specific branding (logo, colors)
-- Tenant backup/restore operations
+- Tenant branding, Backup/restore
 
 ### P3
 - Buy Plan Readiness Dashboard & Assortment planning reports
