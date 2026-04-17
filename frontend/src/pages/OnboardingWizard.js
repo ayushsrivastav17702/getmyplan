@@ -428,7 +428,7 @@ export default function OnboardingWizard({ onComplete }) {
     setError(null);
 
     try {
-      const res = await axios.post(`${API}/upload/v2/load-sample-data`);
+      const res = await axios.post(`${API}/upload/v2/load-sample-data`, { force: true });
       if (!res.data.success) {
         setError(res.data.message || "Failed to start sample data loading");
         setSampleLoading(false);

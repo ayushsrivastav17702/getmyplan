@@ -288,14 +288,25 @@ async def get_master_status():
     tenant_id = _get_tenant_id()
     result = {}
 
+    COLLECTION_MAP = {
+        "sku_master": "sku_ean_master",
+        "store_master": "store_master",
+        "warehouse_master": "warehouse_master",
+        "style_master": "style_master",
+        "planogram": "planogram",
+    }
+
     for master_type in ["sku_master", "store_master", "warehouse_master", "style_master", "planogram"]:
         last = await db.upload_history.find_one(
             {"tenant_id": tenant_id, "upload_type": master_type, "status": "completed"},
             {"_id": 0},
             sort=[("uploaded_at", -1)],
         )
-        # Try dedicated collection first, fall back to uploaded_files
-        count = await db[master_type].count_documents({"tenant_id": tenant_id})
+        coll_name = COLLECTION_MAP.get(master_type, master_type)
+        # Try dedicated collection first — match tenant or no tenant_id (seeded data)
+        count = await db[coll_name].count_documents(
+            {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}]}
+        )
         if count == 0:
             doc = await db.uploaded_files.find_one({"file_type": master_type})
             if doc and "data" in doc:
@@ -760,9 +771,24 @@ async def load_sample_data(request: Request, background_tasks: BackgroundTasks):
     """Start sample data seeding in background. Returns immediately with job_id."""
     db = _get_db()
 
+    # Check if force reseed requested
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    force = body.get("force", False)
+
     existing = await db.daily_sales.estimated_document_count()
-    if existing > 50:
-        return {"success": False, "message": "This tenant already has data. Sample data is for empty tenants."}
+    if existing > 50 and not force:
+        return {"success": False, "message": "This tenant already has data. Use force=true to reseed, or upload your own data."}
+
+    # If force reseed, clear existing sample collections first
+    if existing > 0 and force:
+        for coll in ["daily_sales", "store_master", "style_master", "sku_ean_master",
+                      "warehouse_master", "warehouse_inventory", "planogram_norms",
+                      "store_classes", "store_wedge_results", "style_mix_results"]:
+            await db[coll].delete_many({})
 
     job_id = str(uuid.uuid4())[:12]
     _seed_jobs[job_id] = {"status": "pending", "progress": 0, "step": "Starting..."}

@@ -241,7 +241,7 @@ const DataUploadPage = () => {
   const handleLoadSample = async () => {
     setLoadingSample(true);
     try {
-      const r = await fetch(`${API}/api/upload/v2/load-sample-data`, { method: "POST", headers: hdrs });
+      const r = await fetch(`${API}/api/upload/v2/load-sample-data`, { method: "POST", headers: {...hdrs, "Content-Type": "application/json"}, body: JSON.stringify({force: true}) });
       const d = await r.json();
       if (d.success) {
         refresh();
