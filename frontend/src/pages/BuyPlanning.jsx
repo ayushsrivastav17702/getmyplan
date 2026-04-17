@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   BarChart3, RefreshCw, Zap, Store, Tag, Grid3X3, Download, Edit2, Settings, RotateCcw, Save,
   Search, TrendingUp, TrendingDown, CheckCircle2, Eye, Crown, Star, MapPin, ClipboardList,
+  Ban, Plus, X,
 } from "lucide-react";
 
 function WedgeBadge({ wedge }) {
@@ -62,6 +63,13 @@ export default function BuyPlanning() {
   const [planCoverDays, setPlanCoverDays] = useState(30);
   const [auditLog, setAuditLog] = useState([]);
   const [auditFilter, setAuditFilter] = useState({ entity_type: "", source: "" });
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [formatFilter, setFormatFilter] = useState("all");
+  const [exclusions, setExclusions] = useState([]);
+  const [exclusionModal, setExclusionModal] = useState(false);
+  const [newExclusion, setNewExclusion] = useState({ store_code: "", sku: "", reason: "" });
+  const [storeEditModal, setStoreEditModal] = useState(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -92,6 +100,9 @@ export default function BuyPlanning() {
       // Fetch audit log
       const auditRes = await axios.get(`${API}/buy-planning/audit-log`).catch(() => ({ data: { entries: [] } }));
       setAuditLog(auditRes.data?.entries || []);
+      // Fetch exclusions
+      const exclRes = await axios.get(`${API}/buy-planning/exclusions`).catch(() => ({ data: { exclusions: [] } }));
+      setExclusions(exclRes.data?.exclusions || []);
     } catch {}
   }, []);
 
@@ -210,12 +221,49 @@ export default function BuyPlanning() {
     } catch (e) { toast.error(e.response?.data?.detail || "Delete failed"); }
   };
 
+  const fetchExclusions = async () => {
+    try {
+      const res = await axios.get(`${API}/buy-planning/exclusions`);
+      setExclusions(res.data?.exclusions || []);
+    } catch {}
+  };
+
+  const addExclusion = async () => {
+    if (!newExclusion.store_code || !newExclusion.sku) { toast.error("Store and SKU are required"); return; }
+    try {
+      await axios.post(`${API}/buy-planning/exclusions`, newExclusion);
+      toast.success("Exclusion added");
+      setNewExclusion({ store_code: "", sku: "", reason: "" });
+      fetchExclusions();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to add exclusion"); }
+  };
+
+  const removeExclusion = async (storeCode, sku) => {
+    try {
+      await axios.delete(`${API}/buy-planning/exclusions/${storeCode}/${sku}`);
+      toast.success("Exclusion removed");
+      fetchExclusions();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed to remove"); }
+  };
+
+  const updateStoreAttrs = async (storeCode, attrs) => {
+    try {
+      await axios.put(`${API}/buy-planning/stores/${storeCode}/attributes`, attrs);
+      toast.success("Store attributes updated");
+      setStoreEditModal(null);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || "Update failed"); }
+  };
+
   const wedgeSummary = wedge?.summary || { A: 0, B: 0, C: 0 };
   const mixSummary = mix?.summary || { Core: 0, Fashion: 0, Test: 0 };
   const totalStyles = mixSummary.Core + mixSummary.Fashion + mixSummary.Test;
 
   const filteredStores = (wedge?.stores || []).filter(s => {
     if (storeWedgeFilter !== "all" && s.wedge_class !== storeWedgeFilter) return false;
+    if (regionFilter !== "all" && s.region !== regionFilter) return false;
+    if (tierFilter !== "all" && s.city_tier !== tierFilter) return false;
+    if (formatFilter !== "all" && s.store_format !== formatFilter) return false;
     if (!storeSearch) return true;
     const term = storeSearch.toLowerCase();
     return (s.store_code || "").toLowerCase().includes(term) || (s.store_name || "").toLowerCase().includes(term) || (s.city || "").toLowerCase().includes(term);
@@ -381,7 +429,7 @@ export default function BuyPlanning() {
           </div>
 
           {/* Search & Filter */}
-          <div data-testid="store-filters" className="flex items-center gap-3">
+          <div data-testid="store-filters" className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -392,16 +440,35 @@ export default function BuyPlanning() {
                 className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B2545] focus:border-[#0B2545] outline-none"
               />
             </div>
-            <select
-              data-testid="store-wedge-filter"
-              value={storeWedgeFilter}
-              onChange={e => setStoreWedgeFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none"
-            >
+            <select data-testid="store-wedge-filter" value={storeWedgeFilter} onChange={e => setStoreWedgeFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
               <option value="all">All Wedges</option>
               <option value="A">A-Stores</option>
               <option value="B">B-Stores</option>
               <option value="C">C-Stores</option>
+            </select>
+            <select data-testid="store-region-filter" value={regionFilter} onChange={e => setRegionFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
+              <option value="all">All Regions</option>
+              <option value="North">North</option>
+              <option value="South">South</option>
+              <option value="East">East</option>
+              <option value="West">West</option>
+              <option value="Central">Central</option>
+            </select>
+            <select data-testid="store-tier-filter" value={tierFilter} onChange={e => setTierFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
+              <option value="all">All Tiers</option>
+              <option value="tier1">Tier 1</option>
+              <option value="tier2">Tier 2</option>
+              <option value="tier3">Tier 3</option>
+            </select>
+            <select data-testid="store-format-filter" value={formatFilter} onChange={e => setFormatFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0B2545] outline-none">
+              <option value="all">All Formats</option>
+              <option value="hypermarket">Hypermarket</option>
+              <option value="supermarket">Supermarket</option>
+              <option value="convenience">Convenience</option>
             </select>
             <span className="text-xs text-gray-400">{filteredStores.length} stores</span>
           </div>
@@ -414,12 +481,14 @@ export default function BuyPlanning() {
                   <th className="text-left p-3 font-medium text-gray-600">Store</th>
                   <th className="text-left p-3 font-medium text-gray-600">Name</th>
                   <th className="text-left p-3 font-medium text-gray-600">City</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Channel</th>
-                  <th className="text-left p-3 font-medium text-gray-600">Area (sqft)</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Region</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Format</th>
+                  <th className="text-left p-3 font-medium text-gray-600">Tier</th>
                   <th className="text-left p-3 font-medium text-gray-600">Wedge</th>
+                  <th className="text-right p-3 font-medium text-gray-600">Area</th>
                   <th className="text-right p-3 font-medium text-gray-600">Revenue</th>
                   <th className="text-left p-3 font-medium text-gray-600">Type</th>
-                  <th className="w-12"></th>
+                  <th className="w-20"></th>
                 </tr>
               </thead>
               <tbody>
@@ -428,9 +497,23 @@ export default function BuyPlanning() {
                     <td className="p-3 font-mono text-xs font-medium">{s.store_code}</td>
                     <td className="p-3 text-gray-700">{s.store_name || "\u2014"}</td>
                     <td className="p-3 text-gray-500">{s.city || "\u2014"}</td>
-                    <td className="p-3 text-gray-500">{s.channel || "\u2014"}</td>
-                    <td className="p-3 text-gray-500">{s.area_sqft ? s.area_sqft.toLocaleString() : "\u2014"}</td>
+                    <td className="p-3 text-gray-500">{s.region || "\u2014"}</td>
+                    <td className="p-3">
+                      {s.store_format ? (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.store_format === "hypermarket" ? "bg-purple-50 text-purple-700" : s.store_format === "supermarket" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                          {s.store_format}
+                        </span>
+                      ) : "\u2014"}
+                    </td>
+                    <td className="p-3">
+                      {s.city_tier ? (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.city_tier === "tier1" ? "bg-amber-50 text-amber-700" : s.city_tier === "tier2" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                          {s.city_tier}
+                        </span>
+                      ) : "\u2014"}
+                    </td>
                     <td className="p-3"><WedgeBadge wedge={s.wedge_class} /></td>
+                    <td className="p-3 text-right text-gray-500 text-xs">{s.area_sqft ? s.area_sqft.toLocaleString() : "\u2014"}</td>
                     <td className="p-3 text-right text-gray-700 font-medium">
                       {s.total_revenue ? `\u20B9${Math.round(s.total_revenue).toLocaleString()}` : "\u2014"}
                     </td>
@@ -441,7 +524,10 @@ export default function BuyPlanning() {
                         <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-medium">Auto</span>
                       ) : null}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right flex gap-1">
+                      <button onClick={() => setStoreEditModal(s)} className="p-1 hover:bg-blue-50 rounded text-blue-500" title="Edit attributes">
+                        <Settings className="h-3.5 w-3.5" />
+                      </button>
                       <button onClick={() => { setOverrideModal({ type: "store", id: s.store_code, current: s.wedge_class }); setOverrideValue(s.wedge_class || "C"); }}
                         className="p-1 hover:bg-indigo-50 rounded text-indigo-500" title="Override wedge">
                         <Edit2 className="h-3.5 w-3.5" />
@@ -450,8 +536,8 @@ export default function BuyPlanning() {
                   </tr>
                 ))}
                 {filteredStores.length === 0 && (
-                  <tr><td colSpan={9} className="p-8 text-center text-gray-400">
-                    {storeSearch || storeWedgeFilter !== "all" ? "No stores match your filters." : "No stores found. Upload store master data first."}
+                  <tr><td colSpan={11} className="p-8 text-center text-gray-400">
+                    {storeSearch || storeWedgeFilter !== "all" || regionFilter !== "all" || tierFilter !== "all" || formatFilter !== "all" ? "No stores match your filters." : "No stores found. Upload store master data first."}
                   </td></tr>
                 )}
               </tbody>
@@ -538,6 +624,11 @@ export default function BuyPlanning() {
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C] disabled:opacity-50">
               <Zap className="h-4 w-4" />
               {loading.generate ? "Generating..." : "Generate & Save Plan"}
+            </button>
+            <button data-testid="manage-exclusions-btn" onClick={() => setExclusionModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">
+              <Ban className="h-4 w-4" />
+              Exclusions {exclusions.length > 0 && <span className="bg-red-100 text-red-700 px-1.5 rounded-full text-xs font-bold">{exclusions.length}</span>}
             </button>
           </div>
 
@@ -1114,6 +1205,132 @@ export default function BuyPlanning() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Store Attribute Edit Modal */}
+      {storeEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setStoreEditModal(null)}>
+          <div data-testid="store-edit-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Edit Store Attributes</h2>
+            <p className="text-sm text-gray-500">Store: <code className="bg-gray-100 px-1 rounded">{storeEditModal.store_code}</code> {storeEditModal.store_name}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Store Format</label>
+                <select data-testid="edit-store-format" defaultValue={storeEditModal.store_format || ""} id="edit-fmt"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="hypermarket">Hypermarket</option>
+                  <option value="supermarket">Supermarket</option>
+                  <option value="convenience">Convenience</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">City Tier</label>
+                <select data-testid="edit-city-tier" defaultValue={storeEditModal.city_tier || ""} id="edit-tier"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="tier1">Tier 1</option>
+                  <option value="tier2">Tier 2</option>
+                  <option value="tier3">Tier 3</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+                <select data-testid="edit-region" defaultValue={storeEditModal.region || ""} id="edit-region"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="North">North</option>
+                  <option value="South">South</option>
+                  <option value="East">East</option>
+                  <option value="West">West</option>
+                  <option value="Central">Central</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Area (sqft)</label>
+                <input data-testid="edit-area" type="number" defaultValue={storeEditModal.area_sqft || ""} id="edit-area"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setStoreEditModal(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button data-testid="save-store-attrs-btn" onClick={() => {
+                const fmt = document.getElementById("edit-fmt").value;
+                const tier = document.getElementById("edit-tier").value;
+                const region = document.getElementById("edit-region").value;
+                const area = document.getElementById("edit-area").value;
+                updateStoreAttrs(storeEditModal.store_code, {
+                  store_format: fmt, city_tier: tier, region: region,
+                  ...(area ? { area_sqft: parseInt(area) } : {}),
+                });
+              }} className="px-4 py-2 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">Save Attributes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exclusion Management Modal */}
+      {exclusionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setExclusionModal(false)}>
+          <div data-testid="exclusion-modal" onClick={e => e.stopPropagation()} className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Manage Exclusions</h2>
+              <button onClick={() => setExclusionModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="text-sm text-gray-500">Excluded store-SKU pairs are skipped during buy plan generation.</p>
+
+            {/* Add new exclusion */}
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium text-gray-600">Add Exclusion</p>
+              <div className="flex gap-2">
+                <input data-testid="excl-store-input" placeholder="Store code" value={newExclusion.store_code}
+                  onChange={e => setNewExclusion(p => ({ ...p, store_code: e.target.value }))}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+                <input data-testid="excl-sku-input" placeholder="SKU / EAN" value={newExclusion.sku}
+                  onChange={e => setNewExclusion(p => ({ ...p, sku: e.target.value }))}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <div className="flex gap-2">
+                <input data-testid="excl-reason-input" placeholder="Reason" value={newExclusion.reason}
+                  onChange={e => setNewExclusion(p => ({ ...p, reason: e.target.value }))}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+                <button data-testid="add-exclusion-btn" onClick={addExclusion}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-[#0B2545] text-white rounded-lg hover:bg-[#13315C]">
+                  <Plus className="h-3.5 w-3.5" /> Add
+                </button>
+              </div>
+            </div>
+
+            {/* Exclusion list */}
+            {exclusions.length > 0 ? (
+              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 font-medium text-gray-600">Store</th>
+                      <th className="text-left p-2 font-medium text-gray-600">SKU</th>
+                      <th className="text-left p-2 font-medium text-gray-600">Reason</th>
+                      <th className="w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exclusions.map((ex, i) => (
+                      <tr key={i} className="border-t border-gray-100">
+                        <td className="p-2 font-mono text-xs">{ex.store_code}</td>
+                        <td className="p-2 font-mono text-xs">{ex.sku}</td>
+                        <td className="p-2 text-xs text-gray-500">{ex.reason || "\u2014"}</td>
+                        <td className="p-2">
+                          <button onClick={() => removeExclusion(ex.store_code, ex.sku)} className="text-red-400 hover:text-red-600">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">No exclusions. All store-SKU pairs will be included in buy plans.</p>
+            )}
           </div>
         </div>
       )}

@@ -658,11 +658,19 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
             "mrp": doc.get("mrp", 0),
         }
 
-    # 6. Calculate buy quantity per SKU
+    # 6. Load exclusions
+    excluded_skus = set()
+    async for doc in db.buy_planning_exclusions.find({"tenant_id": tenant_id}, {"_id": 0, "sku": 1}):
+        excluded_skus.add(doc.get("sku"))
+
+    # 7. Calculate buy quantity per SKU
     buy_plan = []
-    totals = {"total_buy_qty": 0, "total_buy_value": 0, "total_display_qty": 0, "total_safety_qty": 0}
+    totals = {"total_buy_qty": 0, "total_buy_value": 0, "total_display_qty": 0, "total_safety_qty": 0, "excluded_skus": 0}
 
     for sku, meta in sku_meta.items():
+        if sku in excluded_skus:
+            totals["excluded_skus"] += 1
+            continue
         mix = meta["style_mix"]
         category = meta["category"]
         ros_data = ros_map.get(sku, {"total_qty": 0, "daily_ros": 0, "revenue": 0})
@@ -1398,3 +1406,112 @@ async def delete_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
     await db.buy_plans.delete_one({"_id": ObjectId(plan_id)})
     return {"success": True, "deleted": True}
 
+
+
+# ═══════════════════════════════════════════════════
+# STORE ATTRIBUTES (Format, City Tier, Region)
+# ═══════════════════════════════════════════════════
+
+class StoreAttributeUpdateReq(BaseModel):
+    store_format: Optional[str] = None  # hypermarket, supermarket, convenience
+    city_tier: Optional[str] = None     # tier1, tier2, tier3
+    region: Optional[str] = None        # North, South, East, West, Central
+    area_sqft: Optional[int] = None
+
+
+VALID_FORMATS = {"hypermarket", "supermarket", "convenience"}
+VALID_TIERS = {"tier1", "tier2", "tier3"}
+VALID_REGIONS = {"North", "South", "East", "West", "Central"}
+
+
+@router.put("/stores/{store_code}/attributes")
+async def update_store_attributes(store_code: str, body: StoreAttributeUpdateReq, user: dict = Depends(_dep_user)):
+    """Update store extended attributes (format, tier, region, area)."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    store = await db.store_master.find_one({"store_code": store_code}, {"_id": 0, "store_code": 1})
+    if not store:
+        raise HTTPException(404, f"Store '{store_code}' not found")
+    updates = {}
+    if body.store_format is not None:
+        if body.store_format not in VALID_FORMATS:
+            raise HTTPException(400, f"store_format must be one of: {', '.join(VALID_FORMATS)}")
+        updates["store_format"] = body.store_format
+    if body.city_tier is not None:
+        if body.city_tier not in VALID_TIERS:
+            raise HTTPException(400, f"city_tier must be one of: {', '.join(VALID_TIERS)}")
+        updates["city_tier"] = body.city_tier
+    if body.region is not None:
+        if body.region not in VALID_REGIONS:
+            raise HTTPException(400, f"region must be one of: {', '.join(VALID_REGIONS)}")
+        updates["region"] = body.region
+    if body.area_sqft is not None:
+        updates["area_sqft"] = body.area_sqft
+    if not updates:
+        raise HTTPException(400, "No attributes to update")
+    updates["attributes_updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["attributes_updated_by"] = user.get("email", "")
+    await db.store_master.update_one({"store_code": store_code}, {"$set": updates})
+    # Audit log
+    for field, new_val in updates.items():
+        if field.startswith("attributes_updated"):
+            continue
+        await db.buy_planning_audit_log.insert_one({
+            "tenant_id": tenant_id, "action": "attribute_update", "entity_type": "store",
+            "entity_id": store_code, "field": field, "old_value": None, "new_value": str(new_val),
+            "reason": "Store attribute updated", "source": "manual",
+            "created_by": user.get("email", ""), "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"success": True, "store_code": store_code, "updated": list(updates.keys())}
+
+
+# ═══════════════════════════════════════════════════
+# EXCLUSION LIST MANAGEMENT
+# ═══════════════════════════════════════════════════
+
+class ExclusionCreateReq(BaseModel):
+    store_code: str
+    sku: str
+    reason: str = ""
+    expires_at: Optional[str] = None
+
+
+@router.post("/exclusions")
+async def add_exclusion(body: ExclusionCreateReq, user: dict = Depends(_dep_user)):
+    """Add a store-SKU exclusion (excluded from buy plans)."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    await db.buy_planning_exclusions.update_one(
+        {"tenant_id": tenant_id, "store_code": body.store_code, "sku": body.sku},
+        {"$set": {
+            "tenant_id": tenant_id, "store_code": body.store_code, "sku": body.sku,
+            "reason": body.reason, "expires_at": body.expires_at,
+            "created_by": user.get("email", ""), "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"success": True, "store_code": body.store_code, "sku": body.sku}
+
+
+@router.delete("/exclusions/{store_code}/{sku}")
+async def remove_exclusion(store_code: str, sku: str, user: dict = Depends(_dep_user)):
+    """Remove a store-SKU exclusion."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    result = await db.buy_planning_exclusions.delete_one(
+        {"tenant_id": tenant_id, "store_code": store_code, "sku": sku}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Exclusion not found")
+    return {"success": True, "deleted": True}
+
+
+@router.get("/exclusions")
+async def list_exclusions(user: dict = Depends(_dep_user)):
+    """List all active exclusions for the tenant."""
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    exclusions = []
+    async for doc in db.buy_planning_exclusions.find({"tenant_id": tenant_id}, {"_id": 0}):
+        exclusions.append(doc)
+    return {"exclusions": exclusions, "total": len(exclusions)}

@@ -1,0 +1,153 @@
+{
+  "summary": "Iteration 102: Store Master Extension (store_format, city_tier, region) + Exclusion List Management - All backend (28/28) and frontend tests passed. Backend: Store attribute CRUD with validation, Exclusion CRUD, Buy formula exclusion integration. Frontend: Store Wedge tab filters (Region/Tier/Format), store edit modal, exclusion modal in Buy Plan tab.",
+
+  "test_case_matrix": {
+    "BACKEND_STORE_ATTRIBUTES": {
+      "TEST_01_update_store_format_hypermarket": {"status": "PASS", "notes": "PUT /api/buy-planning/stores/DEL-01/attributes with store_format=hypermarket"},
+      "TEST_02_update_store_format_supermarket": {"status": "PASS", "notes": "PUT with store_format=supermarket"},
+      "TEST_03_update_store_format_convenience": {"status": "PASS", "notes": "PUT with store_format=convenience"},
+      "TEST_04_update_city_tier_tier1": {"status": "PASS", "notes": "PUT with city_tier=tier1"},
+      "TEST_05_update_city_tier_tier2": {"status": "PASS", "notes": "PUT with city_tier=tier2"},
+      "TEST_06_update_city_tier_tier3": {"status": "PASS", "notes": "PUT with city_tier=tier3"},
+      "TEST_07_update_region_north": {"status": "PASS", "notes": "PUT with region=North"},
+      "TEST_08_update_region_south": {"status": "PASS", "notes": "PUT with region=South"},
+      "TEST_09_update_region_east": {"status": "PASS", "notes": "PUT with region=East"},
+      "TEST_10_update_region_west": {"status": "PASS", "notes": "PUT with region=West"},
+      "TEST_11_update_region_central": {"status": "PASS", "notes": "PUT with region=Central"},
+      "TEST_12_update_area_sqft": {"status": "PASS", "notes": "PUT with area_sqft=5000"},
+      "TEST_13_update_multiple_attributes": {"status": "PASS", "notes": "PUT with all 4 attributes at once"}
+    },
+    "BACKEND_STORE_VALIDATION": {
+      "TEST_14_invalid_store_format": {"status": "PASS", "notes": "Returns 400 for invalid store_format"},
+      "TEST_15_invalid_city_tier": {"status": "PASS", "notes": "Returns 400 for invalid city_tier (tier4)"},
+      "TEST_16_invalid_region": {"status": "PASS", "notes": "Returns 400 for invalid region"},
+      "TEST_17_nonexistent_store": {"status": "PASS", "notes": "Returns 404 for nonexistent store"},
+      "TEST_18_empty_update": {"status": "PASS", "notes": "Returns 400 for empty update body"}
+    },
+    "BACKEND_EXCLUSION_CRUD": {
+      "TEST_19_add_exclusion": {"status": "PASS", "notes": "POST /api/buy-planning/exclusions creates exclusion"},
+      "TEST_20_list_exclusions": {"status": "PASS", "notes": "GET /api/buy-planning/exclusions returns list"},
+      "TEST_21_exclusion_has_required_fields": {"status": "PASS", "notes": "Exclusion entries have store_code, sku"},
+      "TEST_22_add_duplicate_exclusion_upserts": {"status": "PASS", "notes": "Duplicate exclusion upserts without error"},
+      "TEST_23_remove_exclusion": {"status": "PASS", "notes": "DELETE /api/buy-planning/exclusions/{store}/{sku} removes exclusion"},
+      "TEST_24_remove_nonexistent_exclusion": {"status": "PASS", "notes": "Returns 404 for nonexistent exclusion"}
+    },
+    "BACKEND_BUY_FORMULA_EXCLUSIONS": {
+      "TEST_25_buy_formula_returns_excluded_skus_count": {"status": "PASS", "notes": "POST /api/buy-planning/buy-formula/calculate returns excluded_skus in totals"},
+      "TEST_26_buy_formula_structure": {"status": "PASS", "notes": "Buy formula response has success, parameters, totals, sku_count, buy_plan"}
+    },
+    "BACKEND_STORE_WEDGE_ENDPOINT": {
+      "TEST_27_store_wedge_returns_stores_with_attributes": {"status": "PASS", "notes": "GET /api/buy-planning/store-wedge returns stores with format, tier, region"},
+      "TEST_28_update_and_verify_persistence": {"status": "PASS", "notes": "Updated attributes persist and are returned in store-wedge endpoint"}
+    },
+    "FRONTEND_STORE_WEDGE_TAB": {
+      "TEST_29_region_filter_present": {"status": "PASS", "notes": "data-testid=store-region-filter found with options: All Regions, North, South, East, West, Central"},
+      "TEST_30_tier_filter_present": {"status": "PASS", "notes": "data-testid=store-tier-filter found with options: All Tiers, Tier 1, Tier 2, Tier 3"},
+      "TEST_31_format_filter_present": {"status": "PASS", "notes": "data-testid=store-format-filter found with options: All Formats, Hypermarket, Supermarket, Convenience"},
+      "TEST_32_table_columns": {"status": "PASS", "notes": "Table headers: Store, Name, City, Region, Format, Tier, Wedge, Area, Revenue, Type"},
+      "TEST_33_region_filter_works": {"status": "PASS", "notes": "Selecting 'North' filters to 8 rows"},
+      "TEST_34_tier_filter_works": {"status": "PASS", "notes": "Selecting 'tier1' filters to 9 rows"},
+      "TEST_35_format_filter_works": {"status": "PASS", "notes": "Selecting 'hypermarket' filters to 4 rows"},
+      "TEST_36_format_badges": {"status": "PASS", "notes": "Format badges: hypermarket (purple), supermarket (blue)"},
+      "TEST_37_tier_badges": {"status": "PASS", "notes": "Tier badges: tier1 (amber), tier2 (blue), tier3 (gray)"}
+    },
+    "FRONTEND_STORE_EDIT_MODAL": {
+      "TEST_38_settings_icon_opens_modal": {"status": "PASS", "notes": "Settings icon in table row opens store edit modal"},
+      "TEST_39_modal_has_testid": {"status": "PASS", "notes": "data-testid=store-edit-modal present"},
+      "TEST_40_format_dropdown": {"status": "PASS", "notes": "#edit-fmt dropdown present"},
+      "TEST_41_tier_dropdown": {"status": "PASS", "notes": "#edit-tier dropdown present"},
+      "TEST_42_region_dropdown": {"status": "PASS", "notes": "#edit-region dropdown present"},
+      "TEST_43_area_input": {"status": "PASS", "notes": "#edit-area input present"},
+      "TEST_44_save_button": {"status": "PASS", "notes": "data-testid=save-store-attrs-btn present"}
+    },
+    "FRONTEND_EXCLUSION_MODAL": {
+      "TEST_45_manage_exclusions_btn": {"status": "PASS", "notes": "data-testid=manage-exclusions-btn visible in Buy Plan tab"},
+      "TEST_46_exclusion_modal_opens": {"status": "PASS", "notes": "data-testid=exclusion-modal opens on button click"},
+      "TEST_47_store_input": {"status": "PASS", "notes": "data-testid=excl-store-input present"},
+      "TEST_48_sku_input": {"status": "PASS", "notes": "data-testid=excl-sku-input present"},
+      "TEST_49_add_button": {"status": "PASS", "notes": "Add button present and functional"},
+      "TEST_50_exclusion_appears_in_list": {"status": "PASS", "notes": "Added exclusion appears in modal list with Store, SKU, Reason columns"},
+      "TEST_51_remove_exclusion_x_button": {"status": "PASS", "notes": "X button present to remove exclusions"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_TESTS": "28/28 PASS",
+    "FRONTEND_TESTS": "23/23 PASS",
+    "TOTAL": "51/51 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_store_attrs_exclusions_iter102.py",
+    "/app/test_reports/pytest/pytest_results_iter102.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Backend store attributes endpoint (PUT /api/buy-planning/stores/{store_code}/attributes):",
+    "- Validates store_format: hypermarket, supermarket, convenience",
+    "- Validates city_tier: tier1, tier2, tier3",
+    "- Validates region: North, South, East, West, Central",
+    "- Updates area_sqft as integer",
+    "- Returns 404 for nonexistent store, 400 for invalid values or empty body",
+    "- Logs changes to buy_planning_audit_log",
+    "",
+    "Backend exclusion endpoints:",
+    "- POST /api/buy-planning/exclusions: Creates/upserts store-SKU exclusion",
+    "- GET /api/buy-planning/exclusions: Lists all exclusions for tenant",
+    "- DELETE /api/buy-planning/exclusions/{store_code}/{sku}: Removes exclusion, returns 404 if not found",
+    "",
+    "Buy formula exclusion integration:",
+    "- Loads exclusions from buy_planning_exclusions collection",
+    "- Skips excluded SKUs during calculation",
+    "- Returns excluded_skus count in totals object",
+    "",
+    "Frontend Store Wedge tab:",
+    "- 4 filter dropdowns: store-wedge-filter, store-region-filter, store-tier-filter, store-format-filter",
+    "- Table shows Region, Format (colored badge), Tier (colored badge), Area columns",
+    "- Settings icon opens store edit modal with dropdowns for format, tier, region and input for area",
+    "- Save Attributes button (save-store-attrs-btn) calls PUT endpoint",
+    "",
+    "Frontend Buy Plan tab:",
+    "- Manage Exclusions button (manage-exclusions-btn) opens exclusion modal",
+    "- Exclusion modal (exclusion-modal) has add form with excl-store-input, excl-sku-input",
+    "- Exclusion list shows Store, SKU, Reason columns with X button to remove"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_store_attrs_exclusions_iter102.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (28/28 tests passed)",
+    "frontend": "100% (23/23 tests passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "Test exclusions created and cleaned up during testing. DEL-01 store attributes updated to hypermarket/tier1/North/15000.",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 102 verified Store Master Extension (store_format, city_tier, region) + Exclusion List Management. Backend: PUT /api/buy-planning/stores/{store_code}/attributes validates and updates store attributes. POST/GET/DELETE /api/buy-planning/exclusions for exclusion CRUD. Buy formula returns excluded_skus count. Frontend: Store Wedge tab has 4 filter dropdowns (store-region-filter, store-tier-filter, store-format-filter, store-wedge-filter). Table shows Region, Format, Tier, Area columns with colored badges. Settings icon opens store edit modal (store-edit-modal) with #edit-fmt, #edit-tier, #edit-region, #edit-area fields. Buy Plan tab has Manage Exclusions button (manage-exclusions-btn) that opens exclusion modal (exclusion-modal) with excl-store-input, excl-sku-input inputs.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}
