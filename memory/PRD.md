@@ -1,7 +1,7 @@
 # GetMyPlan - AI Demand Planning Platform
 
 ## Problem Statement
-Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, Super Admin governance, automated Trial Expiration, SSO, and robust piece-level retail assortment planning engine.
+Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, Super Admin governance, automated Trial Expiration, SSO, and robust piece-level retail assortment planning engine. Dynamic "Module System" to control feature flags and resource limits per tenant.
 
 ## Architecture
 - Frontend: React 19 + Tailwind + Shadcn UI
@@ -13,6 +13,7 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 ```
 frontend/src/
 ├── pages/BuyPlanning.jsx (1691 lines - orchestrator + inline tabs)
+├── pages/admin/ModuleConfiguration.jsx (Module system UI)
 ├── components/BuyPlanning/
 │   ├── index.js (barrel exports)
 │   ├── shared.jsx (WedgeBadge, MixBadge, StatCard)
@@ -21,7 +22,11 @@ frontend/src/
 │   ├── StyleMixTab.jsx
 │   ├── DnaTagsTab.jsx
 │   └── AttributionTab.jsx
-backend/routes/buy_planning.py (~2100 lines - all buy planning endpoints)
+backend/
+├── routes/modules.py (Module configuration APIs)
+├── routes/buy_planning.py (~2100 lines - all buy planning endpoints)
+├── multi_tenant/user_routes.py (User mgmt + module-access + scope)
+├── migrations/006_module_system.js (Module system DB migration)
 ```
 
 ## Completed Features
@@ -49,8 +54,16 @@ backend/routes/buy_planning.py (~2100 lines - all buy planning endpoints)
 ### Phase C: Component Restructuring (COMPLETED 2026-04-17)
 - Extracted 5 tab components + shared utilities from BuyPlanning.jsx
 - Main file: 2084 → 1691 lines
-- Components: shared.jsx, OverviewTab, StoreWedgeTab, StyleMixTab, DnaTagsTab, AttributionTab
-- Remaining inline: Buy Plan, Config, Audit Log, Inventory, Orders, Promotions (can be extracted in future)
+
+### Module System (COMPLETED 2026-04-17)
+- MongoDB `module_definitions` collection with 5 modules: Core Classification, Buy Planning, Inventory Management, Space Planning, AI Insights
+- Backend APIs: GET/PUT module toggles, feature toggles, usage/limits
+- User module-access management (per-user module access + data scope)
+- Tenant subscription, limits, usage tracking
+- Frontend Module Configuration page at /admin/modules with:
+  - Modules & Features tab (toggle modules/features, expand/collapse feature lists)
+  - Usage & Limits tab (resource progress bars, subscription info, API limits)
+- 32/32 tests passing (iteration 107)
 
 ## Backlog
 
