@@ -64,6 +64,9 @@ const GlobalConfig = lazy(() => import("./pages/admin/GlobalConfig"));
 const ModuleConfiguration = lazy(() => import("./pages/admin/ModuleConfiguration"));
 const ReadinessDashboard = lazy(() => import("./pages/ReadinessDashboard"));
 const ForecastAccuracyDashboard = lazy(() => import("./pages/ForecastAccuracyDashboard"));
+const PlannerPerformance = lazy(() => import("./pages/PlannerPerformance"));
+const CategoryHealth = lazy(() => import("./pages/CategoryHealth"));
+const RoiDashboard = lazy(() => import("./pages/RoiDashboard"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -278,6 +281,9 @@ const AuthenticatedApp = () => {
             <Route path="/admin/modules" element={<ModuleConfiguration />} />
             <Route path="/readiness" element={<ReadinessDashboard />} />
             <Route path="/forecast-accuracy" element={<ForecastAccuracyDashboard />} />
+            <Route path="/planner-performance" element={<PlannerPerformance />} />
+            <Route path="/category-health" element={<CategoryHealth />} />
+            <Route path="/roi" element={<RoiDashboard />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}

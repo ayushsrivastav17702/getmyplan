@@ -8,7 +8,8 @@ import {
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
-  HelpCircle, FileText, Flag, Blocks, ClipboardCheck, Target
+  HelpCircle, FileText, Flag, Blocks, ClipboardCheck, Target,
+  Trophy, Package, DollarSign, Bell, User, Key, ChevronUp,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -59,8 +60,11 @@ const NAV_GROUPS = [
     id: "insights",
     label: "INSIGHTS",
     items: [
-      { path: "/readiness",         label: "Buy Plan Readiness", icon: ClipboardCheck, permission: null },
-      { path: "/forecast-accuracy", label: "Forecast Accuracy",  icon: Target,         permission: null },
+      { path: "/readiness",            label: "Buy Plan Readiness",    icon: ClipboardCheck, permission: null },
+      { path: "/forecast-accuracy",    label: "Forecast Accuracy",     icon: Target,         permission: null },
+      { path: "/planner-performance",  label: "Planner Performance",   icon: Trophy,         permission: null },
+      { path: "/category-health",      label: "Category Health",       icon: Package,        permission: null },
+      { path: "/roi",                  label: "ROI Dashboard",         icon: DollarSign,     permission: null },
     ],
   },
   {
@@ -416,54 +420,26 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
           })}
         </nav>
 
-        {/* ─── User / Logout ─── */}
+        {/* ─── User Profile with Dropdown ─── */}
         {user && (
-          <div className={`border-t border-white/10 shrink-0 ${collapsed ? "px-2 py-3" : "px-3 py-3"}`} data-testid="user-bar">
-            {collapsed ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-slate-300 font-medium" title={user.email}>
-                  {user.email?.charAt(0).toUpperCase()}
-                </div>
-                <button
-                  data-testid="logout-btn"
-                  onClick={logout}
-                  className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                  title="Sign out"
-                >
-                  <LogOut size={14} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs text-slate-300 font-medium shrink-0">
-                  {user.email?.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-medium text-slate-300 truncate">{user.email}</p>
-                  <p className="text-[10px] text-slate-500 capitalize">{user.role}</p>
-                </div>
-                <button
-                  data-testid="logout-btn"
-                  onClick={logout}
-                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors shrink-0"
-                  title="Sign out"
-                >
-                  <LogOut size={14} />
-                </button>
-              </div>
-            )}
-          </div>
+          <UserProfileSection
+            user={user}
+            collapsed={collapsed}
+            isSuperAdmin={isSuperAdmin}
+            logout={logout}
+          />
         )}
 
-        {/* ─── Keyboard shortcut hint (expanded only) ─── */}
+        {/* ─── Footer: Keyboard Shortcut + System Status ─── */}
         {!collapsed && (
-          <div className="px-4 py-2 border-t border-white/5 shrink-0">
-            <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-600">
+          <div className="px-3 py-2 border-t border-white/5 shrink-0 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
               <Keyboard size={10} />
-              <kbd className="px-1 py-0.5 bg-white/5 rounded text-slate-500 font-mono text-[9px]">Ctrl</kbd>
-              <span>+</span>
-              <kbd className="px-1 py-0.5 bg-white/5 rounded text-slate-500 font-mono text-[9px]">B</kbd>
-              <span className="ml-1">to collapse</span>
+              <kbd className="px-1 py-0.5 bg-white/5 rounded text-slate-500 font-mono text-[9px]">Ctrl+B</kbd>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-500">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Online</span>
             </div>
           </div>
         )}
@@ -476,5 +452,145 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
     </>
   );
 };
+
+/* ─── User Profile Dropdown Component ─── */
+const ROLE_LABELS = {
+  super_admin: "Super Admin",
+  admin: "Tenant Admin",
+  cxo: "CXO",
+  merchandiser: "Merchandiser",
+  allocator: "Allocator",
+  demand_planner: "Demand Planner",
+  store_manager: "Store Manager",
+  viewer: "Viewer",
+};
+
+const ROLE_COLORS = {
+  super_admin: "bg-purple-500/20 text-purple-300",
+  admin: "bg-red-500/20 text-red-300",
+  cxo: "bg-blue-500/20 text-blue-300",
+  merchandiser: "bg-emerald-500/20 text-emerald-300",
+  allocator: "bg-amber-500/20 text-amber-300",
+  demand_planner: "bg-cyan-500/20 text-cyan-300",
+  store_manager: "bg-orange-500/20 text-orange-300",
+  viewer: "bg-slate-500/20 text-slate-300",
+};
+
+function UserProfileSection({ user, collapsed, isSuperAdmin, logout }) {
+  const [open, setOpen] = useState(false);
+  const role = user.role || "viewer";
+  const initials = (user.full_name || user.email || "U")
+    .split(/[@.\s]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s.charAt(0).toUpperCase())
+    .join("");
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (!e.target.closest("[data-profile-dropdown]")) setOpen(false);
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [open]);
+
+  if (collapsed) {
+    return (
+      <div className="border-t border-white/10 shrink-0 px-2 py-3" data-testid="user-bar">
+        <div className="flex flex-col items-center gap-2">
+          <button
+            data-testid="user-avatar-collapsed"
+            onClick={() => setOpen(!open)}
+            className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs text-white font-bold ring-2 ring-white/10 hover:ring-white/20 transition-all"
+            title={user.email}
+          >
+            {initials}
+          </button>
+          <button
+            data-testid="logout-btn"
+            onClick={logout}
+            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+            title="Sign out"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-white/10 shrink-0 relative" data-testid="user-bar" data-profile-dropdown>
+      {/* Profile toggle button */}
+      <button
+        data-testid="user-profile-toggle"
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-3 flex items-center gap-2.5 hover:bg-white/5 transition-colors"
+      >
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs text-white font-bold ring-2 ring-white/10 shrink-0">
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1 text-left">
+          <p className="text-[12px] font-medium text-slate-200 truncate">{user.full_name || user.email}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${ROLE_COLORS[role] || ROLE_COLORS.viewer}`}>
+              {ROLE_LABELS[role] || role}
+            </span>
+          </div>
+        </div>
+        <ChevronUp size={14} className={`text-slate-500 transition-transform shrink-0 ${open ? "" : "rotate-180"}`} />
+      </button>
+
+      {/* Dropdown menu */}
+      {open && (
+        <div
+          data-testid="user-profile-dropdown"
+          className="absolute bottom-full left-2 right-2 mb-1 bg-[#1a2744] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-150"
+        >
+          {/* Profile header in dropdown */}
+          <div className="px-4 py-3 border-b border-white/5">
+            <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+          </div>
+
+          {/* Menu items */}
+          <div className="py-1">
+            <DropdownItem icon={User} label="Profile Settings" href="/tenant-admin" onClick={() => setOpen(false)} testId="dropdown-profile" />
+            <DropdownItem icon={Shield} label="Security & MFA" href="/security" onClick={() => setOpen(false)} testId="dropdown-mfa" />
+            <DropdownItem icon={Key} label="API Keys" href="/tenant-admin" onClick={() => setOpen(false)} testId="dropdown-api-keys" />
+            {isSuperAdmin && (
+              <DropdownItem icon={Building2} label="Switch Tenant" href="/admin/tenants" onClick={() => setOpen(false)} testId="dropdown-switch-tenant" />
+            )}
+          </div>
+
+          <div className="border-t border-white/5 py-1">
+            <button
+              data-testid="dropdown-logout"
+              onClick={() => { setOpen(false); logout(); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-[12px] text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut size={14} /> Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DropdownItem({ icon: Icon, label, href, onClick, testId }) {
+  return (
+    <NavLink
+      to={href}
+      data-testid={testId}
+      onClick={onClick}
+      className="flex items-center gap-2.5 px-4 py-2 text-[12px] text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+    >
+      <Icon size={14} className="text-slate-400" />
+      {label}
+    </NavLink>
+  );
+}
 
 export default Sidebar;

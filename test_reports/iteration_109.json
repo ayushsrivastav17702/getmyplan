@@ -1,0 +1,139 @@
+{
+  "summary": "Iteration 109: Reporting Module APIs and Sidebar UX Redesign fully tested. All 21 backend API tests passed. All frontend UI tests passed. New features: Planner Performance Leaderboard, Category Health Scorecard, ROI Dashboard, User Profile Dropdown with avatar/role badge, Sidebar footer with Online status and Ctrl+B shortcut.",
+
+  "test_case_matrix": {
+    "BACKEND_PLANNER_PERFORMANCE_API": {
+      "TEST_01_returns_200": {"status": "PASS", "notes": "GET /api/reports/planner-performance returns 200 OK"},
+      "TEST_02_has_leaderboard": {"status": "PASS", "notes": "Response contains leaderboard array"},
+      "TEST_03_has_totals": {"status": "PASS", "notes": "Response contains total_plans and total_planners"},
+      "TEST_04_leaderboard_structure": {"status": "PASS", "notes": "Each entry has rank, email, plans_created, approval_rate"},
+      "TEST_05_requires_auth": {"status": "PASS", "notes": "Unauthenticated request returns 400"}
+    },
+    "BACKEND_CATEGORY_HEALTH_API": {
+      "TEST_06_returns_200": {"status": "PASS", "notes": "GET /api/reports/category-health returns 200 OK"},
+      "TEST_07_has_categories": {"status": "PASS", "notes": "Response contains categories array"},
+      "TEST_08_has_period": {"status": "PASS", "notes": "period = 'last_30_days'"},
+      "TEST_09_category_structure": {"status": "PASS", "notes": "Each category has stock_health, fill_rate, doh, revenue_30d"},
+      "TEST_10_requires_auth": {"status": "PASS", "notes": "Unauthenticated request returns 400"}
+    },
+    "BACKEND_ROI_DASHBOARD_API": {
+      "TEST_11_returns_200": {"status": "PASS", "notes": "GET /api/reports/roi returns 200 OK"},
+      "TEST_12_has_kpis": {"status": "PASS", "notes": "Response contains kpis object"},
+      "TEST_13_kpis_structure": {"status": "PASS", "notes": "KPIs has total_plans, approved_plans, plan_approval_rate, time_saved_hrs"},
+      "TEST_14_has_monthly_revenue": {"status": "PASS", "notes": "Response contains monthly_revenue array"},
+      "TEST_15_monthly_revenue_structure": {"status": "PASS", "notes": "Each entry has month (YYYY-MM), revenue, qty, transactions"},
+      "TEST_16_requires_auth": {"status": "PASS", "notes": "Unauthenticated request returns 400"},
+      "TEST_17_additional_kpis": {"status": "PASS", "notes": "KPIs has total_stores, total_skus, inventory_records"}
+    },
+    "BACKEND_DATA_INTEGRITY": {
+      "TEST_18_ranks_sequential": {"status": "PASS", "notes": "Leaderboard ranks are sequential starting from 1"},
+      "TEST_19_percentages_valid": {"status": "PASS", "notes": "stock_health and fill_rate within 0-100 range"},
+      "TEST_20_approval_rate_valid": {"status": "PASS", "notes": "plan_approval_rate within 0-100 range"},
+      "TEST_21_approved_less_than_total": {"status": "PASS", "notes": "approved_plans <= total_plans"}
+    },
+    "FRONTEND_SIDEBAR_INSIGHTS": {
+      "TEST_F01_insights_section": {"status": "PASS", "notes": "INSIGHTS section found in sidebar"},
+      "TEST_F02_readiness_nav": {"status": "PASS", "notes": "Buy Plan Readiness nav item found"},
+      "TEST_F03_forecast_nav": {"status": "PASS", "notes": "Forecast Accuracy nav item found"},
+      "TEST_F04_planner_nav": {"status": "PASS", "notes": "Planner Performance nav item found"},
+      "TEST_F05_category_nav": {"status": "PASS", "notes": "Category Health nav item found"},
+      "TEST_F06_roi_nav": {"status": "PASS", "notes": "ROI Dashboard nav item found"}
+    },
+    "FRONTEND_USER_PROFILE": {
+      "TEST_F07_user_bar": {"status": "PASS", "notes": "User bar found in sidebar"},
+      "TEST_F08_profile_toggle": {"status": "PASS", "notes": "User profile toggle button found"},
+      "TEST_F09_dropdown_opens": {"status": "PASS", "notes": "Clicking toggle opens dropdown"},
+      "TEST_F10_profile_settings": {"status": "PASS", "notes": "Profile Settings menu item found"},
+      "TEST_F11_security_mfa": {"status": "PASS", "notes": "Security & MFA menu item found"},
+      "TEST_F12_api_keys": {"status": "PASS", "notes": "API Keys menu item found"},
+      "TEST_F13_sign_out": {"status": "PASS", "notes": "Sign Out menu item found"}
+    },
+    "FRONTEND_SIDEBAR_FOOTER": {
+      "TEST_F14_online_status": {"status": "PASS", "notes": "'Online' status indicator found"},
+      "TEST_F15_keyboard_shortcut": {"status": "PASS", "notes": "'Ctrl+B' keyboard shortcut displayed"}
+    },
+    "FRONTEND_PLANNER_PERFORMANCE_PAGE": {
+      "TEST_F16_page_loads": {"status": "PASS", "notes": "/planner-performance page loads with planner-performance-page testid"},
+      "TEST_F17_title": {"status": "PASS", "notes": "Title 'Planner Performance' displayed"},
+      "TEST_F18_kpis": {"status": "PASS", "notes": "KPIs section with Total Planners, Total Plans, Top Approval Rate"},
+      "TEST_F19_leaderboard": {"status": "PASS", "notes": "Leaderboard table with rank, planner, plans created, approved, rejected, approval rate"},
+      "TEST_F20_refresh_btn": {"status": "PASS", "notes": "Refresh button found"}
+    },
+    "FRONTEND_CATEGORY_HEALTH_PAGE": {
+      "TEST_F21_page_loads": {"status": "PASS", "notes": "/category-health page loads with category-health-page testid"},
+      "TEST_F22_title": {"status": "PASS", "notes": "Title 'Category Health Scorecard' displayed"},
+      "TEST_F23_category_cards": {"status": "PASS", "notes": "Category cards with stock health, fill rate, DOH metrics"},
+      "TEST_F24_detailed_table": {"status": "PASS", "notes": "Detailed comparison table found"}
+    },
+    "FRONTEND_ROI_DASHBOARD_PAGE": {
+      "TEST_F25_page_loads": {"status": "PASS", "notes": "/roi page loads with roi-dashboard-page testid"},
+      "TEST_F26_title": {"status": "PASS", "notes": "Title 'ROI Dashboard' displayed"},
+      "TEST_F27_kpis": {"status": "PASS", "notes": "KPI cards: Plan Approval Rate, Time Saved, Plans Generated, Avg SKUs/Plan"},
+      "TEST_F28_plan_status": {"status": "PASS", "notes": "Plan Status Breakdown section found"},
+      "TEST_F29_revenue_chart": {"status": "PASS", "notes": "Monthly Revenue Trend chart found"}
+    },
+    "FRONTEND_MODULE_SYSTEM": {
+      "TEST_F30_ai_demand_hidden": {"status": "PASS", "notes": "AI Demand Planning nav item hidden (ai_insights module disabled)"}
+    }
+  },
+
+  "summary_counts": {
+    "BACKEND_APIS": "21/21 PASS",
+    "FRONTEND_UI": "30/30 PASS",
+    "TOTAL": "51/51 PASS"
+  },
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "test_report_links": [
+    "/app/backend/tests/test_reports_iter109.py",
+    "/app/test_reports/pytest/pytest_results_iter109.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Planner Performance API correctly aggregates buy_plans and buy_planning_approval_audit collections",
+    "Category Health API uses style prefix extraction (STYLE-TS-001-WHT-L -> STYLE-TS-001) to map SKUs to categories",
+    "ROI Dashboard API calculates time_saved_hrs as total_plans * 1.92 (estimated manual vs automated time)",
+    "User Profile dropdown uses data-testid='user-profile-toggle' and 'user-profile-dropdown' for testing",
+    "Role badge uses ROLE_COLORS and ROLE_LABELS maps for consistent styling",
+    "Sidebar footer shows 'Online' status with green pulse indicator and Ctrl+B keyboard shortcut",
+    "All 5 INSIGHTS nav items correctly displayed: Readiness, Forecast Accuracy, Planner Performance, Category Health, ROI",
+    "Module system correctly hides AI Demand Planning when ai_insights module is disabled"
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_reports_iter109.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "100% (30/30 UI checks passed)"
+  },
+
+  "test_credentials": {
+    "super_admin": "admin@demo.com / demo1234 (role: super_admin, tenant: production)"
+  },
+
+  "seed_data_creation": "None - used existing data in merch_production database (28 buy_plans, 185813 daily_sales)",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Iteration 109 verified the Reporting Module with 3 new dashboards: (1) Planner Performance Leaderboard at /planner-performance showing 1 planner (admin@demo.com) with 28 plans, 32.1% approval rate, (2) Category Health Scorecard at /category-health showing 3 categories (Apparel, Footwear, Accessories) with 100% stock health and fill rate, (3) ROI Dashboard at /roi showing 53.6% plan approval rate, 53.8 hrs time saved, 28 plans generated. The sidebar UX redesign includes: UserProfileSection component with avatar (initials), role badge (Super Admin in purple), and dropdown menu (Profile Settings, Security & MFA, API Keys, Switch Tenant, Sign Out). The sidebar footer shows 'Online' status indicator and 'Ctrl+B' keyboard shortcut. The INSIGHTS section now has 5 items. Module system correctly hides AI Demand Planning when ai_insights is disabled.",
+
+  "mocked_api": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

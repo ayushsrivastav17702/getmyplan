@@ -53,6 +53,7 @@ from routes.health import router as health_router
 from routes.super_admin import router as super_admin_router, init_super_admin
 from routes.modules import router as modules_router, init_modules
 from routes.dashboards import router as dashboards_router, init_dashboards
+from routes.reports import router as reports_router, init_reports
 from routes.backup import router as backup_router
 from routes.funnel_analytics import router as funnel_router
 from routes.drip_campaigns import router as drip_router
@@ -2789,6 +2790,7 @@ app.include_router(super_admin_router, prefix="/api")
 app.include_router(buy_planning_router, prefix="/api")
 app.include_router(modules_router, prefix="/api")
 app.include_router(dashboards_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
 
 # ==================== MIDDLEWARE STACK (Starlette LIFO: last added = first to run) ====================
 
@@ -3097,6 +3099,7 @@ async def startup():
     init_tenant_provider(get_cached_data, get_db)
     init_modules(get_current_user, get_shared_db, tenant_context)
     init_dashboards(get_db, get_current_user)
+    init_reports(get_db, get_current_user)
 
     # Start daily drip campaign background task
     asyncio.create_task(_drip_scheduler())
