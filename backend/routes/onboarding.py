@@ -43,7 +43,7 @@ async def _collection_count(db, name):
 @router.get("/onboarding/status")
 async def get_onboarding_status(request: Request):
     user = await _auth(request)
-    tenant_id = user.get("tenant_id", "demo")
+    tenant_id = user.get("tenant_id", "")
     db = _get_db()
 
     # Check master data collections
@@ -127,7 +127,7 @@ async def get_onboarding_status(request: Request):
 @router.post("/onboarding/skip")
 async def skip_onboarding(request: Request):
     user = await _auth(request)
-    tenant_id = user.get("tenant_id", "demo")
+    tenant_id = user.get("tenant_id", "")
     db = _get_db()
     await db.onboarding_status.update_one(
         {"tenant_id": tenant_id},
@@ -145,7 +145,7 @@ async def skip_onboarding(request: Request):
 @router.post("/onboarding/complete")
 async def complete_onboarding(request: Request):
     user = await _auth(request)
-    tenant_id = user.get("tenant_id", "demo")
+    tenant_id = user.get("tenant_id", "")
     db = _get_db()
     await db.onboarding_status.update_one(
         {"tenant_id": tenant_id},
@@ -162,7 +162,7 @@ async def complete_onboarding(request: Request):
 @router.post("/onboarding/reset")
 async def reset_onboarding(request: Request):
     user = await _auth(request)
-    tenant_id = user.get("tenant_id", "demo")
+    tenant_id = user.get("tenant_id", "")
     db = _get_db()
     await db.onboarding_status.delete_many({"tenant_id": tenant_id})
     return {"success": True, "message": "Onboarding reset"}

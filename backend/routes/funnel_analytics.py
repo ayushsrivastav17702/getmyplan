@@ -47,9 +47,9 @@ async def get_funnel_data(
     """
     role = user.get("role", "viewer")
     tenant_id = user.get("tenant_id")
-    if role != "super_admin" and tenant_id != "demo":
+    if role != "super_admin":
         raise HTTPException(status_code=403, detail="Only super admins can access funnel analytics")
-    is_platform_wide = role in ("super_admin",) or tenant_id == "demo"
+    is_platform_wide = role in ("super_admin",)
 
     shared = get_shared_db()
     now = datetime.now(timezone.utc)

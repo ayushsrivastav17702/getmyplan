@@ -326,8 +326,8 @@ async def update_tenant_status(tenant_id: str, body: dict, request: Request, use
 @router.delete("/tenants/{tenant_id}")
 async def delete_tenant(tenant_id: str, request: Request, user: dict = Depends(_dep_get_current_user)):
     _super_admin_only(user)
-    if tenant_id == "demo":
-        raise HTTPException(400, "Cannot delete the demo tenant")
+    if tenant_id == "production":
+        raise HTTPException(400, "Cannot delete the primary tenant")
     shared = _shared()
     await shared.tenants.delete_one({"tenant_id": tenant_id})
     await shared.user_tenants.delete_many({"tenant_id": tenant_id})

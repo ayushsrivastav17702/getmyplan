@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/drip", tags=["Drip Campaigns"])
 
 
 def _require_super_admin(user: dict):
-    if user.get("role") != "super_admin" and user.get("tenant_id") != "demo":
+    if user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Only super admins can manage drip campaigns")
 
 
