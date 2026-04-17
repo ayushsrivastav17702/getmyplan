@@ -107,9 +107,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 if doc:
                     return doc["tenant_id"]
 
-        # 4. Fallback to "demo" tenant (backward compat / development)
-        demo = await resolve_tenant("demo")
-        if demo:
-            return "demo"
+        # 4. Fallback to default tenant (backward compat / development)
+        default = await resolve_tenant("production")
+        if default:
+            return "production"
 
         return None

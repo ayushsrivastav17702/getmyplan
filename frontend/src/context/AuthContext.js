@@ -30,7 +30,9 @@ export const AuthProvider = ({ children }) => {
     interceptorId.current = axios.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
+        const status = error.response?.status;
+        const detail = error.response?.data?.detail || "";
+        if (status === 401 || (status === 403 && detail.includes("not found or inactive"))) {
           // Don't intercept login requests themselves
           const url = error.config?.url || "";
           if (!url.includes("/auth/login")) {
