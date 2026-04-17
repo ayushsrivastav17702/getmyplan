@@ -21,8 +21,7 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 - Trial Expiration Scheduler & Plan Limits Enforcement
 - Platform-wide Analytics Dashboard
 - Feature Flags & Global Config Defaults
-- IP Whitelisting
-- Upload speed optimization
+- IP Whitelisting, Upload speed optimization
 
 ### Buy Planning Module (Retail Assortment)
 - Phase 1: Store Wedge (A/B/C) + Style Mix (Core/Fashion/Test) classification
@@ -31,7 +30,13 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 - Feature B: Manual Overrides with Audit Trail
 - Feature C: CSV/Excel Export
 - Feature F: Scheduled auto-refresh jobs (APScheduler)
-- Sell-Through Config: Configurable target multipliers per style mix (Config tab UI) - COMPLETED 2026-04-17
+- Sell-Through Config: Configurable target multipliers per style mix (Config tab UI)
+
+### Phase A UI Enhancements (COMPLETED 2026-04-17)
+- Store Wedge tab: Distribution summary cards (Total/A/B/C with progress bars), search by ID/name/city, wedge filter dropdown, Auto/Manual type column
+- Style Mix tab: Search filter with live style count
+- Attribution tab: Clickable detail panel showing style info, wedge allocation bars, coverage %
+- Config tab: Impact indicators (Balanced/Aggressive/Conservative), Impact Summary panel, live Example Calculation
 
 ### Database (MongoDB)
 - Clean production tenant only (demo tenant removed)
@@ -42,7 +47,11 @@ Multi-tenant AI Demand Planning system with V2 data pipelines, ML forecasting, S
 ### P1
 - Audit logging for wedge/mix changes (Option A - user requested)
 
-### P2
+### P2 (Phase B)
+- Buy Plan persistence & approval workflow (save/load/approve/edit quantities)
+- Component restructuring (Phase C) - break BuyPlanning.jsx into components
+
+### P2 (Enterprise)
 - Payment integration (Stripe/Razorpay) for tenant billing
 - Full SAML/OIDC SSO (Okta, Azure AD)
 - Subdomain-based tenant routing
