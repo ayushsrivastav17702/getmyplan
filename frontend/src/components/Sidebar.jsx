@@ -4,7 +4,7 @@ import axios from "axios";
 import {
   Home, Upload, Settings, BarChart3, PieChart, TrendingUp,
   MessageSquare, ChevronRight, ChevronLeft, ChevronDown,
-  Check, AlertCircle, Warehouse, Server, Award, XCircle,
+  Check, CheckCircle, AlertCircle, Warehouse, Server, Award, XCircle,
   ShoppingCart, Clock, Layout as LayoutIcon, LayoutDashboard,
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
@@ -54,6 +54,7 @@ const NAV_GROUPS = [
       { path: "/warehouse",     label: "Warehouse",            icon: Warehouse,       permission: "dashboard.warehouse.view" },
       { path: "/buy-plan",      label: "Buy Plan Generator",   icon: FileSpreadsheet, permission: null },
       { path: "/buy-planning",  label: "Buy Planning",         icon: BarChart3,       permission: null },
+      { path: "/approvals",     label: "Approval Workflow",    icon: CheckCircle,     permission: null },
     ],
   },
   {

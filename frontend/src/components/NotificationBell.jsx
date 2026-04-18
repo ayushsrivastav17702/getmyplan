@@ -37,11 +37,22 @@ export default function NotificationBell() {
     setLoading(false);
   }, []);
 
-  // Poll unread count every 30s
+  // Poll unread count every 30s (pause when tab is hidden to avoid stale connections)
   useEffect(() => {
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
+    let interval = setInterval(fetchUnreadCount, 30000);
+    const handleVisibility = () => {
+      clearInterval(interval);
+      if (!document.hidden) {
+        fetchUnreadCount();
+        interval = setInterval(fetchUnreadCount, 30000);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchUnreadCount]);
 
   // Fetch full list when panel opens

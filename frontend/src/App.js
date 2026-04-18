@@ -67,6 +67,7 @@ const ForecastAccuracyDashboard = lazy(() => import("./pages/ForecastAccuracyDas
 const PlannerPerformance = lazy(() => import("./pages/PlannerPerformance"));
 const CategoryHealth = lazy(() => import("./pages/CategoryHealth"));
 const RoiDashboard = lazy(() => import("./pages/RoiDashboard"));
+const ApprovalWorkflow = lazy(() => import("./pages/ApprovalWorkflow"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -284,6 +285,7 @@ const AuthenticatedApp = () => {
             <Route path="/planner-performance" element={<PlannerPerformance />} />
             <Route path="/category-health" element={<CategoryHealth />} />
             <Route path="/roi" element={<RoiDashboard />} />
+            <Route path="/approvals" element={<ApprovalWorkflow />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 
             {/* 404 — proper Not Found page */}

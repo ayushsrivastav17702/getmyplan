@@ -278,19 +278,52 @@ const ExecutiveDashboard = () => {
         pageType="executive"
       />
 
-      {/* Error */}
+      {/* Error / Empty State */}
       {error && (
-        <div className="bg-amber-50 border border-amber-200 p-6 mb-6 rounded text-center" data-testid="exec-error">
-          <AlertTriangle size={36} className="text-amber-500 mx-auto mb-2" />
-          <p className="text-amber-700">{error}</p>
-          <button onClick={() => navigate('/upload')} className="btn-primary mt-3 inline-flex items-center gap-2">
-            Go to Data Upload <ArrowRight size={16} />
+        <div className="bg-white border border-slate-200 rounded-xl p-10 mb-6 text-center shadow-sm" data-testid="exec-error">
+          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <Upload size={28} className="text-amber-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">Dashboard Needs Data</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">{error === "Failed to fetch dashboard data." ? "Upload your daily sales, store master, and SKU master files to power the executive dashboard." : error}</p>
+          <button onClick={() => navigate('/upload')} className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors" data-testid="exec-upload-btn">
+            <Upload size={16} /> Upload Data <ArrowRight size={14} />
           </button>
         </div>
       )}
 
-      {loading && (
-        <div className="flex items-center justify-center py-20"><div className="spinner" /></div>
+      {/* Loading Skeleton */}
+      {loading && !data && (
+        <div data-testid="exec-loading-skeleton">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm animate-pulse">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-slate-100" />
+                  <div className="w-20 h-7 rounded bg-slate-100" />
+                </div>
+                <div className="w-24 h-4 rounded bg-slate-100 mt-2" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 h-64 shadow-sm animate-pulse">
+              <div className="w-32 h-5 rounded bg-slate-100 mb-4" />
+              <div className="w-full h-40 rounded bg-slate-50" />
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-5 h-64 shadow-sm animate-pulse">
+              <div className="w-32 h-5 rounded bg-slate-100 mb-4" />
+              <div className="w-full h-40 rounded bg-slate-50" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading && data && (
+        <div className="flex items-center justify-center py-4 mb-4">
+          <Loader2 size={20} className="animate-spin text-indigo-500 mr-2" />
+          <span className="text-sm text-slate-500">Refreshing...</span>
+        </div>
       )}
 
       {data && !loading && !error && (
