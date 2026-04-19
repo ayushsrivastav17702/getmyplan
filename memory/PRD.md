@@ -59,7 +59,8 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 ### Industries Pages (2026-02-19)
 - 5 Industries pages via `src/data/industryContent.js` + shared `IndustryPage` template at `/industries/:slug`:
   - `apparel`, `footwear`, `accessories`, `beauty-cosmetics`, `home-living`
-  - Each page: kicker, gradient hero, Industry Challenges, How GetMyPlan Helps, Key Features checklist, Final CTA, per-page SEO
+  - Each page: kicker, gradient hero, **Categories (3 sub-category cards)**, optional **Callout** (body text or checklist), Industry Challenges, How GetMyPlan Helps, Key Features checklist, Final CTA, per-page SEO
+  - Footwear has a "Size Curve Challenge" body callout; Beauty has a 4-bullet "Unique Beauty Industry Challenges" callout
 - Navbar `Industries` dropdown wired to real pages
 
 ### Test Results

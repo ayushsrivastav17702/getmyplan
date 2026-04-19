@@ -79,6 +79,49 @@ export default function IndustryPage() {
         </div>
       </section>
 
+      {/* ─── Categories ─────────────────────────────────────────── */}
+      {ind.categories?.length > 0 && (
+        <section className="py-10 max-w-6xl mx-auto px-4 sm:px-6" data-testid="industry-categories">
+          <div className="grid sm:grid-cols-3 gap-4">
+            {ind.categories.map((c) => (
+              <div
+                key={c.title}
+                className="bg-white/[0.04] border border-indigo-500/10 rounded-2xl p-6 hover:bg-white/[0.07] hover:border-indigo-500/40 transition"
+                data-testid={`industry-category-${c.title.replace(/\s+/g, "-").toLowerCase()}`}
+              >
+                <div className="text-4xl mb-3">{c.icon}</div>
+                <h3 className="text-lg font-semibold text-white mb-2">{c.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{c.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ─── Optional Callout (bullets or body text) ────────────── */}
+      {(ind.calloutTitle && (ind.calloutBody || ind.calloutBullets?.length > 0)) && (
+        <section className="py-10 max-w-4xl mx-auto px-4 sm:px-6" data-testid="industry-callout">
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 sm:p-8">
+            <h2 className="text-xl font-bold text-white text-center mb-4">{ind.calloutTitle}</h2>
+            {ind.calloutBody && (
+              <p className="text-sm text-slate-400 text-center max-w-2xl mx-auto leading-relaxed">
+                {ind.calloutBody}
+              </p>
+            )}
+            {ind.calloutBullets?.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-3 mt-2">
+                {ind.calloutBullets.map((b, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                    <span className="text-emerald-400 font-bold mt-0.5">✓</span>
+                    <span>{b}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ─── Challenges ─────────────────────────────────────────── */}
       <section className="py-14 max-w-6xl mx-auto px-4 sm:px-6" data-testid="industry-challenges">
         <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-10">Industry Challenges</h2>
@@ -126,7 +169,8 @@ export default function IndustryPage() {
       {/* ─── Final CTA ──────────────────────────────────────────── */}
       <section className="py-16 px-4 sm:px-6">
         <div className={`max-w-5xl mx-auto rounded-3xl p-10 sm:p-12 text-center bg-gradient-to-r ${ind.heroGradient} shadow-[0_30px_80px_-30px_rgba(99,102,241,0.6)]`} data-testid="industry-final-cta">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-6">{ind.ctaTitle}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{ind.ctaTitle}</h2>
+          {ind.ctaSubtitle && <p className="text-white/80 mb-6">{ind.ctaSubtitle}</p>}
           <Link
             to="/signup"
             className="inline-block px-8 py-3 rounded-xl bg-white text-slate-900 font-semibold hover:shadow-xl transition"
