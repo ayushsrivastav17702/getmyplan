@@ -68,6 +68,7 @@ const PlannerPerformance = lazy(() => import("./pages/PlannerPerformance"));
 const CategoryHealth = lazy(() => import("./pages/CategoryHealth"));
 const RoiDashboard = lazy(() => import("./pages/RoiDashboard"));
 const ApprovalWorkflow = lazy(() => import("./pages/ApprovalWorkflow"));
+const ProductPage = lazy(() => import("./pages/ProductPage"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
 const VsBlueYonder = lazy(() => import("./pages/VsBlueYonder"));
@@ -426,6 +427,7 @@ const AppRouter = () => {
       ) : (
         <>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/products/:slug" element={<ProductPage />} />
           <Route path="*" element={<NotFound />} />
         </>
       )}

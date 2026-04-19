@@ -1,41 +1,53 @@
-import { motion, useInView } from "framer-motion";
-import { useRef } from "react";
-import { TrendingUp, Shield, Clock, Star } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
-const stats = [
-  { icon: TrendingUp, value: "92.7%", label: "Forecast Accuracy", sub: "*Backtested on 50+ datasets" },
-  { icon: Shield, value: "41%", label: "Stockout Reduction", sub: "**Based on beta results" },
-  { icon: Clock, value: "32%", label: "Dead Stock Reduction", sub: "**Based on beta results" },
-  { icon: Star, value: "4.9", label: "User Rating", sub: "Out of 5 stars" },
+const STATS = [
+  { target: 92.7, suffix: "%", label: "Forecast Accuracy", desc: "Backtested on 50+ datasets" },
+  { target: 41, suffix: "%", label: "Stockout Reduction", desc: "Based on beta results" },
+  { target: 32, suffix: "%", label: "Dead Stock Reduction", desc: "Based on beta results" },
+  { target: 4.9, suffix: "", label: "User Rating", desc: "Out of 5 stars" },
 ];
+
+function AnimatedCounter({ target, suffix, started }) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!started) return;
+    let current = 0;
+    const step = target / 60;
+    const iv = setInterval(() => {
+      current += step;
+      if (current >= target) { setValue(target); clearInterval(iv); }
+      else setValue(current);
+    }, 25);
+    return () => clearInterval(iv);
+  }, [started, target]);
+  const display = target % 1 !== 0 ? value.toFixed(1) : Math.ceil(value);
+  return <span>{display}{suffix}{target === 4.9 ? " / 5" : ""}</span>;
+}
 
 export default function StatsSection() {
   const ref = useRef(null);
-  const inView = useInView(ref, { once: true });
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } }, { threshold: 0.3 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   return (
-    <section ref={ref} data-testid="stats-section" className="py-16 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
-          {stats.map((s, i) => {
-            const Icon = s.icon;
-            return (
-              <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 }}
-                className="text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                </div>
-                <p className="text-3xl sm:text-4xl font-bold text-gray-900">
-                  {s.value}{s.label === "User Rating" && <span className="text-yellow-500 text-xl ml-1">&#9733;</span>}
-                </p>
-                <p className="text-sm font-medium text-gray-700 mt-1">{s.label}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{s.sub}</p>
-              </motion.div>
-            );
-          })}
-        </div>
+    <section ref={ref} className="relative py-16 bg-black/20" data-testid="stats-section">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {STATS.map((s) => (
+          <div key={s.label} className="bg-white/[0.04] backdrop-blur-sm rounded-2xl border border-indigo-500/10 p-6 text-center hover:bg-white/[0.06] transition-colors" data-testid={`stat-${s.label.toLowerCase().replace(/\s/g, "-")}`}>
+            <div className="text-3xl sm:text-4xl font-extrabold text-indigo-400 mb-1">
+              <AnimatedCounter target={s.target} suffix={s.suffix} started={visible} />
+            </div>
+            <div className="text-sm text-slate-300 font-medium">{s.label}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{s.desc}</div>
+          </div>
+        ))}
       </div>
     </section>
   );
