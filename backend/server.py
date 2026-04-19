@@ -3107,6 +3107,29 @@ async def startup():
     asyncio.create_task(_trial_expiration_scheduler())
     # Weekly buy planning auto-refresh (wedge + style mix + DNA)
     asyncio.create_task(_buy_planning_refresh_scheduler())
+    # Warm Redis cache for heavy dashboard queries (runs once at startup)
+    asyncio.create_task(_warmup_cache())
+
+
+async def _warmup_cache():
+    """Pre-warm Redis cache for heavy dashboard queries after startup."""
+    await asyncio.sleep(5)  # Wait for DB connections to stabilize
+    try:
+        from services.cache_service import get_redis
+        r = get_redis()
+        if not r:
+            return
+        logger.info("Cache warmup: pre-loading heavy datasets...")
+        # Pre-load the expensive pandas DataFrames that power the executive dashboard
+        for ft in ["daily_sales", "store_master", "style_master", "sku_ean_master", "store_inventory"]:
+            try:
+                await get_cached_data(ft)
+            except Exception:
+                pass
+        logger.info("Cache warmup complete")
+    except Exception as e:
+        logger.warning("Cache warmup failed (non-fatal): %s", e)
+
 
 
 async def _drip_scheduler():
