@@ -28,9 +28,11 @@ const SOLUTIONS = [
 ];
 
 const INDUSTRIES = [
-  { href: "#", label: "Apparel" }, { href: "#", label: "Footwear" },
-  { href: "#", label: "Accessories" }, { href: "#", label: "Beauty & Cosmetics" },
-  { href: "#", label: "Home & Living" },
+  { href: "/industries/apparel", label: "Apparel" },
+  { href: "/industries/footwear", label: "Footwear" },
+  { href: "/industries/accessories", label: "Accessories" },
+  { href: "/industries/beauty-cosmetics", label: "Beauty & Cosmetics" },
+  { href: "/industries/home-living", label: "Home & Living" },
 ];
 
 const RESOURCES = [

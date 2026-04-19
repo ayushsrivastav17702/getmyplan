@@ -71,6 +71,7 @@ const ApprovalWorkflow = lazy(() => import("./pages/ApprovalWorkflow"));
 const ProductPage = lazy(() => import("./pages/ProductPage"));
 const ProductsListing = lazy(() => import("./pages/ProductsListing"));
 const SolutionPage = lazy(() => import("./pages/SolutionPage"));
+const IndustryPage = lazy(() => import("./pages/IndustryPage"));
 const ApiReference = lazy(() => import("./pages/ApiReference"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VsAnaplan = lazy(() => import("./pages/VsAnaplan"));
@@ -433,6 +434,7 @@ const AppRouter = () => {
           <Route path="/products" element={<ProductsListing />} />
           <Route path="/products/:slug" element={<ProductPage />} />
           <Route path="/solutions/:slug" element={<SolutionPage />} />
+          <Route path="/industries/:slug" element={<IndustryPage />} />
           <Route path="/resources/api-reference" element={<ApiReference />} />
           <Route path="*" element={<NotFound />} />
         </>

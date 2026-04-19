@@ -56,6 +56,12 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Industries Pages (2026-02-19)
+- 5 Industries pages via `src/data/industryContent.js` + shared `IndustryPage` template at `/industries/:slug`:
+  - `apparel`, `footwear`, `accessories`, `beauty-cosmetics`, `home-living`
+  - Each page: kicker, gradient hero, Industry Challenges, How GetMyPlan Helps, Key Features checklist, Final CTA, per-page SEO
+- Navbar `Industries` dropdown wired to real pages
+
 ### Test Results
 - Iteration 112: All fixes — PASS
 - Product page smoke test (2026-02-19): all sections render, ROI calc recalculates, 404 handled, per-product content unique
