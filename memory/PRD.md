@@ -41,8 +41,17 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 ### Notification Stability (2026-04-18)
 - Visibility-aware polling — pauses when browser tab is hidden, resumes on focus
 
+### Enterprise Marketing Website (2026-02-19)
+- Dark-themed landing page (Navbar, Hero, Stats, Features, Pricing) with Three.js 3D particle background
+- Dynamic ProductPage template driven by CMS-style content mapping in `src/data/productContent.js`
+  - Sections per page: Hero + gradient badge, Key Features (with Core/Enterprise badges), How It Works, Technical Formula, Benefits, Use Cases, ROI Calculator, Related Products, FAQ, Final CTA
+  - 9 products: demand-planning, buy-planning, allocation-replenishment, assortment-planning, integrated-business-planning, inventory-planning, merchandise-financial-planning, otb-wssi, range-assortment
+- `/products` listing page with all 9 products as cards
+- Per-product SEO (meta title/description/keywords via Helmet)
+
 ### Test Results
-- Iteration 111: All fixes — 26/26 PASS (100%)
+- Iteration 112: All fixes — PASS
+- Product page smoke test (2026-02-19): all sections render, ROI calc recalculates, 404 handled, per-product content unique
 
 ## Backlog
 - P2: Payment integration (Stripe/Razorpay), SAML/OIDC SSO, Subdomain routing, Tenant branding
