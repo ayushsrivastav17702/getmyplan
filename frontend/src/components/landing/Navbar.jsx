@@ -20,9 +20,11 @@ const PRODUCTS = [
 ];
 
 const SOLUTIONS = [
-  { href: "#", label: "Fashion Retail" }, { href: "#", label: "Luxury Goods" },
-  { href: "#", label: "Fast Fashion" }, { href: "#", label: "D2C Brands" },
-  { href: "#", label: "Multi-Channel Retail" },
+  { href: "/solutions/fashion-retail", label: "Fashion Retail" },
+  { href: "/solutions/luxury-goods", label: "Luxury Goods" },
+  { href: "/solutions/fast-fashion", label: "Fast Fashion" },
+  { href: "/solutions/d2c-brands", label: "D2C Brands" },
+  { href: "/solutions/multi-channel-retail", label: "Multi-Channel Retail" },
 ];
 
 const INDUSTRIES = [
@@ -32,9 +34,9 @@ const INDUSTRIES = [
 ];
 
 const RESOURCES = [
-  { href: "/help", label: "Help Center" }, { href: "/blog", label: "Blog" },
-  { href: "#", label: "API Reference" }, { href: "#", label: "Case Studies" },
-  { href: "#", label: "Webinars" }, { href: "#", label: "White Papers" },
+  { href: "/help", label: "Help Center" },
+  { href: "/blog", label: "Blog" },
+  { href: "/resources/api-reference", label: "API Reference" },
 ];
 
 const ICON_MAP = {
