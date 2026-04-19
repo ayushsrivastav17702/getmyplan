@@ -10,21 +10,31 @@ const puppeteer = require('puppeteer');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { extractSlugs } = require('./scripts/generate-sitemap');
 
 const BUILD_DIR = path.join(__dirname, 'build');
 const PORT = 45678;
 
-// All public routes to pre-render (landing + blogs + SEO + legal pages)
+// All public routes to pre-render (landing + blogs + SEO + legal pages + CMS pages)
 // Note: /blog index is last so the blog/ directory already exists from sub-routes
+const CMS_ROUTES = [
+  ...extractSlugs('src/data/productContent.js').map((s) => `/products/${s}`),
+  ...extractSlugs('src/data/solutionContent.js').map((s) => `/solutions/${s}`),
+  ...extractSlugs('src/data/industryContent.js').map((s) => `/industries/${s}`),
+];
+
 const ROUTES = [
   '/',
   '/login',
   '/register',
   '/privacy',
   '/terms',
+  '/products',
+  '/resources/api-reference',
   '/vs/anaplan',
   '/vs/blue-yonder',
   '/ai-demand-planning',
+  ...CMS_ROUTES,
   '/blog/best-demand-planning-software-india-2026',
   '/blog/reduce-stockouts-myntra-flipkart',
   '/blog/what-is-demand-forecasting-guide',

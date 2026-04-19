@@ -56,6 +56,12 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Auto-Generated Sitemap (2026-02-19)
+- New `frontend/scripts/generate-sitemap.js` reads slugs from `productContent.js`, `solutionContent.js`, `industryContent.js` and writes `public/sitemap.xml` (72 URLs: 11 static + 9 products + 5 solutions + 5 industries + 42 blog posts)
+- Wired as `yarn prebuild` so it runs before every `craco build` (live sitemap always current)
+- `prerender.js` now also sources the 19 CMS slugs so SSR snapshots stay in sync (no more blank SPA shell for crawlers)
+- Base URL configurable via `SITE_URL` env var (defaults to `https://getmyplan.in`)
+
 ### Industries Pages (2026-02-19)
 - 5 Industries pages via `src/data/industryContent.js` + shared `IndustryPage` template at `/industries/:slug`:
   - `apparel`, `footwear`, `accessories`, `beauty-cosmetics`, `home-living`

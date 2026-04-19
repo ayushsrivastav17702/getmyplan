@@ -67,6 +67,7 @@
   },
   "scripts": {
     "start": "craco start",
+    "prebuild": "node scripts/generate-sitemap.js",
     "build": "craco build",
     "postbuild": "node prerender.js",
     "test": "craco test"
