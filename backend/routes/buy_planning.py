@@ -720,6 +720,14 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
         buy_qty = max(demand_buy, display_qty, safety_qty)
         buy_qty = round(buy_qty)
 
+        # Binding factor — which component drove the final qty
+        if demand_buy >= max(display_qty, safety_qty):
+            binding = "demand"
+        elif display_qty >= safety_qty:
+            binding = "display_min"
+        else:
+            binding = "safety_stock"
+
         buy_value = buy_qty * meta.get("mrp", 0)
         totals["total_buy_qty"] += buy_qty
         totals["total_buy_value"] += buy_value
@@ -744,7 +752,8 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
             "buy_qty": buy_qty,
             "buy_value": round(buy_value, 2),
             "mrp": meta["mrp"],
-            "binding_constraint": "demand" if demand_buy >= max(display_qty, safety_qty) else "display_min" if display_qty >= safety_qty else "safety_stock",
+            "binding_factor": binding,
+            "binding_constraint": binding,  # legacy alias — do not remove
         })
 
     buy_plan.sort(key=lambda x: x["buy_value"], reverse=True)
@@ -1226,7 +1235,12 @@ async def export_buy_plan_csv(cover_days: int = 30, safety_days: int = 7, user: 
             display_qty += disp_mins.get((category, w), disp_mins.get(("ALL", w), 4)) * wedge_counts.get(w, 0)
         safety_qty = daily_ros * safety_days
         buy_qty = round(max(demand_buy, display_qty, safety_qty))
-        constraint = "demand" if demand_buy >= max(display_qty, safety_qty) else "display_min" if display_qty >= safety_qty else "safety_stock"
+        if demand_buy >= max(display_qty, safety_qty):
+            constraint = "demand"
+        elif display_qty >= safety_qty:
+            constraint = "display_min"
+        else:
+            constraint = "safety_stock"
         rows.append({
             "SKU": sku, "Style": meta.get("style", ""), "Category": category,
             "Sub Category": meta.get("sub_category", ""), "Style Mix": mix,
@@ -1235,7 +1249,8 @@ async def export_buy_plan_csv(cover_days: int = 30, safety_days: int = 7, user: 
             "Sell-Through Target": sell_through, "Demand Buy": round(demand_buy),
             "Display Minimum": round(display_qty), "Safety Stock": round(safety_qty),
             "Buy Qty": buy_qty, "Buy Value": round(buy_qty * meta.get("mrp", 0), 2),
-            "Binding Constraint": constraint,
+            "Binding Factor": constraint,
+            "Binding Constraint": constraint,  # legacy alias
             "Flow Rank": meta.get("flow_rank"), "Lifecycle": meta.get("lifecycle_stage", ""),
             "Launch Date": meta.get("launch_date", ""),
         })

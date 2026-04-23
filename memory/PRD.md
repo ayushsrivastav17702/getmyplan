@@ -56,6 +56,12 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Buy Formula Attribution Safety (2026-02-19)
+- New canonical `/app/backend/core/buy_formula.py` — per-store `calculate_buy_qty()` that applies `attribution_pct` ONLY to the demand signal, never to the absolute floors (display_minimum, safety_stock)
+- Added `binding_factor` field to every buy plan row (alongside legacy `binding_constraint` alias for backward compat) — values: `demand` / `display_min` / `safety_stock`
+- Pinned regression test `/app/backend/tests/test_buy_formula_attribution.py` — A-store 100% vs C-store 20% with zero demand MUST return the same display_minimum. 6/6 tests pass.
+- Verified live: `/api/buy-planning/buy-formula/calculate` returns 173 rows each carrying `binding_factor` + `binding_constraint`.
+
 ### Auto-Generated Sitemap (2026-02-19)
 - New `frontend/scripts/generate-sitemap.js` reads slugs from `productContent.js`, `solutionContent.js`, `industryContent.js` and writes `public/sitemap.xml` (72 URLs: 11 static + 9 products + 5 solutions + 5 industries + 42 blog posts)
 - Wired as `yarn prebuild` so it runs before every `craco build` (live sitemap always current)
