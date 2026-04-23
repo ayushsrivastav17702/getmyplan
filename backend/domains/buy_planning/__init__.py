@@ -7,16 +7,17 @@ routes/buy_planning.py      ← thin HTTP adapters (Pydantic in/out, auth, HTTPE
     ↓ imports
 domains/buy_planning/       ← business logic (this package)
     ├── schemas.py          ← Pydantic request/response models
-    ├── display_minimums.py ← one vertical slice (repo + service)
-    ├── style_mix.py        ← next slice (pending)
+    ├── display_minimums.py ← vertical slice (repo + service)
+    ├── style_mix.py        ← vertical slice (repo + service)
+    ├── store_wedge.py      ← vertical slice (repo + service)
     └── ...                 ← future slices
     ↓ imports
 core/buy_formula.py         ← pure math, no DB, no HTTP
 ```
 
 # The strangler-fig migration pattern
-The monolithic `routes/buy_planning.py` (2,343 LOC) is being broken down one
-vertical slice at a time. Each slice follows the same 3-layer shape:
+The monolithic `routes/buy_planning.py` is being broken down one vertical slice
+at a time. Each slice follows the same 3-layer shape:
 
   1. `<feature>.Repository`  — pure Motor/MongoDB calls, returns plain dicts
   2. `<feature>.Service`     — business logic, composes repo + core utils
@@ -24,10 +25,10 @@ vertical slice at a time. Each slice follows the same 3-layer shape:
 
 # How to extract the next slice
 1. Pick a set of related endpoints (e.g. all `/style-mix/*`).
-2. Create `domains/buy_planning/style_mix.py` with Repository + Service.
+2. Create `domains/buy_planning/<slice>.py` with Repository + Service.
 3. Lift logic out of `routes/buy_planning.py` — repo for DB, service for compute.
 4. Replace the route body with a delegation:
-       svc = StyleMixService(StyleMixRepository(_db_func()))
+       svc = XxxService(XxxRepository(_db_func()))
        return await svc.do_thing(...)
 5. Run the full test suite + curl smoke each endpoint.
 6. Commit.
@@ -52,6 +53,16 @@ from .style_mix import (
     ValidationError as StyleMixValidationError,
     NotFoundError as StyleMixNotFoundError,
 )
+from .store_wedge import (
+    StoreWedgeRepository,
+    StoreWedgeService,
+    classify_wedge_by_cumulative_revenue,
+    classify_stores_by_revenue,
+    tier_to_wedge,
+    ValidationError as StoreWedgeValidationError,
+    NotFoundError as StoreWedgeNotFoundError,
+    NoDataError as StoreWedgeNoDataError,
+)
 
 __all__ = [
     "DisplayMinimumsRepository",
@@ -63,4 +74,12 @@ __all__ = [
     "compute_style_stats",
     "StyleMixValidationError",
     "StyleMixNotFoundError",
+    "StoreWedgeRepository",
+    "StoreWedgeService",
+    "classify_wedge_by_cumulative_revenue",
+    "classify_stores_by_revenue",
+    "tier_to_wedge",
+    "StoreWedgeValidationError",
+    "StoreWedgeNotFoundError",
+    "StoreWedgeNoDataError",
 ]

@@ -91,137 +91,25 @@ async def classify_store_wedge(user: dict = Depends(_dep_user)):
     B = Next 30% by revenue (≈15% of sales)
     C = Bottom 50% by revenue (≈5% of sales)
     """
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    # Aggregate total revenue per store from daily_sales
-    pipeline = [
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {
-            "_id": "$store_code",
-            "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
-            "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
-            "days_active": {"$addToSet": "$day"},
-        }},
-        {"$project": {
-            "store_code": "$_id",
-            "_id": 0,
-            "total_revenue": 1,
-            "total_qty": 1,
-            "days_active": {"$size": "$days_active"},
-        }},
-        {"$sort": {"total_revenue": -1}},
-    ]
-
-    stores_revenue = []
-    async for doc in db.daily_sales.aggregate(pipeline):
-        stores_revenue.append(doc)
-
-    if not stores_revenue:
-        # Fallback: use store_master tier if no sales data
-        stores = []
-        async for s in db.store_master.find(_tenant_match(tenant_id), {"_id": 0}):
-            stores.append(s)
-        if not stores:
-            raise HTTPException(400, "No store data found. Upload store master and daily sales first.")
-        # Use existing tier or area_sqft as proxy
-        for s in stores:
-            tier = s.get("tier", "C")
-            wedge = "A" if tier == "A" else "B" if tier == "B" else "C"
-            await db.store_master.update_one(
-                {"store_code": s["store_code"]},
-                {"$set": {"wedge_class": wedge}},
-            )
-        return {
-            "success": True,
-            "method": "tier_fallback",
-            "message": "Used existing tier data (no sales data). Upload daily sales for revenue-based classification.",
-            "summary": {"A": sum(1 for s in stores if s.get("tier") == "A"),
-                        "B": sum(1 for s in stores if s.get("tier") == "B"),
-                        "C": sum(1 for s in stores if s.get("tier") not in ("A", "B"))},
-        }
-
-    # Calculate cumulative revenue share
-    total_rev = sum(s["total_revenue"] for s in stores_revenue)
-    if total_rev == 0:
-        raise HTTPException(400, "All stores have zero revenue.")
-
-    # Fetch current wedge classes for audit logging
-    old_wedges = {}
-    async for sd in db.store_master.find(_tenant_match(tenant_id), {"_id": 0, "store_code": 1, "wedge_class": 1}):
-        old_wedges[sd.get("store_code")] = sd.get("wedge_class")
-    audit_entries = []
-
-    cumulative = 0
-    classifications = {"A": [], "B": [], "C": []}
-
-    for s in stores_revenue:
-        cumulative += s["total_revenue"]
-        pct = cumulative / total_rev
-        if pct <= 0.80:
-            wedge = "A"
-        elif pct <= 0.95:
-            wedge = "B"
-        else:
-            wedge = "C"
-        s["wedge_class"] = wedge
-        s["revenue_pct"] = round(s["total_revenue"] / total_rev * 100, 1)
-        classifications[wedge].append(s["store_code"])
-
-        # Update store_master
-        await db.store_master.update_one(
-            {"store_code": s["store_code"]},
-            {"$set": {"wedge_class": wedge, "total_revenue": s["total_revenue"],
-                      "wedge_classified_at": datetime.now(timezone.utc).isoformat()}},
+    from domains.buy_planning import (
+        StoreWedgeRepository, StoreWedgeService, StoreWedgeNoDataError,
+    )
+    svc = StoreWedgeService(StoreWedgeRepository(_db_func()))
+    try:
+        return await svc.classify(
+            tenant_id=user.get("tenant_id", ""),
+            user_email=user.get("email", "system"),
         )
-
-        # Track change for audit
-        old_w = old_wedges.get(s["store_code"])
-        if old_w != wedge:
-            audit_entries.append({
-                "tenant_id": tenant_id, "action": "classify", "entity_type": "store",
-                "entity_id": s["store_code"], "field": "wedge_class",
-                "old_value": old_w, "new_value": wedge,
-                "reason": f"Revenue-based: {s['revenue_pct']}% of total",
-                "source": "auto", "created_by": user.get("email", "system"),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
-    if audit_entries:
-        await db.buy_planning_audit_log.insert_many(audit_entries)
-
-    return {
-        "success": True,
-        "method": "revenue_based",
-        "total_revenue": round(total_rev, 2),
-        "summary": {k: len(v) for k, v in classifications.items()},
-        "stores": stores_revenue,
-        "audit_changes": len(audit_entries),
-    }
+    except StoreWedgeNoDataError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/store-wedge")
 async def get_store_wedge(user: dict = Depends(_dep_user)):
     """Get current store wedge classification."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    stores = []
-    async for s in db.store_master.find(_tenant_match(tenant_id), {"_id": 0}):
-        stores.append(s)
-
-    if not stores:
-        return {"stores": [], "summary": {"A": 0, "B": 0, "C": 0}, "classified": False}
-
-    summary = {"A": 0, "B": 0, "C": 0}
-    classified = False
-    for s in stores:
-        w = s.get("wedge_class", "")
-        if w in summary:
-            summary[w] += 1
-            classified = True
-
-    return {"stores": stores, "summary": summary, "classified": classified, "total": len(stores)}
+    from domains.buy_planning import StoreWedgeRepository, StoreWedgeService
+    svc = StoreWedgeService(StoreWedgeRepository(_db_func()))
+    return await svc.list_classifications(user.get("tenant_id", ""))
 
 
 # ── Style Mix Tagging ──
@@ -896,53 +784,28 @@ class MixOverrideReq(BaseModel):
 @router.post("/overrides/store-wedge")
 async def override_store_wedge(body: WedgeOverrideReq, user: dict = Depends(_dep_user)):
     """Manually override a store's wedge class with audit trail."""
-    if body.wedge_class not in ("A", "B", "C"):
-        raise HTTPException(400, "wedge_class must be A, B, or C")
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    store = await db.store_master.find_one({"store_code": body.store_code}, {"_id": 0, "wedge_class": 1})
-    if not store:
-        raise HTTPException(404, f"Store '{body.store_code}' not found")
-    old = store.get("wedge_class")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.store_master.update_one(
-        {"store_code": body.store_code},
-        {"$set": {
-            "wedge_class": body.wedge_class,
-            "wedge_manual_override": True,
-            "wedge_classified_at": now,
-            "wedge_classified_by": user.get("email", "manual"),
-        }},
+    from domains.buy_planning import (
+        StoreWedgeRepository, StoreWedgeService,
+        StoreWedgeValidationError, StoreWedgeNotFoundError,
     )
-    await db.buy_planning_overrides.insert_one({
-        "entity_type": "store", "entity_id": body.store_code,
-        "field": "wedge_class", "old_value": old, "new_value": body.wedge_class,
-        "reason": body.reason, "created_by": user.get("email", ""),
-        "created_at": now, "is_active": True,
-    })
-    await db.buy_planning_audit_log.insert_one({
-        "tenant_id": tenant_id, "action": "override", "entity_type": "store",
-        "entity_id": body.store_code, "field": "wedge_class",
-        "old_value": old, "new_value": body.wedge_class,
-        "reason": body.reason, "source": "manual",
-        "created_by": user.get("email", ""), "created_at": now,
-    })
-    return {"success": True, "store_code": body.store_code, "old": old, "new": body.wedge_class}
+    svc = StoreWedgeService(StoreWedgeRepository(_db_func()))
+    try:
+        return await svc.override(
+            store_code=body.store_code, wedge=body.wedge_class, reason=body.reason,
+            user_email=user.get("email", ""), tenant_id=user.get("tenant_id", ""),
+        )
+    except StoreWedgeValidationError as e:
+        raise HTTPException(400, str(e))
+    except StoreWedgeNotFoundError as e:
+        raise HTTPException(404, str(e))
 
 
 @router.delete("/overrides/store-wedge/{store_code}")
 async def revert_store_wedge_override(store_code: str, user: dict = Depends(_dep_user)):
     """Remove manual override — store will be reclassified on next auto-run."""
-    db = _db_func()
-    await db.store_master.update_one(
-        {"store_code": store_code},
-        {"$set": {"wedge_manual_override": False}, "$unset": {"wedge_classified_by": ""}},
-    )
-    await db.buy_planning_overrides.update_many(
-        {"entity_type": "store", "entity_id": store_code, "is_active": True},
-        {"$set": {"is_active": False, "reverted_at": datetime.now(timezone.utc).isoformat(), "reverted_by": user.get("email", "")}},
-    )
-    return {"success": True, "message": f"Override removed for {store_code}"}
+    from domains.buy_planning import StoreWedgeRepository, StoreWedgeService
+    svc = StoreWedgeService(StoreWedgeRepository(_db_func()))
+    return await svc.revert_override(store_code, user.get("email", ""))
 
 
 @router.post("/overrides/style-mix")

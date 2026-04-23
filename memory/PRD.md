@@ -56,6 +56,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor Vertical #3 — store_wedge (2026-02-19)
+- `store_wedge` extracted → `StoreWedgeRepository` + `StoreWedgeService` in `domains/buy_planning/store_wedge.py`
+- **Pure classifier** (`classify_wedge_by_cumulative_revenue`, `classify_stores_by_revenue`, `tier_to_wedge`) — side-effect-free, unit-testable without Mongo
+- 4 route handlers (classify / list / override / revert) collapsed into thin adapters
+- 23 new unit tests (12 for pure classifier + 11 for service orchestration including tier-fallback, audit-log-only-on-change, invalid-wedge, unknown-store)
+- **`routes/buy_planning.py` now 1,989 LOC** (down from 2,126 — shed another 137 LOC; total 352 LOC across 3 verticals)
+- Live verified all 4 endpoints via curl (admin@demo.com): classify returned `{A:17, B:9, C:4}` across 30 stores, override + revert round-trip clean, 400 on invalid wedge, 404 on unknown store
+
 ### Strangler-Fig Refactor Vertical #2 — style_mix (2026-02-19)
 - `style_mix` extracted → `StyleMixRepository` + `StyleMixService` in `domains/buy_planning/style_mix.py`
 - **Pure classifier** (`classify_style`, `compute_style_stats`) extracted as side-effect-free functions — now unit-testable without any Mongo
