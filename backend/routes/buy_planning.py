@@ -444,10 +444,10 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
         sell_through_target = sell_targets.get(mix, 0.8)
         demand_buy = max(0, (sell_through_target * forecasted_demand) - current_soh)
 
-        # Display minimum across eligible stores
+        # Display minimum across eligible stores (uses canonical WEDGE_RULES)
+        from domains.buy_planning import eligible_wedges_for_mix
         display_qty = 0
-        eligible_wedges = {"Core": ["A", "B", "C"], "Fashion": ["A", "B"], "Test": ["A"]}.get(mix, ["A"])
-        for w in eligible_wedges:
+        for w in eligible_wedges_for_mix(mix):
             dm = disp_mins.get((category, w), disp_mins.get(("ALL", w), 4))
             display_qty += dm * wedge_counts.get(w, 0)
 
@@ -697,73 +697,13 @@ async def get_dna_tags(user: dict = Depends(_dep_user)):
 async def get_attribution_matrix(user: dict = Depends(_dep_user)):
     """
     Return SKU → Store cluster attribution.
-    Core → ALL stores (proportional to store count)
+    Core → ALL stores (A+B+C)
     Fashion → A + B only
     Test → A only
     """
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    # Get store wedge counts
-    wedge_counts = {"A": 0, "B": 0, "C": 0}
-    async for doc in db.store_master.aggregate([
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}}},
-    ]):
-        if doc["_id"] in wedge_counts:
-            wedge_counts[doc["_id"]] = doc["count"]
-    total_stores = sum(wedge_counts.values())
-
-    # Get styles with mix
-    pipeline = [
-        {"$match": {**_tenant_match(tenant_id), "style_mix": {"$exists": True}}},
-        {"$group": {"_id": {"style": "$style", "mix": "$style_mix"}, "sku_count": {"$sum": 1}}},
-    ]
-    style_data = []
-    async for doc in db.sku_ean_master.aggregate(pipeline):
-        style_data.append({"style": doc["_id"]["style"], "style_mix": doc["_id"]["mix"], "sku_count": doc["sku_count"]})
-
-    # Attribution rules
-    WEDGE_RULES = {
-        "Core": {"A": True, "B": True, "C": True},
-        "Fashion": {"A": True, "B": True, "C": False},
-        "Test": {"A": True, "B": False, "C": False},
-    }
-
-    attributions = []
-    for s in style_data:
-        mix = s["style_mix"]
-        rules = WEDGE_RULES.get(mix, WEDGE_RULES["Test"])
-        eligible_stores = sum(wedge_counts[w] for w in ["A", "B", "C"] if rules.get(w))
-        wedge_alloc = {}
-        for w in ["A", "B", "C"]:
-            if rules.get(w) and eligible_stores > 0:
-                wedge_alloc[w] = {
-                    "eligible": True,
-                    "stores": wedge_counts[w],
-                    "allocation_pct": round(wedge_counts[w] / eligible_stores * 100, 1),
-                }
-            else:
-                wedge_alloc[w] = {"eligible": False, "stores": 0, "allocation_pct": 0}
-
-        attributions.append({
-            "style": s["style"],
-            "style_mix": mix,
-            "sku_count": s["sku_count"],
-            "eligible_stores": eligible_stores,
-            "total_stores": total_stores,
-            "coverage_pct": round(eligible_stores / max(total_stores, 1) * 100, 1),
-            "wedge_allocation": wedge_alloc,
-        })
-
-    attributions.sort(key=lambda x: x["coverage_pct"], reverse=True)
-
-    return {
-        "attributions": attributions,
-        "total_styles": len(attributions),
-        "store_counts": wedge_counts,
-        "rules": WEDGE_RULES,
-    }
+    from domains.buy_planning import AttributionRepository, AttributionService
+    svc = AttributionService(AttributionRepository(_db_func()))
+    return await svc.get_matrix(user.get("tenant_id", ""))
 
 # ═══════════════════════════════════════════════════
 # FEATURE B: Manual Overrides with Audit

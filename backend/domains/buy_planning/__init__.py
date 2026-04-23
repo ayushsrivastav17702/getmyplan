@@ -63,6 +63,14 @@ from .store_wedge import (
     NotFoundError as StoreWedgeNotFoundError,
     NoDataError as StoreWedgeNoDataError,
 )
+from .attribution import (
+    AttributionRepository,
+    AttributionService,
+    WEDGE_RULES,
+    eligible_wedges_for_mix,
+    compute_wedge_allocation,
+    build_attribution_row,
+)
 
 __all__ = [
     "DisplayMinimumsRepository",
@@ -82,4 +90,10 @@ __all__ = [
     "StoreWedgeValidationError",
     "StoreWedgeNotFoundError",
     "StoreWedgeNoDataError",
+    "AttributionRepository",
+    "AttributionService",
+    "WEDGE_RULES",
+    "eligible_wedges_for_mix",
+    "compute_wedge_allocation",
+    "build_attribution_row",
 ]

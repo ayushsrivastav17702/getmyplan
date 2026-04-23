@@ -56,6 +56,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor Vertical #4 — attribution (2026-02-19)
+- `attribution` extracted → `AttributionRepository` + `AttributionService` in `domains/buy_planning/attribution.py`
+- **Canonical `WEDGE_RULES`** lifted out — previously duplicated in `/attribution/matrix` and inline inside `/buy-formula/calculate`. Both endpoints now share `eligible_wedges_for_mix(mix)` as the single source of truth. Changing attribution rules now requires touching ONE place.
+- **Pure functions** (`eligible_wedges_for_mix`, `compute_wedge_allocation`, `build_attribution_row`) — side-effect-free, unit-testable
+- 15 new unit tests (4 rule-table + 4 allocation + 3 row-builder + 2 rule-shape + 2 service)
+- **`routes/buy_planning.py` now 1,929 LOC** (down from 1,989 → -60 LOC this vertical; -197 LOC total in this session; -412 cumulative)
+- Live verified: `/attribution/matrix` returns 20 styles across `{A:17, B:9, C:4}` stores; `/buy-formula/calculate` still produces 173 SKUs with correct `binding_factor` distribution (dedup'd rules match old inline dict exactly)
+
 ### Strangler-Fig Refactor Vertical #3 — store_wedge (2026-02-19)
 - `store_wedge` extracted → `StoreWedgeRepository` + `StoreWedgeService` in `domains/buy_planning/store_wedge.py`
 - **Pure classifier** (`classify_wedge_by_cumulative_revenue`, `classify_stores_by_revenue`, `tier_to_wedge`) — side-effect-free, unit-testable without Mongo
