@@ -234,209 +234,20 @@ async def classify_style_mix(user: dict = Depends(_dep_user)):
     Fashion = peak-to-avg ratio >3x, lifecycle <26 weeks
     Test  = <8 weeks old OR <2 units/week avg
     """
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    # Get the date range from daily_sales
-    date_pipeline = [
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": None, "min_day": {"$min": "$day"}, "max_day": {"$max": "$day"}}},
-    ]
-    date_range = await db.daily_sales.aggregate(date_pipeline).to_list(1)
-    if not date_range or not date_range[0].get("min_day"):
-        # Fallback: tag all as Test
-        sku_count = 0
-        async for sku in db.sku_ean_master.find(_tenant_match(tenant_id), {"_id": 0, "style": 1}):
-            await db.sku_ean_master.update_many(
-                {"style": sku.get("style")},
-                {"$set": {"style_mix": "Test"}},
-            )
-            sku_count += 1
-        return {
-            "success": True,
-            "method": "no_sales_fallback",
-            "message": "No sales data — all styles tagged as Test. Upload daily sales for proper classification.",
-            "summary": {"Core": 0, "Fashion": 0, "Test": sku_count},
-        }
-
-    min_day = date_range[0]["min_day"]
-    max_day = date_range[0]["max_day"]
-
-    # Calculate total weeks in dataset
-    try:
-        from datetime import datetime as _dt
-        d1 = _dt.strptime(min_day, "%Y-%m-%d") if isinstance(min_day, str) else min_day
-        d2 = _dt.strptime(max_day, "%Y-%m-%d") if isinstance(max_day, str) else max_day
-        total_weeks = max(1, (d2 - d1).days // 7)
-    except Exception:
-        total_weeks = 12
-
-    # Aggregate: weekly sales per style
-    weekly_pipeline = [
-        {"$match": _tenant_match(tenant_id)},
-        {"$lookup": {
-            "from": "sku_ean_master",
-            "let": {"sku": "$sku"},
-            "pipeline": [
-                {"$match": {"$expr": {"$eq": ["$ean", "$$sku"]}}},
-                {"$project": {"style": 1, "_id": 0}},
-            ],
-            "as": "sku_info",
-        }},
-        {"$unwind": {"path": "$sku_info", "preserveNullAndEmptyArrays": True}},
-        {"$addFields": {
-            "style": {"$ifNull": ["$sku_info.style", "$sku"]},
-            "week": {"$dateToString": {"format": "%Y-W%V", "date": {"$dateFromString": {"dateString": "$day", "onError": "$day"}}}},
-        }},
-        {"$group": {
-            "_id": {"style": "$style", "week": "$week"},
-            "weekly_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
-            "weekly_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
-        }},
-        {"$group": {
-            "_id": "$_id.style",
-            "weeks_active": {"$sum": 1},
-            "total_qty": {"$sum": "$weekly_qty"},
-            "total_revenue": {"$sum": "$weekly_revenue"},
-            "max_weekly_qty": {"$max": "$weekly_qty"},
-            "weekly_qtys": {"$push": "$weekly_qty"},
-        }},
-    ]
-
-    style_stats = []
-    async for doc in db.daily_sales.aggregate(weekly_pipeline, allowDiskUse=True):
-        style_stats.append(doc)
-
-    if not style_stats:
-        return {"success": True, "method": "no_style_data", "summary": {"Core": 0, "Fashion": 0, "Test": 0}, "styles": []}
-
-    # Classify each style
-    classifications = {"Core": [], "Fashion": [], "Test": []}
-    results = []
-
-    # Fetch current style mixes for audit logging
-    old_mixes = {}
-    async for sd in db.sku_ean_master.aggregate([
-        {"$match": {**_tenant_match(tenant_id), "style_mix": {"$exists": True}}},
-        {"$group": {"_id": "$style", "mix": {"$first": "$style_mix"}}},
-    ]):
-        old_mixes[sd["_id"]] = sd.get("mix")
-    audit_entries = []
-
-    for s in style_stats:
-        style = s["_id"]
-        weeks_active = s.get("weeks_active", 0)
-        total_qty = s.get("total_qty", 0)
-        avg_weekly = total_qty / max(weeks_active, 1)
-        max_weekly = s.get("max_weekly_qty", 0)
-        peak_to_avg = max_weekly / max(avg_weekly, 0.01)
-        week_presence = weeks_active / max(total_weeks, 1)
-
-        # Classification logic
-        if avg_weekly >= 5 and week_presence >= 0.80:
-            mix = "Core"
-        elif peak_to_avg >= 3 and weeks_active < 26:
-            mix = "Fashion"
-        elif weeks_active < 8 or avg_weekly < 2:
-            mix = "Test"
-        else:
-            mix = "Fashion"  # Default middle ground
-
-        classifications[mix].append(style)
-
-        # Update sku_ean_master for all SKUs of this style
-        await db.sku_ean_master.update_many(
-            {"style": style},
-            {"$set": {
-                "style_mix": mix,
-                "style_mix_stats": {
-                    "avg_weekly_qty": round(avg_weekly, 1),
-                    "weeks_active": weeks_active,
-                    "peak_to_avg": round(peak_to_avg, 1),
-                    "week_presence_pct": round(week_presence * 100, 1),
-                },
-                "style_mix_classified_at": datetime.now(timezone.utc).isoformat(),
-            }},
-        )
-
-        # Track change for audit
-        old_m = old_mixes.get(style)
-        if old_m != mix:
-            audit_entries.append({
-                "tenant_id": tenant_id, "action": "classify", "entity_type": "style",
-                "entity_id": style, "field": "style_mix",
-                "old_value": old_m, "new_value": mix,
-                "reason": f"Avg {round(avg_weekly, 1)}/wk, {weeks_active}w active, {round(peak_to_avg, 1)}x peak",
-                "source": "auto", "created_by": user.get("email", "system"),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
-        results.append({
-            "style": style,
-            "style_mix": mix,
-            "total_qty": total_qty,
-            "total_revenue": round(s.get("total_revenue", 0), 2),
-            "avg_weekly_qty": round(avg_weekly, 1),
-            "weeks_active": weeks_active,
-            "peak_to_avg_ratio": round(peak_to_avg, 1),
-            "week_presence_pct": round(week_presence * 100, 1),
-        })
-
-    if audit_entries:
-        await db.buy_planning_audit_log.insert_many(audit_entries)
-
-    results.sort(key=lambda x: x["total_revenue"], reverse=True)
-
-    return {
-        "success": True,
-        "method": "revenue_based",
-        "total_weeks_analyzed": total_weeks,
-        "date_range": {"from": min_day, "to": max_day},
-        "summary": {k: len(v) for k, v in classifications.items()},
-        "styles": results,
-        "audit_changes": len(audit_entries),
-    }
+    from domains.buy_planning import StyleMixRepository, StyleMixService
+    svc = StyleMixService(StyleMixRepository(_db_func()))
+    return await svc.classify(
+        tenant_id=user.get("tenant_id", ""),
+        user_email=user.get("email", "system"),
+    )
 
 
 @router.get("/style-mix")
 async def get_style_mix(user: dict = Depends(_dep_user)):
     """Get current style mix classification for all SKUs."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    pipeline = [
-        {"$match": {"style_mix": {"$exists": True}}},
-        {"$group": {
-            "_id": {"style": "$style", "mix": "$style_mix"},
-            "sku_count": {"$sum": 1},
-            "stats": {"$first": "$style_mix_stats"},
-        }},
-        {"$project": {
-            "_id": 0,
-            "style": "$_id.style",
-            "style_mix": "$_id.mix",
-            "sku_count": 1,
-            "stats": 1,
-        }},
-        {"$sort": {"style_mix": 1, "style": 1}},
-    ]
-
-    styles = []
-    async for doc in db.sku_ean_master.aggregate(pipeline):
-        styles.append(doc)
-
-    summary = {"Core": 0, "Fashion": 0, "Test": 0}
-    for s in styles:
-        mix = s.get("style_mix", "Test")
-        if mix in summary:
-            summary[mix] += 1
-
-    return {
-        "styles": styles,
-        "summary": summary,
-        "classified": len(styles) > 0,
-        "total_styles": len(styles),
-    }
+    from domains.buy_planning import StyleMixRepository, StyleMixService
+    svc = StyleMixService(StyleMixRepository(_db_func()))
+    return await svc.list_classifications()
 
 
 # ── Assortment Matrix (Wedge × Mix) ──
@@ -1137,53 +948,28 @@ async def revert_store_wedge_override(store_code: str, user: dict = Depends(_dep
 @router.post("/overrides/style-mix")
 async def override_style_mix(body: MixOverrideReq, user: dict = Depends(_dep_user)):
     """Manually override a style's mix classification with audit trail."""
-    if body.style_mix not in ("Core", "Fashion", "Test"):
-        raise HTTPException(400, "style_mix must be Core, Fashion, or Test")
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    sku = await db.sku_ean_master.find_one({"style": body.style}, {"_id": 0, "style_mix": 1})
-    if not sku:
-        raise HTTPException(404, f"Style '{body.style}' not found")
-    old = sku.get("style_mix")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.sku_ean_master.update_many(
-        {"style": body.style},
-        {"$set": {
-            "style_mix": body.style_mix,
-            "style_mix_manual_override": True,
-            "style_mix_classified_at": now,
-            "style_mix_classified_by": user.get("email", "manual"),
-        }},
+    from domains.buy_planning import (
+        StyleMixRepository, StyleMixService,
+        StyleMixValidationError, StyleMixNotFoundError,
     )
-    await db.buy_planning_overrides.insert_one({
-        "entity_type": "sku", "entity_id": body.style,
-        "field": "style_mix", "old_value": old, "new_value": body.style_mix,
-        "reason": body.reason, "created_by": user.get("email", ""),
-        "created_at": now, "is_active": True,
-    })
-    await db.buy_planning_audit_log.insert_one({
-        "tenant_id": tenant_id, "action": "override", "entity_type": "style",
-        "entity_id": body.style, "field": "style_mix",
-        "old_value": old, "new_value": body.style_mix,
-        "reason": body.reason, "source": "manual",
-        "created_by": user.get("email", ""), "created_at": now,
-    })
-    return {"success": True, "style": body.style, "old": old, "new": body.style_mix}
+    svc = StyleMixService(StyleMixRepository(_db_func()))
+    try:
+        return await svc.override(
+            style=body.style, mix=body.style_mix, reason=body.reason,
+            user_email=user.get("email", ""), tenant_id=user.get("tenant_id", ""),
+        )
+    except StyleMixValidationError as e:
+        raise HTTPException(400, str(e))
+    except StyleMixNotFoundError as e:
+        raise HTTPException(404, str(e))
 
 
 @router.delete("/overrides/style-mix/{style}")
 async def revert_style_mix_override(style: str, user: dict = Depends(_dep_user)):
     """Remove manual override — style will be reclassified on next auto-run."""
-    db = _db_func()
-    await db.sku_ean_master.update_many(
-        {"style": style},
-        {"$set": {"style_mix_manual_override": False}, "$unset": {"style_mix_classified_by": ""}},
-    )
-    await db.buy_planning_overrides.update_many(
-        {"entity_type": "sku", "entity_id": style, "is_active": True},
-        {"$set": {"is_active": False, "reverted_at": datetime.now(timezone.utc).isoformat(), "reverted_by": user.get("email", "")}},
-    )
-    return {"success": True, "message": f"Override removed for {style}"}
+    from domains.buy_planning import StyleMixRepository, StyleMixService
+    svc = StyleMixService(StyleMixRepository(_db_func()))
+    return await svc.revert_override(style, user.get("email", ""))
 
 
 @router.get("/overrides/history")

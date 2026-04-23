@@ -56,6 +56,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor Vertical #2 — style_mix (2026-02-19)
+- `style_mix` extracted → `StyleMixRepository` + `StyleMixService` in `domains/buy_planning/style_mix.py`
+- **Pure classifier** (`classify_style`, `compute_style_stats`) extracted as side-effect-free functions — now unit-testable without any Mongo
+- 4 route handlers (classify / list / override / revert) collapsed into thin adapters
+- 13 new unit tests (6 for pure classifier + 3 for stats math + 4 for service orchestration)
+- **`routes/buy_planning.py` now 2,126 LOC** (down from 2,341 — shed 215 LOC across 2 verticals)
+- Live verified: all 4 endpoints working, including corrected validation (400 on invalid mix, 404 on unknown style)
+
 ### Strangler-Fig Refactor Started + A11y Tests (2026-02-19)
 - **Domain package created** at `/app/backend/domains/buy_planning/` with full pattern docs in `__init__.py`
 - **First vertical extracted**: `display_minimums` (3 CRUD endpoints) → `Repository` + `Service` layers; route handlers now 3-line adapters

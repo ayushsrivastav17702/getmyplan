@@ -44,9 +44,23 @@ from .display_minimums import (
     DisplayMinimumsService,
     NotFoundError,
 )
+from .style_mix import (
+    StyleMixRepository,
+    StyleMixService,
+    classify_style,
+    compute_style_stats,
+    ValidationError as StyleMixValidationError,
+    NotFoundError as StyleMixNotFoundError,
+)
 
 __all__ = [
     "DisplayMinimumsRepository",
     "DisplayMinimumsService",
     "NotFoundError",
+    "StyleMixRepository",
+    "StyleMixService",
+    "classify_style",
+    "compute_style_stats",
+    "StyleMixValidationError",
+    "StyleMixNotFoundError",
 ]
