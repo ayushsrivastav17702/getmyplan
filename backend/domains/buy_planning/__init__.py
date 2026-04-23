@@ -71,6 +71,40 @@ from .attribution import (
     compute_wedge_allocation,
     build_attribution_row,
 )
+from .dna_tags import (
+    DnaTagsRepository,
+    DnaTagsService,
+    classify_flow_rank,
+    classify_lifecycle,
+    compute_expected_weeks,
+    NotFoundError as DnaTagsNotFoundError,
+)
+from .audit_log import (
+    AuditLogRepository,
+    AuditLogService,
+)
+from .exclusions import (
+    ExclusionsRepository,
+    ExclusionsService,
+    NotFoundError as ExclusionsNotFoundError,
+)
+from .promotions import (
+    PromotionsRepository,
+    PromotionsService,
+    NotFoundError as PromotionsNotFoundError,
+    ValidationError as PromotionsValidationError,
+)
+from .orders import (
+    OrdersRepository,
+    OrdersService,
+    PO_STATUSES,
+    group_items_by_category,
+    build_po_number,
+    validate_phase_inputs,
+    build_phase_shipments,
+    NotFoundError as OrdersNotFoundError,
+    ValidationError as OrdersValidationError,
+)
 
 __all__ = [
     "DisplayMinimumsRepository",
@@ -96,4 +130,28 @@ __all__ = [
     "eligible_wedges_for_mix",
     "compute_wedge_allocation",
     "build_attribution_row",
+    "DnaTagsRepository",
+    "DnaTagsService",
+    "classify_flow_rank",
+    "classify_lifecycle",
+    "compute_expected_weeks",
+    "DnaTagsNotFoundError",
+    "AuditLogRepository",
+    "AuditLogService",
+    "ExclusionsRepository",
+    "ExclusionsService",
+    "ExclusionsNotFoundError",
+    "PromotionsRepository",
+    "PromotionsService",
+    "PromotionsNotFoundError",
+    "PromotionsValidationError",
+    "OrdersRepository",
+    "OrdersService",
+    "PO_STATUSES",
+    "group_items_by_category",
+    "build_po_number",
+    "validate_phase_inputs",
+    "build_phase_shipments",
+    "OrdersNotFoundError",
+    "OrdersValidationError",
 ]

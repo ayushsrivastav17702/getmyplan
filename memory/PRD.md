@@ -56,6 +56,21 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor Verticals #5-9 — dna_tags / audit_log / exclusions / promotions / orders (2026-02-19)
+Five additional verticals extracted in one batch — all following the Repository + Service pattern:
+
+- **dna_tags** (`domains/buy_planning/dna_tags.py`): 4 endpoints (`tag`, `tag/bulk`, `tag/auto`, `list`) with pure classifiers (`classify_flow_rank`, `classify_lifecycle`, `compute_expected_weeks`, `parse_sale_date_safely`) + 17 unit tests. Auto-tag lifecycle logic now unit-testable without Mongo.
+- **audit_log** (`domains/buy_planning/audit_log.py`): 2 read endpoints (`/audit-log`, `/overrides/history`) + 4 unit tests (tenant isolation, filter-by-entity-type, filter-by-source).
+- **exclusions** (`domains/buy_planning/exclusions.py`): 3 endpoints (POST/DELETE/GET) + 4 unit tests (tenant isolation, missing-key 404, full round-trip).
+- **promotions** (`domains/buy_planning/promotions.py`): 5 endpoints (create/list/update/delete/active-lift) with lift_factor validation centralised + 8 unit tests (bad-lift 400, filter-by-status, ghost 404, today-based active-lift window).
+- **orders** (`domains/buy_planning/orders.py`): 6 endpoints (consolidate/list/phased/get/status/phase) with 4 pure helpers (`group_items_by_category`, `build_po_number`, `validate_phase_inputs`, `build_phase_shipments`) + 14 unit tests covering bad-ObjectId 404, empty-plan 400, phase sum≠100 400, status lifecycle, round-trip.
+
+Impact:
+- **`routes/buy_planning.py` now 1,744 LOC** (down from 1,929 → -185 this batch; -597 cumulative from original 2,341 LOC monolith — **25.5% reduction**)
+- **Domain test suite: 119/119 green** (added 47 tests across 5 new modules)
+- **Live verified all 15 curl checks**: every endpoint returns expected HTTP code (200 / 400 / 404) for happy + error paths
+- Business logic (lift validation, PO format, phase % sum, lifecycle classification) now lives in pure functions — zero Mongo dependency for testing
+
 ### Strangler-Fig Refactor Vertical #4 — attribution (2026-02-19)
 - `attribution` extracted → `AttributionRepository` + `AttributionService` in `domains/buy_planning/attribution.py`
 - **Canonical `WEDGE_RULES`** lifted out — previously duplicated in `/attribution/matrix` and inline inside `/buy-formula/calculate`. Both endpoints now share `eligible_wedges_for_mix(mix)` as the single source of truth. Changing attribution rules now requires touching ONE place.
