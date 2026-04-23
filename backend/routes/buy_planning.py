@@ -512,40 +512,37 @@ class DisplayMinimumReq(BaseModel):
 @router.get("/display-minimums")
 async def get_display_minimums(user: dict = Depends(_dep_user)):
     """Get display minimum configuration per category × wedge."""
-    db = _db_func()
-    configs = []
-    async for doc in db.display_minimums_config.find({}, {"_id": 0}):
-        doc["total_display_min_units"] = doc.get("min_facings", 2) * doc.get("display_units_per_facing", 2)
-        configs.append(doc)
-    return {"configs": configs, "total": len(configs)}
+    from domains.buy_planning import DisplayMinimumsRepository, DisplayMinimumsService
+    svc = DisplayMinimumsService(DisplayMinimumsRepository(_db_func()))
+    return await svc.list_configs()
 
 
 @router.post("/display-minimums")
 async def set_display_minimum(body: DisplayMinimumReq, user: dict = Depends(_dep_user)):
     """Set display minimum for a category × wedge combination."""
-    db = _db_func()
-    total = body.min_facings * body.display_units_per_facing
-    await db.display_minimums_config.update_one(
-        {"category": body.category, "store_wedge": body.store_wedge},
-        {"$set": {
-            "category": body.category,
-            "store_wedge": body.store_wedge,
-            "min_facings": body.min_facings,
-            "display_units_per_facing": body.display_units_per_facing,
-            "total_display_min_units": total,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
-        upsert=True,
-    )
-    return {"success": True, "category": body.category, "store_wedge": body.store_wedge, "total_display_min_units": total}
+    from domains.buy_planning import DisplayMinimumsRepository, DisplayMinimumsService
+    svc = DisplayMinimumsService(DisplayMinimumsRepository(_db_func()))
+    try:
+        return await svc.set_config(
+            category=body.category,
+            store_wedge=body.store_wedge,
+            min_facings=body.min_facings,
+            display_units_per_facing=body.display_units_per_facing,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.delete("/display-minimums/{category}/{store_wedge}")
 async def delete_display_minimum(category: str, store_wedge: str, user: dict = Depends(_dep_user)):
-    result = await _db_func().display_minimums_config.delete_one({"category": category, "store_wedge": store_wedge})
-    if result.deleted_count == 0:
-        raise HTTPException(404, "Config not found")
-    return {"success": True}
+    from domains.buy_planning import (
+        DisplayMinimumsRepository, DisplayMinimumsService, NotFoundError,
+    )
+    svc = DisplayMinimumsService(DisplayMinimumsRepository(_db_func()))
+    try:
+        return await svc.delete_config(category=category, store_wedge=store_wedge)
+    except NotFoundError as e:
+        raise HTTPException(404, str(e))
 
 
 # Sell-through targets by style mix (configurable)

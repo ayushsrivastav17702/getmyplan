@@ -45,7 +45,7 @@ export default function StatsSection() {
               <AnimatedCounter target={s.target} suffix={s.suffix} started={visible} />
             </div>
             <div className="text-sm text-slate-300 font-medium">{s.label}</div>
-            <div className="text-[11px] text-slate-500 mt-1">{s.desc}</div>
+            <div className="text-[11px] text-slate-400 mt-1">{s.desc}</div>
           </div>
         ))}
       </div>

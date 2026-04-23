@@ -15,7 +15,7 @@ export default function CTASection() {
               Log in
             </Link>
           </div>
-          <p className="text-xs text-slate-500 mt-4">No credit card required</p>
+          <p className="text-xs text-slate-400 mt-4">No credit card required</p>
         </div>
       </div>
     </section>

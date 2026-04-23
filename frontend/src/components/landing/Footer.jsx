@@ -50,7 +50,7 @@ export default function Footer() {
             </div>
           ))}
         </div>
-        <div className="border-t border-indigo-500/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="border-t border-indigo-500/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <p>2026 GetMyPlan. All rights reserved.</p>
           <div className="flex gap-4">
             <a href="#" className="hover:text-slate-300 transition-colors">Privacy Policy</a>

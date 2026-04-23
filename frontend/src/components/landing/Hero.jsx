@@ -113,7 +113,7 @@ export default function Hero({ onWatchDemo, onRequestDemo }) {
           </button>
         </div>
 
-        <p className="text-xs text-slate-500">No credit card required &middot; 15-minute setup &middot; Cancel anytime</p>
+        <p className="text-xs text-slate-400">No credit card required &middot; 15-minute setup &middot; Cancel anytime</p>
       </div>
 
       {/* Bottom fade */}

@@ -5,7 +5,7 @@ export default function Testimonials() {
         <p className="text-center text-sm text-slate-400 mb-6 uppercase tracking-wider font-medium">Trusted by leading fashion brands</p>
         <div className="flex items-center justify-center flex-wrap gap-x-12 gap-y-4 mb-16">
           {["MYNTRA", "AJIO", "LIFESTYLE", "ZARA", "H&M", "UNIQLO"].map((name) => (
-            <span key={name} className="text-xl font-bold text-slate-600 hover:text-indigo-400 transition-colors cursor-default tracking-wide">{name}</span>
+            <span key={name} className="text-xl font-bold text-slate-400 hover:text-indigo-400 transition-colors cursor-default tracking-wide">{name}</span>
           ))}
         </div>
         <div className="grid md:grid-cols-3 gap-5">
@@ -22,7 +22,7 @@ export default function Testimonials() {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-white">{t.author}</div>
-                  <div className="text-xs text-slate-500">{t.company}</div>
+                  <div className="text-xs text-slate-400">{t.company}</div>
                 </div>
               </div>
             </div>

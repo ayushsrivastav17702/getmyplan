@@ -56,6 +56,15 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor Started + A11y Tests (2026-02-19)
+- **Domain package created** at `/app/backend/domains/buy_planning/` with full pattern docs in `__init__.py`
+- **First vertical extracted**: `display_minimums` (3 CRUD endpoints) → `Repository` + `Service` layers; route handlers now 3-line adapters
+- **Added input validation** as a byproduct of the extraction (rejects invalid `store_wedge`, negative values) — endpoints previously silently accepted junk
+- **6 unit tests** for the extracted domain, using a fake in-memory DB (no Motor required)
+- **axe-core WCAG 2.1 AA test suite** at `/app/backend/tests/test_accessibility.py` — loads axe-core via CDN (cached), runs Playwright against 6 live public pages, fails on any `critical`/`serious` violation
+- **Fixed all a11y violations surfaced by the initial run:** 3 unlabeled ROI-calculator inputs (`critical`) + low-contrast `text-slate-500/600/700` classes across marketing pages (`serious`)
+- **Retained tech debt**: `buy_planning.py` still 2,340 LOC; next extraction candidates: `style_mix` (~170 LOC), `store_wedge` (~200 LOC), `attribution` (~300 LOC). Each follows the identical pattern documented in `domains/buy_planning/__init__.py`.
+
 ### Binding Factor Dashboard — Clickable Drill-In (2026-02-19)
 - `BindingFactorDashboard` donut + worst-category bar now clickable → navigates to `/buy-planning?plan_id=...&category=...&binding=...`
 - Added keyboard-friendly worst-category drill list below the bar chart (5 accessible buttons)

@@ -127,7 +127,7 @@ export default function ProductPage() {
                 <h3 className="text-base font-semibold text-white mb-2">{s.title}</h3>
                 <p className="text-sm text-slate-400">{s.description}</p>
                 {idx < product.howItWorks.length - 1 && (
-                  <div className="hidden lg:block text-xl text-slate-700 mt-4">→</div>
+                  <div className="hidden lg:block text-xl text-slate-400 mt-4">→</div>
                 )}
               </div>
             ))}
@@ -182,8 +182,9 @@ export default function ProductPage() {
         <div className="bg-white/[0.04] border border-indigo-500/10 rounded-2xl p-6 sm:p-8" data-testid="roi-calculator">
           <div className="grid sm:grid-cols-3 gap-4 mb-6">
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Number of SKUs</label>
+              <label htmlFor="roi-skus" className="block text-xs text-slate-400 mb-1.5">Number of SKUs</label>
               <input
+                id="roi-skus"
                 type="number"
                 value={skus}
                 onChange={(e) => setSkus(+e.target.value || 0)}
@@ -192,8 +193,9 @@ export default function ProductPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Current Forecast Accuracy %</label>
+              <label htmlFor="roi-accuracy" className="block text-xs text-slate-400 mb-1.5">Current Forecast Accuracy %</label>
               <input
+                id="roi-accuracy"
                 type="number"
                 value={accuracy}
                 onChange={(e) => setAccuracy(+e.target.value || 0)}
@@ -202,8 +204,9 @@ export default function ProductPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Average SKU Value ($)</label>
+              <label htmlFor="roi-value" className="block text-xs text-slate-400 mb-1.5">Average SKU Value ($)</label>
               <input
+                id="roi-value"
                 type="number"
                 value={avgValue}
                 onChange={(e) => setAvgValue(+e.target.value || 0)}
@@ -217,7 +220,7 @@ export default function ProductPage() {
               ${totalSavings.toLocaleString()}
             </div>
             <div className="text-sm text-slate-400">Estimated Annual Savings</div>
-            <div className="flex justify-center gap-6 mt-3 text-xs text-slate-500">
+            <div className="flex justify-center gap-6 mt-3 text-xs text-slate-400">
               <span>Stockout Reduction: ${stockoutSavings.toLocaleString()}</span>
               <span>Overstock Reduction: ${overstockSavings.toLocaleString()}</span>
             </div>
