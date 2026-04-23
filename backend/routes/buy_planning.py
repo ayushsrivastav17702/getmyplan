@@ -29,58 +29,6 @@ def _tenant_match(tenant_id: str) -> dict:
     return {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}]}
 
 
-def _compute_binding_breakdown(items: list) -> dict:
-    """
-    Summarize binding_factor across buy plan items.
-
-    This is the signal surface for "are display_minimums misconfigured?"
-    If floor_override_pct stays high cycle after cycle, either demand has
-    fallen below what floors justify, or the floors are set too aggressively.
-
-    Returned shape:
-      {
-        "counts":    {demand, display_min, safety_stock, unknown},
-        "pcts":      {same keys, percentage of total_skus},
-        "total_skus": int,
-        "demand_driven_pct": float,
-        "floor_override_pct": float,   # display_min + safety_stock
-        "by_category": [{category, counts, total}],
-      }
-    """
-    counts = {"demand": 0, "display_min": 0, "safety_stock": 0, "unknown": 0}
-    by_cat: dict = {}
-    for it in items:
-        bf = it.get("binding_factor") or it.get("binding_constraint") or "unknown"
-        key = bf if bf in counts else "unknown"
-        counts[key] += 1
-        cat = it.get("category") or "Uncategorised"
-        slot = by_cat.setdefault(cat, {"demand": 0, "display_min": 0, "safety_stock": 0, "unknown": 0, "total": 0})
-        slot[key] += 1
-        slot["total"] += 1
-
-    total = sum(counts.values())
-    pcts = {k: round((v / total * 100), 1) if total > 0 else 0 for k, v in counts.items()}
-    by_category = [
-        {
-            "category": cat,
-            "counts": {k: v for k, v in c.items() if k != "total"},
-            "total": c["total"],
-            "floor_override_pct": round(((c["display_min"] + c["safety_stock"]) / c["total"] * 100), 1) if c["total"] > 0 else 0,
-        }
-        for cat, c in by_cat.items()
-    ]
-    by_category.sort(key=lambda x: x["floor_override_pct"], reverse=True)
-
-    return {
-        "counts": counts,
-        "pcts": pcts,
-        "total_skus": total,
-        "demand_driven_pct": pcts["demand"],
-        "floor_override_pct": round(pcts["display_min"] + pcts["safety_stock"], 1),
-        "by_category": by_category,
-    }
-
-
 # ── Store Wedge Classification ──
 
 @router.post("/store-wedge/classify")
@@ -256,78 +204,39 @@ class SellThroughConfigReq(BaseModel):
 @router.get("/sell-through-config")
 async def get_sell_through_config(user: dict = Depends(_dep_user)):
     """Get sell-through multiplier config (tenant-specific + defaults)."""
-    db = _db_func()
-    stored = {}
-    async for doc in db.sell_through_config.find({}, {"_id": 0}):
-        stored[doc["style_mix"]] = doc
-
-    configs = []
-    for mix in ["Core", "Fashion", "Test"]:
-        if mix in stored:
-            configs.append({
-                "style_mix": mix,
-                "target_multiplier": stored[mix]["target_multiplier"],
-                "is_default": False,
-                "updated_at": stored[mix].get("updated_at"),
-                "updated_by": stored[mix].get("updated_by"),
-            })
-        else:
-            configs.append({
-                "style_mix": mix,
-                "target_multiplier": DEFAULT_SELL_THROUGH[mix],
-                "is_default": True,
-            })
-    return {"configs": configs}
+    from domains.buy_planning import SellThroughRepository, SellThroughService
+    svc = SellThroughService(SellThroughRepository(_db_func()))
+    return await svc.list_configs()
 
 
 @router.put("/sell-through-config")
 async def set_sell_through_config(body: SellThroughConfigReq, user: dict = Depends(_dep_user)):
     """Set sell-through multiplier for a style mix."""
-    if body.style_mix not in ("Core", "Fashion", "Test"):
-        raise HTTPException(400, "style_mix must be Core, Fashion, or Test")
-    if body.target_multiplier < 0 or body.target_multiplier > 5:
-        raise HTTPException(400, "target_multiplier must be between 0 and 5")
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    # Get old value for audit
-    old_doc = await db.sell_through_config.find_one({"style_mix": body.style_mix}, {"_id": 0, "target_multiplier": 1})
-    old_val = old_doc.get("target_multiplier") if old_doc else DEFAULT_SELL_THROUGH.get(body.style_mix)
-    await db.sell_through_config.update_one(
-        {"style_mix": body.style_mix},
-        {"$set": {
-            "style_mix": body.style_mix,
-            "target_multiplier": body.target_multiplier,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "updated_by": user.get("email", ""),
-        }},
-        upsert=True,
+    from domains.buy_planning import (
+        SellThroughRepository, SellThroughService, SellThroughValidationError,
     )
-    if old_val != body.target_multiplier:
-        await db.buy_planning_audit_log.insert_one({
-            "tenant_id": tenant_id, "action": "config_update", "entity_type": "config",
-            "entity_id": body.style_mix, "field": "target_multiplier",
-            "old_value": str(old_val), "new_value": str(body.target_multiplier),
-            "reason": f"Sell-through target changed for {body.style_mix}",
-            "source": "manual", "created_by": user.get("email", ""),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    return {"success": True, "style_mix": body.style_mix, "target_multiplier": body.target_multiplier}
+    svc = SellThroughService(SellThroughRepository(_db_func()))
+    try:
+        return await svc.set_config(
+            style_mix=body.style_mix, multiplier=body.target_multiplier,
+            user_email=user.get("email", ""), tenant_id=user.get("tenant_id", ""),
+        )
+    except SellThroughValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/sell-through-config/reset")
 async def reset_sell_through_config(user: dict = Depends(_dep_user)):
     """Reset all multipliers to system defaults."""
-    db = _db_func()
-    await db.sell_through_config.delete_many({})
-    return {"success": True, "defaults": DEFAULT_SELL_THROUGH}
+    from domains.buy_planning import SellThroughRepository, SellThroughService
+    svc = SellThroughService(SellThroughRepository(_db_func()))
+    return await svc.reset()
 
 
 async def _get_sell_through_targets(db) -> dict:
     """Load sell-through targets from DB, falling back to defaults."""
-    targets = dict(DEFAULT_SELL_THROUGH)
-    async for doc in db.sell_through_config.find({}, {"_id": 0}):
-        targets[doc["style_mix"]] = doc["target_multiplier"]
-    return targets
+    from domains.buy_planning import SellThroughRepository
+    return await SellThroughRepository(db).get_targets()
 
 
 class BuyFormulaReq(BaseModel):
@@ -815,169 +724,67 @@ class UpdateItemQtyReq(BaseModel):
 @router.post("/buy-plans/generate")
 async def generate_and_save_plan(body: GeneratePlanReq, user: dict = Depends(_dep_user)):
     """Generate a buy plan using the full formula and save to database."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    # Reuse the existing calculate logic
+    from domains.buy_planning import BuyPlansRepository, BuyPlansService
+    # Reuse existing buy-formula calculation
     calc_body = BuyFormulaReq(cover_days=body.cover_days, safety_days=body.safety_days)
-    result = await calculate_buy_formula(calc_body, user)
-
-    plan_name = body.plan_name or f"Buy Plan {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
-    items = result.get("buy_plan", [])
-    binding_breakdown = _compute_binding_breakdown(items)
-    plan_doc = {
-        "tenant_id": tenant_id,
-        "plan_name": plan_name,
-        "cover_days": body.cover_days,
-        "safety_days": body.safety_days,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "generated_by": user.get("email", ""),
-        "status": "draft",
-        "items": items,
-        "parameters": result.get("parameters", {}),
-        "totals": result.get("totals", {}),
-        "sku_count": result.get("sku_count", 0),
-        "binding_breakdown": binding_breakdown,
-        "notes": body.notes,
-    }
-    insert_result = await db.buy_plans.insert_one(plan_doc)
-    plan_id = str(insert_result.inserted_id)
-
-    return {
-        "success": True,
-        "plan_id": plan_id,
-        "plan_name": plan_name,
-        "status": "draft",
-        "sku_count": result.get("sku_count", 0),
-        "totals": result.get("totals", {}),
-    }
+    calc_result = await calculate_buy_formula(calc_body, user)
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
+    return await svc.persist_from_formula(
+        tenant_id=user.get("tenant_id", ""),
+        user_email=user.get("email", ""),
+        calc_result=calc_result,
+        plan_name=body.plan_name,
+        cover_days=body.cover_days, safety_days=body.safety_days,
+        notes=body.notes,
+    )
 
 
 @router.get("/buy-plans")
 async def list_buy_plans(status: Optional[str] = None, limit: int = 20, user: dict = Depends(_dep_user)):
     """List saved buy plans (without items for performance)."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    query = {"tenant_id": tenant_id}
-    if status:
-        query["status"] = status
-    plans = []
-    async for doc in db.buy_plans.find(query, {"items": 0}).sort("generated_at", -1).limit(limit):
-        plans.append({
-            "plan_id": str(doc["_id"]),
-            "plan_name": doc.get("plan_name", ""),
-            "status": doc.get("status", "draft"),
-            "generated_at": doc.get("generated_at", ""),
-            "generated_by": doc.get("generated_by", ""),
-            "sku_count": doc.get("sku_count", 0),
-            "totals": doc.get("totals", {}),
-            "cover_days": doc.get("cover_days", 30),
-            "notes": doc.get("notes"),
-            "approved_at": doc.get("approved_at"),
-            "approved_by": doc.get("approved_by"),
-        })
-    return {"plans": plans, "total": len(plans)}
+    from domains.buy_planning import BuyPlansRepository, BuyPlansService
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
+    return await svc.list_plans(
+        tenant_id=user.get("tenant_id", ""), status=status, limit=limit,
+    )
 
 
 @router.get("/buy-plans/{plan_id}")
 async def get_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
     """Get a single buy plan with full item details."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
+    from domains.buy_planning import (
+        BuyPlansRepository, BuyPlansService, BuyPlansNotFoundError,
+    )
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
     try:
-        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
-    except Exception:
-        raise HTTPException(404, "Invalid plan ID")
-    if not doc:
-        raise HTTPException(404, "Plan not found")
-    return {
-        "plan_id": str(doc["_id"]),
-        "plan_name": doc.get("plan_name", ""),
-        "status": doc.get("status", "draft"),
-        "generated_at": doc.get("generated_at", ""),
-        "generated_by": doc.get("generated_by", ""),
-        "sku_count": doc.get("sku_count", 0),
-        "totals": doc.get("totals", {}),
-        "parameters": doc.get("parameters", {}),
-        "items": doc.get("items", []),
-        "cover_days": doc.get("cover_days", 30),
-        "notes": doc.get("notes"),
-        "approved_at": doc.get("approved_at"),
-        "approved_by": doc.get("approved_by"),
-        "approvals": doc.get("approvals", {}),
-        "submitted_at": doc.get("submitted_at"),
-        "submitted_by": doc.get("submitted_by"),
-        "category_approved_at": doc.get("category_approved_at"),
-        "category_approved_by": doc.get("category_approved_by"),
-        "senior_approved_at": doc.get("senior_approved_at"),
-        "senior_approved_by": doc.get("senior_approved_by"),
-        "head_approved_at": doc.get("head_approved_at"),
-        "head_approved_by": doc.get("head_approved_by"),
-        "ordered_at": doc.get("ordered_at"),
-        "ordered_by": doc.get("ordered_by"),
-    }
+        return await svc.get_plan(tenant_id=user.get("tenant_id", ""), plan_id=plan_id)
+    except BuyPlansNotFoundError as e:
+        raise HTTPException(404, str(e))
 
 
 @router.put("/buy-plans/{plan_id}/items")
 async def update_plan_item(plan_id: str, body: UpdateItemQtyReq, user: dict = Depends(_dep_user)):
     """Update quantity for a specific item in a draft plan."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    try:
-        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
-    except Exception:
-        raise HTTPException(404, "Invalid plan ID")
-    if not doc:
-        raise HTTPException(404, "Plan not found")
-    if doc.get("status") != "draft":
-        raise HTTPException(400, "Cannot edit non-draft plan")
-    items = doc.get("items", [])
-    if body.item_index < 0 or body.item_index >= len(items):
-        raise HTTPException(400, "Item index out of range")
-    items[body.item_index]["edited_qty"] = body.new_qty
-    items[body.item_index]["edited_by"] = user.get("email", "")
-    items[body.item_index]["edited_at"] = datetime.now(timezone.utc).isoformat()
-    total_qty = sum(i.get("edited_qty", i.get("buy_qty", 0)) for i in items)
-    total_val = sum(i.get("edited_qty", i.get("buy_qty", 0)) * i.get("mrp", 0) for i in items)
-    # Recompute breakdown in case items have been normalized/edited
-    binding_breakdown = _compute_binding_breakdown(items)
-    await db.buy_plans.update_one(
-        {"_id": ObjectId(plan_id)},
-        {"$set": {
-            "items": items,
-            "totals.total_buy_qty": total_qty,
-            "totals.total_buy_value": round(total_val, 2),
-            "binding_breakdown": binding_breakdown,
-        }},
+    from domains.buy_planning import (
+        BuyPlansRepository, BuyPlansService,
+        BuyPlansNotFoundError, BuyPlansValidationError,
     )
-    return {"success": True, "item_index": body.item_index, "new_qty": body.new_qty, "total_buy_qty": total_qty}
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
+    try:
+        return await svc.update_item_qty(
+            tenant_id=user.get("tenant_id", ""), plan_id=plan_id,
+            item_index=body.item_index, new_qty=body.new_qty,
+            user_email=user.get("email", ""),
+        )
+    except BuyPlansNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except BuyPlansValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 # ═══════════════════════════════════════════════════
-# MULTI-LEVEL APPROVAL WORKFLOW
+# MULTI-LEVEL APPROVAL WORKFLOW (workflow tables live in domains/buy_planning/buy_plans.py)
 # ═══════════════════════════════════════════════════
-
-PLAN_STATUS_CHAIN = ["draft", "submitted", "category_approved", "senior_approved", "head_approved", "ordered"]
-
-APPROVAL_ACTIONS = {
-    "submit":            {"from": ["draft"],              "to": "submitted"},
-    "approve_category":  {"from": ["submitted"],          "to": "category_approved"},
-    "approve_senior":    {"from": ["category_approved"],  "to": "senior_approved"},
-    "approve_head":      {"from": ["senior_approved"],    "to": "head_approved"},
-    "finance_ack":       {"from": ["head_approved"],      "to": "ordered"},
-    "reject":            {"from": ["submitted", "category_approved", "senior_approved", "head_approved"], "to": "rejected"},
-    "request_changes":   {"from": ["submitted", "category_approved", "senior_approved"], "to": "draft"},
-}
-
-APPROVAL_ROLES = {
-    "submit":            ["super_admin", "admin", "junior_planner", "category_planner", "planner"],
-    "approve_category":  ["super_admin", "admin", "category_planner"],
-    "approve_senior":    ["super_admin", "admin", "senior_planner"],
-    "approve_head":      ["super_admin", "admin", "merchandise_head"],
-    "finance_ack":       ["super_admin", "admin", "finance"],
-    "reject":            ["super_admin", "admin", "category_planner", "senior_planner", "merchandise_head"],
-    "request_changes":   ["super_admin", "admin", "category_planner", "senior_planner"],
-}
 
 
 class ApprovalActionReq(BaseModel):
@@ -988,125 +795,71 @@ class ApprovalActionReq(BaseModel):
 @router.post("/buy-plans/{plan_id}/approval")
 async def process_plan_approval(plan_id: str, body: ApprovalActionReq, user: dict = Depends(_dep_user)):
     """Process a multi-level approval action on a buy plan."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    action = body.action
-    role = user.get("role", "viewer")
-
-    if action not in APPROVAL_ACTIONS:
-        raise HTTPException(400, f"Invalid action: {action}. Valid: {', '.join(APPROVAL_ACTIONS.keys())}")
-    if role not in APPROVAL_ROLES.get(action, []):
-        raise HTTPException(403, f"Role '{role}' cannot perform '{action}'")
-
+    from domains.buy_planning import (
+        BuyPlansRepository, BuyPlansService,
+        BuyPlansNotFoundError, BuyPlansValidationError, BuyPlansForbiddenError,
+    )
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
     try:
-        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
-    except Exception:
-        raise HTTPException(404, "Invalid plan ID")
-    if not doc:
-        raise HTTPException(404, "Plan not found")
-
-    current = doc.get("status", "draft")
-    rule = APPROVAL_ACTIONS[action]
-    if current not in rule["from"]:
-        raise HTTPException(400, f"Cannot '{action}' from status '{current}'. Requires: {rule['from']}")
-
-    if action in ("reject", "request_changes") and not body.comment:
-        raise HTTPException(400, "Comment is required for reject/request_changes")
-
-    new_status = rule["to"]
-    now = datetime.now(timezone.utc).isoformat()
-    email = user.get("email", "")
-
-    update = {
-        "status": new_status,
-        f"approvals.{action}": {"by": email, "at": now, "comment": body.comment},
-    }
-    # Add timestamp fields for each stage
-    stage_ts = {
-        "submit": ("submitted_at", "submitted_by"),
-        "approve_category": ("category_approved_at", "category_approved_by"),
-        "approve_senior": ("senior_approved_at", "senior_approved_by"),
-        "approve_head": ("head_approved_at", "head_approved_by"),
-        "finance_ack": ("ordered_at", "ordered_by"),
-    }
-    if action in stage_ts:
-        ts_field, by_field = stage_ts[action]
-        update[ts_field] = now
-        update[by_field] = email
-
-    await db.buy_plans.update_one({"_id": ObjectId(plan_id)}, {"$set": update})
-
-    # Audit trail
-    await db.buy_planning_approval_audit.insert_one({
-        "tenant_id": tenant_id, "plan_id": plan_id,
-        "action": action, "from_status": current, "to_status": new_status,
-        "comment": body.comment, "performed_by": email, "role": role,
-        "performed_at": now,
-    })
-
-    return {"success": True, "plan_id": plan_id, "action": action, "old_status": current, "new_status": new_status}
+        return await svc.process_approval(
+            tenant_id=user.get("tenant_id", ""), plan_id=plan_id,
+            action=body.action, comment=body.comment,
+            user_email=user.get("email", ""), role=user.get("role", "viewer"),
+        )
+    except BuyPlansNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except BuyPlansValidationError as e:
+        raise HTTPException(400, str(e))
+    except BuyPlansForbiddenError as e:
+        raise HTTPException(403, str(e))
 
 
 @router.get("/buy-plans/{plan_id}/approval-history")
 async def get_approval_history(plan_id: str, user: dict = Depends(_dep_user)):
     """Get the approval audit trail for a plan."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    entries = []
-    async for doc in db.buy_planning_approval_audit.find(
-        {"tenant_id": tenant_id, "plan_id": plan_id}, {"_id": 0}
-    ).sort("performed_at", 1):
-        entries.append(doc)
-    return {"history": entries, "total": len(entries)}
+    from domains.buy_planning import BuyPlansRepository, BuyPlansService
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
+    return await svc.approval_history(
+        tenant_id=user.get("tenant_id", ""), plan_id=plan_id,
+    )
 
 
 # Keep old simple approve for backward compat
 @router.post("/buy-plans/{plan_id}/approve")
 async def approve_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
     """Simple approve (backward compat) - calls multi-level submit+approve chain."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    try:
-        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
-    except Exception:
-        raise HTTPException(404, "Invalid plan ID")
-    if not doc:
-        raise HTTPException(404, "Plan not found")
-    status = doc.get("status", "draft")
-    if status in ("ordered", "rejected"):
-        raise HTTPException(400, f"Plan is already {status}")
-    # Auto-advance through all stages
-    now = datetime.now(timezone.utc).isoformat()
-    email = user.get("email", "")
-    await db.buy_plans.update_one(
-        {"_id": ObjectId(plan_id)},
-        {"$set": {
-            "status": "ordered", "approved_at": now, "approved_by": email,
-            "submitted_at": now, "submitted_by": email,
-            "category_approved_at": now, "category_approved_by": email,
-            "senior_approved_at": now, "senior_approved_by": email,
-            "head_approved_at": now, "head_approved_by": email,
-            "ordered_at": now, "ordered_by": email,
-        }},
+    from domains.buy_planning import (
+        BuyPlansRepository, BuyPlansService,
+        BuyPlansNotFoundError, BuyPlansValidationError,
     )
-    return {"success": True, "plan_id": plan_id, "status": "ordered", "approved_at": now}
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
+    try:
+        return await svc.fast_track_approve(
+            tenant_id=user.get("tenant_id", ""), plan_id=plan_id,
+            user_email=user.get("email", ""),
+        )
+    except BuyPlansNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except BuyPlansValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.delete("/buy-plans/{plan_id}")
 async def delete_buy_plan(plan_id: str, user: dict = Depends(_dep_user)):
     """Delete a draft buy plan."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
+    from domains.buy_planning import (
+        BuyPlansRepository, BuyPlansService,
+        BuyPlansNotFoundError, BuyPlansValidationError,
+    )
+    svc = BuyPlansService(BuyPlansRepository(_db_func()))
     try:
-        doc = await db.buy_plans.find_one({"_id": ObjectId(plan_id), "tenant_id": tenant_id})
-    except Exception:
-        raise HTTPException(404, "Invalid plan ID")
-    if not doc:
-        raise HTTPException(404, "Plan not found")
-    if doc.get("status") != "draft":
-        raise HTTPException(400, "Cannot delete non-draft plan")
-    await db.buy_plans.delete_one({"_id": ObjectId(plan_id)})
-    return {"success": True, "deleted": True}
+        return await svc.delete(
+            tenant_id=user.get("tenant_id", ""), plan_id=plan_id,
+        )
+    except BuyPlansNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except BuyPlansValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 
@@ -1121,50 +874,25 @@ class StoreAttributeUpdateReq(BaseModel):
     area_sqft: Optional[int] = None
 
 
-VALID_FORMATS = {"hypermarket", "supermarket", "convenience"}
-VALID_TIERS = {"tier1", "tier2", "tier3"}
-VALID_REGIONS = {"North", "South", "East", "West", "Central"}
-
-
 @router.put("/stores/{store_code}/attributes")
 async def update_store_attributes(store_code: str, body: StoreAttributeUpdateReq, user: dict = Depends(_dep_user)):
     """Update store extended attributes (format, tier, region, area)."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    store = await db.store_master.find_one({"store_code": store_code}, {"_id": 0, "store_code": 1})
-    if not store:
-        raise HTTPException(404, f"Store '{store_code}' not found")
-    updates = {}
-    if body.store_format is not None:
-        if body.store_format not in VALID_FORMATS:
-            raise HTTPException(400, f"store_format must be one of: {', '.join(VALID_FORMATS)}")
-        updates["store_format"] = body.store_format
-    if body.city_tier is not None:
-        if body.city_tier not in VALID_TIERS:
-            raise HTTPException(400, f"city_tier must be one of: {', '.join(VALID_TIERS)}")
-        updates["city_tier"] = body.city_tier
-    if body.region is not None:
-        if body.region not in VALID_REGIONS:
-            raise HTTPException(400, f"region must be one of: {', '.join(VALID_REGIONS)}")
-        updates["region"] = body.region
-    if body.area_sqft is not None:
-        updates["area_sqft"] = body.area_sqft
-    if not updates:
-        raise HTTPException(400, "No attributes to update")
-    updates["attributes_updated_at"] = datetime.now(timezone.utc).isoformat()
-    updates["attributes_updated_by"] = user.get("email", "")
-    await db.store_master.update_one({"store_code": store_code}, {"$set": updates})
-    # Audit log
-    for field, new_val in updates.items():
-        if field.startswith("attributes_updated"):
-            continue
-        await db.buy_planning_audit_log.insert_one({
-            "tenant_id": tenant_id, "action": "attribute_update", "entity_type": "store",
-            "entity_id": store_code, "field": field, "old_value": None, "new_value": str(new_val),
-            "reason": "Store attribute updated", "source": "manual",
-            "created_by": user.get("email", ""), "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    return {"success": True, "store_code": store_code, "updated": list(updates.keys())}
+    from domains.buy_planning import (
+        StoreAttributesRepository, StoreAttributesService,
+        StoreAttrsNotFoundError, StoreAttrsValidationError,
+    )
+    svc = StoreAttributesService(StoreAttributesRepository(_db_func()))
+    try:
+        return await svc.update(
+            store_code=store_code,
+            store_format=body.store_format, city_tier=body.city_tier,
+            region=body.region, area_sqft=body.area_sqft,
+            user_email=user.get("email", ""), tenant_id=user.get("tenant_id", ""),
+        )
+    except StoreAttrsNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except StoreAttrsValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 # ═══════════════════════════════════════════════════
@@ -1233,113 +961,50 @@ class BulkInventoryUploadReq(BaseModel):
 @router.post("/inventory/bulk")
 async def bulk_upload_inventory(body: BulkInventoryUploadReq, user: dict = Depends(_dep_user)):
     """Bulk upload store-level inventory data (SOH, in-transit, open PO)."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    if not body.records:
-        raise HTTPException(400, "No records provided")
-    if len(body.records) > 100000:
-        raise HTTPException(400, "Maximum 100,000 records per request")
-    inserted = 0
-    updated = 0
-    failed = 0
-    errors = []
-    for rec in body.records:
-        try:
-            sc = rec.get("store_code", rec.get("store_id", ""))
-            sku = rec.get("sku", rec.get("sku_id", ""))
-            dt = rec.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-            result = await db.store_inventory.update_one(
-                {"tenant_id": tenant_id, "store_code": sc, "sku": sku, "date": dt},
-                {"$set": {
-                    "tenant_id": tenant_id, "store_code": sc, "sku": sku, "date": dt,
-                    "soh": rec.get("soh", 0), "in_transit": rec.get("in_transit", 0),
-                    "open_po_qty": rec.get("open_po_qty", 0),
-                    "source": body.source, "updated_at": datetime.now(timezone.utc).isoformat(),
-                    "uploaded_by": user.get("email", ""),
-                }},
-                upsert=True,
-            )
-            if result.upserted_id:
-                inserted += 1
-            elif result.modified_count > 0:
-                updated += 1
-        except Exception as e:
-            failed += 1
-            if len(errors) < 10:
-                errors.append(f"{rec}: {str(e)}")
-    await db.inventory_sync_log.insert_one({
-        "tenant_id": tenant_id, "synced_at": datetime.now(timezone.utc).isoformat(),
-        "synced_by": user.get("email", ""), "source": body.source,
-        "total": len(body.records), "inserted": inserted, "updated": updated, "failed": failed,
-    })
-    return {"success": failed == 0, "total": len(body.records), "inserted": inserted, "updated": updated, "failed": failed, "errors": errors}
+    from domains.buy_planning import (
+        InventoryRepository, InventoryService, InventoryValidationError,
+    )
+    svc = InventoryService(InventoryRepository(_db_func()))
+    try:
+        return await svc.bulk_upload(
+            tenant_id=user.get("tenant_id", ""),
+            records=body.records, source=body.source,
+            user_email=user.get("email", ""),
+        )
+    except InventoryValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/inventory")
 async def list_inventory(store_code: Optional[str] = None, sku: Optional[str] = None, limit: int = 200, user: dict = Depends(_dep_user)):
     """List inventory records, optionally filtered by store/sku."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    query = {"tenant_id": tenant_id}
-    if store_code:
-        query["store_code"] = store_code
-    if sku:
-        query["sku"] = sku
-    records = []
-    async for doc in db.store_inventory.find(query, {"_id": 0}).sort("date", -1).limit(limit):
-        records.append(doc)
-    return {"records": records, "total": len(records)}
+    from domains.buy_planning import InventoryRepository, InventoryService
+    svc = InventoryService(InventoryRepository(_db_func()))
+    return await svc.list_records(
+        tenant_id=user.get("tenant_id", ""),
+        store_code=store_code, sku=sku, limit=limit,
+    )
 
 
 @router.get("/inventory/summary")
 async def inventory_summary(user: dict = Depends(_dep_user)):
     """Get inventory summary stats."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    total = await db.store_inventory.count_documents({"tenant_id": tenant_id})
-    pipeline = [
-        {"$match": {"tenant_id": tenant_id}},
-        {"$group": {
-            "_id": None,
-            "total_soh": {"$sum": "$soh"},
-            "total_in_transit": {"$sum": "$in_transit"},
-            "total_open_po": {"$sum": "$open_po_qty"},
-            "unique_stores": {"$addToSet": "$store_code"},
-            "unique_skus": {"$addToSet": "$sku"},
-        }},
-    ]
-    result = await db.store_inventory.aggregate(pipeline).to_list(1)
-    if result:
-        r = result[0]
-        return {
-            "total_records": total,
-            "total_soh": r.get("total_soh", 0),
-            "total_in_transit": r.get("total_in_transit", 0),
-            "total_open_po": r.get("total_open_po", 0),
-            "unique_stores": len(r.get("unique_stores", [])),
-            "unique_skus": len(r.get("unique_skus", [])),
-        }
-    return {"total_records": 0, "total_soh": 0, "total_in_transit": 0, "total_open_po": 0, "unique_stores": 0, "unique_skus": 0}
+    from domains.buy_planning import InventoryRepository, InventoryService
+    svc = InventoryService(InventoryRepository(_db_func()))
+    return await svc.summary(user.get("tenant_id", ""))
 
 
-# Last sync info
 @router.get("/inventory/sync-status")
 async def inventory_sync_status(user: dict = Depends(_dep_user)):
     """Get last inventory sync info."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    last = await db.inventory_sync_log.find_one({"tenant_id": tenant_id}, {"_id": 0}, sort=[("synced_at", -1)])
-    return {"last_sync": last}
+    from domains.buy_planning import InventoryRepository, InventoryService
+    svc = InventoryService(InventoryRepository(_db_func()))
+    return await svc.sync_status(user.get("tenant_id", ""))
 
 
 # ═══════════════════════════════════════════════════
 # SAFETY STOCK CONFIGURATION & CALCULATION
 # ═══════════════════════════════════════════════════
-
-DEFAULT_SAFETY_CONFIG = {"service_level": 0.95, "review_period_days": 7, "max_safety_weeks": 12}
-
-Z_SCORES = {0.80: 0.842, 0.85: 1.036, 0.90: 1.282, 0.95: 1.645, 0.98: 2.054, 0.99: 2.326, 0.999: 3.09}
-
 
 class SafetyStockConfigReq(BaseModel):
     service_level: float = 0.95
@@ -1350,70 +1015,47 @@ class SafetyStockConfigReq(BaseModel):
 @router.get("/safety-stock/config")
 async def get_safety_stock_config(user: dict = Depends(_dep_user)):
     """Get safety stock config for the tenant."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    doc = await db.safety_stock_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
-    if not doc:
-        return {**DEFAULT_SAFETY_CONFIG, "is_default": True, "z_score": Z_SCORES.get(0.95, 1.645)}
-    return {**doc, "is_default": False, "z_score": Z_SCORES.get(doc.get("service_level", 0.95), 1.645)}
+    from domains.buy_planning import SafetyStockRepository, SafetyStockService
+    svc = SafetyStockService(SafetyStockRepository(_db_func()))
+    return await svc.get_config(user.get("tenant_id", ""))
 
 
 @router.put("/safety-stock/config")
 async def set_safety_stock_config(body: SafetyStockConfigReq, user: dict = Depends(_dep_user)):
     """Update safety stock config."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    if body.service_level not in Z_SCORES:
-        raise HTTPException(400, f"service_level must be one of: {list(Z_SCORES.keys())}")
-    if body.review_period_days < 1 or body.review_period_days > 30:
-        raise HTTPException(400, "review_period_days must be 1-30")
-    if body.max_safety_weeks < 1 or body.max_safety_weeks > 52:
-        raise HTTPException(400, "max_safety_weeks must be 1-52")
-    await db.safety_stock_config.update_one(
-        {"tenant_id": tenant_id},
-        {"$set": {
-            "tenant_id": tenant_id, "service_level": body.service_level,
-            "review_period_days": body.review_period_days, "max_safety_weeks": body.max_safety_weeks,
-            "updated_by": user.get("email", ""), "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
-        upsert=True,
+    from domains.buy_planning import (
+        SafetyStockRepository, SafetyStockService, SafetyStockValidationError,
     )
-    return {"success": True, "z_score": Z_SCORES[body.service_level], **body.model_dump()}
+    svc = SafetyStockService(SafetyStockRepository(_db_func()))
+    try:
+        return await svc.set_config(
+            tenant_id=user.get("tenant_id", ""),
+            service_level=body.service_level,
+            review_period_days=body.review_period_days,
+            max_safety_weeks=body.max_safety_weeks,
+            user_email=user.get("email", ""),
+        )
+    except SafetyStockValidationError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/safety-stock/config/reset")
 async def reset_safety_stock_config(user: dict = Depends(_dep_user)):
     """Reset to default safety stock config."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    await db.safety_stock_config.delete_one({"tenant_id": tenant_id})
-    return {"success": True, "defaults": DEFAULT_SAFETY_CONFIG}
+    from domains.buy_planning import SafetyStockRepository, SafetyStockService
+    svc = SafetyStockService(SafetyStockRepository(_db_func()))
+    return await svc.reset(user.get("tenant_id", ""))
 
 
 @router.get("/safety-stock/calculate")
 async def calculate_safety_stock(sku: str, lead_time_days: int = 14, user: dict = Depends(_dep_user)):
     """Calculate statistical safety stock for a single SKU."""
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    cfg = await db.safety_stock_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
-    if not cfg:
-        cfg = DEFAULT_SAFETY_CONFIG
-    z = Z_SCORES.get(cfg.get("service_level", 0.95), 1.645)
-    rp = cfg.get("review_period_days", 7)
-    max_weeks = cfg.get("max_safety_weeks", 12)
-    # Fetch forecast errors (last 90 days)
-    errors = []
-    async for doc in db.forecast_errors.find({"tenant_id": tenant_id, "sku": sku}, {"_id": 0, "error": 1}).sort("date", -1).limit(52):
-        errors.append(doc.get("error", 0))
-    mad = sum(errors) / len(errors) if errors else 0.5
-    import math
-    ss = z * mad * math.sqrt(lead_time_days / rp)
-    ss = min(ss, max_weeks * mad)
-    return {
-        "sku": sku, "safety_stock_units": round(ss, 2), "mad": round(mad, 2),
-        "z_score": z, "lead_time_days": lead_time_days, "review_period_days": rp,
-        "forecast_errors_used": len(errors), "formula": "z * MAD * sqrt(LT/RP)",
-    }
+    from domains.buy_planning import SafetyStockRepository, SafetyStockService
+    svc = SafetyStockService(SafetyStockRepository(_db_func()))
+    return await svc.calculate(
+        tenant_id=user.get("tenant_id", ""),
+        sku=sku, lead_time_days=lead_time_days,
+    )
 
 
 
@@ -1634,20 +1276,18 @@ async def backfill_binding_breakdown(user: dict = Depends(_dep_user)):
     One-shot: backfill `binding_breakdown` onto historical buy_plans that
     pre-date the field. Idempotent — existing breakdowns are recomputed.
     """
-    if user.get("role") not in ("super_admin", "admin"):
-        raise HTTPException(403, "Admin only")
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    updated = 0
-    async for doc in db.buy_plans.find({"tenant_id": tenant_id}, {"items": 1}):
-        items = doc.get("items", []) or []
-        breakdown = _compute_binding_breakdown(items)
-        await db.buy_plans.update_one(
-            {"_id": doc["_id"]},
-            {"$set": {"binding_breakdown": breakdown}},
+    from domains.buy_planning import (
+        BindingAnalyticsRepository, BindingAnalyticsService,
+        BindingAnalyticsForbiddenError,
+    )
+    svc = BindingAnalyticsService(BindingAnalyticsRepository(_db_func()))
+    try:
+        return await svc.backfill(
+            tenant_id=user.get("tenant_id", ""),
+            role=user.get("role", "viewer"),
         )
-        updated += 1
-    return {"success": True, "plans_updated": updated}
+    except BindingAnalyticsForbiddenError as e:
+        raise HTTPException(403, str(e))
 
 
 @router.get("/analytics/binding-factor")
@@ -1660,84 +1300,6 @@ async def binding_factor_analytics(limit: int = 10, user: dict = Depends(_dep_us
       - `worst_categories`: categories with highest floor_override_pct across last N plans
       - `plan_count`, `total_skus_analyzed`
     """
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    limit = max(1, min(limit, 50))
-
-    plans: list = []
-    async for doc in db.buy_plans.find(
-        {"tenant_id": tenant_id},
-        {"_id": 1, "plan_name": 1, "generated_at": 1, "status": 1, "binding_breakdown": 1, "items": 1, "sku_count": 1},
-    ).sort("generated_at", -1).limit(limit):
-        # Fallback-compute breakdown if missing (rare after backfill)
-        bd = doc.get("binding_breakdown")
-        if not bd:
-            bd = _compute_binding_breakdown(doc.get("items", []) or [])
-        plans.append({
-            "plan_id": str(doc["_id"]),
-            "plan_name": doc.get("plan_name"),
-            "generated_at": doc.get("generated_at"),
-            "status": doc.get("status"),
-            "breakdown": bd,
-            "sku_count": doc.get("sku_count", bd.get("total_skus", 0)),
-        })
-
-    if not plans:
-        return {
-            "plan_count": 0,
-            "latest": None,
-            "trend": [],
-            "worst_categories": [],
-            "total_skus_analyzed": 0,
-        }
-
-    latest = plans[0]
-    trend = [
-        {
-            "plan_id": p["plan_id"],
-            "plan_name": p["plan_name"],
-            "generated_at": p["generated_at"],
-            "total_skus": p["breakdown"]["total_skus"],
-            "demand_driven_pct": p["breakdown"]["demand_driven_pct"],
-            "floor_override_pct": p["breakdown"]["floor_override_pct"],
-            "display_min_pct": p["breakdown"]["pcts"].get("display_min", 0),
-            "safety_stock_pct": p["breakdown"]["pcts"].get("safety_stock", 0),
-        }
-        for p in reversed(plans)  # chronological for chart
-    ]
-
-    # Aggregate category floor-override% across ALL plans in window
-    cat_totals: dict = {}
-    for p in plans:
-        for c in p["breakdown"].get("by_category", []):
-            slot = cat_totals.setdefault(c["category"], {"skus": 0, "overrides": 0})
-            slot["skus"] += c["total"]
-            slot["overrides"] += c["counts"].get("display_min", 0) + c["counts"].get("safety_stock", 0)
-    worst = sorted(
-        [
-            {
-                "category": cat,
-                "total_skus": v["skus"],
-                "override_count": v["overrides"],
-                "floor_override_pct": round((v["overrides"] / v["skus"] * 100), 1) if v["skus"] else 0,
-            }
-            for cat, v in cat_totals.items()
-            if v["skus"] >= 5  # ignore tiny categories
-        ],
-        key=lambda x: x["floor_override_pct"],
-        reverse=True,
-    )[:10]
-
-    return {
-        "plan_count": len(plans),
-        "latest": {
-            "plan_id": latest["plan_id"],
-            "plan_name": latest["plan_name"],
-            "generated_at": latest["generated_at"],
-            "status": latest["status"],
-            "breakdown": latest["breakdown"],
-        },
-        "trend": trend,
-        "worst_categories": worst,
-        "total_skus_analyzed": sum(p["breakdown"]["total_skus"] for p in plans),
-    }
+    from domains.buy_planning import BindingAnalyticsRepository, BindingAnalyticsService
+    svc = BindingAnalyticsService(BindingAnalyticsRepository(_db_func()))
+    return await svc.get_analytics(tenant_id=user.get("tenant_id", ""), limit=limit)

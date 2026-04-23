@@ -56,6 +56,23 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor Verticals #10-15 — sell_through / store_attributes / inventory / safety_stock / binding_analytics / buy_plans (2026-02-19)
+Six more verticals extracted in one batch — completes the major monolith extraction work:
+
+- **sell_through** (`domains/buy_planning/sell_through.py`): 3 endpoints (GET/PUT/reset config). Validation centralised; audits only fire when a value actually changes.
+- **store_attributes** (`domains/buy_planning/store_attributes.py`): 1 endpoint (PUT attrs) with pure `validate_and_build_updates()` + per-field audit log.
+- **inventory** (`domains/buy_planning/inventory.py`): 4 endpoints (bulk/list/summary/sync-status). Bulk upload validation (≤100k, non-empty) + sync-log writes centralised.
+- **safety_stock** (`domains/buy_planning/safety_stock.py`): 4 endpoints (GET/PUT/reset/calculate) with pure math layer (`compute_safety_stock`, `z_score_for`, `validate_config`) — classical `z × MAD × √(LT/RP)` formula now unit-testable.
+- **binding_analytics** (`domains/buy_planning/binding_analytics.py`): 2 endpoints (backfill/analytics). **Critical dedup**: `compute_binding_breakdown()` previously lived inside `routes/buy_planning.py` as `_compute_binding_breakdown` and was re-used by 5 call sites. Now the single source of truth for "summarise binding_factor across a plan" — imported by both analytics + buy_plans domains.
+- **buy_plans** (`domains/buy_planning/buy_plans.py`): 8 endpoints (generate/list/get/edit/approval/history/approve/delete) + full 7-stage approval workflow (`PLAN_STATUS_CHAIN`, `APPROVAL_ACTIONS`, `APPROVAL_ROLES`). Role-based access + status transition rules + comment-required validation for reject/request_changes now all in the service layer.
+
+Impact:
+- **`routes/buy_planning.py` now 1,305 LOC** (down from 1,744 → -439 this batch)
+- **Cumulative: 2,341 → 1,305 LOC = -1,036 LOC (44.3% reduction)** from original monolith
+- **Domain test suite: 164/164 green** (added 45 tests across 6 new modules — pure math, pure validators, service orchestration)
+- **Dead code removed**: `_compute_binding_breakdown`, `DEFAULT_SAFETY_CONFIG`, `Z_SCORES`, `VALID_FORMATS`, `VALID_TIERS`, `VALID_REGIONS`, `PLAN_STATUS_CHAIN`, `APPROVAL_ACTIONS`, `APPROVAL_ROLES` local definitions — now single-sourced in domain modules
+- **Live verified all 21 curl smoke checks** pass (200 happy, 400 validation, 404 not-found, 403 forbidden); backfill processed same 32 historical plans as the old monolith endpoint — behaviour preserved
+
 ### Strangler-Fig Refactor Verticals #5-9 — dna_tags / audit_log / exclusions / promotions / orders (2026-02-19)
 Five additional verticals extracted in one batch — all following the Repository + Service pattern:
 
