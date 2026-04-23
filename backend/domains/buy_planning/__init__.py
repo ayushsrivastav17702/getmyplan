@@ -155,6 +155,23 @@ from .buy_plans import (
     ValidationError as BuyPlansValidationError,
     ForbiddenError as BuyPlansForbiddenError,
 )
+from .buy_formula import (
+    BuyFormulaRepository,
+    BuyFormulaService,
+    compute_promo_lifts,
+    best_lift_for,
+    compute_demand_buy,
+    compute_display_qty,
+    compute_safety_qty_statistical,
+    binding_factor,
+    build_sku_row,
+)
+from .assortment_matrix import (
+    AssortmentMatrixRepository,
+    AssortmentMatrixService,
+    mixes_eligible_for_wedge,
+    build_matrix,
+)
 
 __all__ = [
     "DisplayMinimumsRepository",
@@ -242,4 +259,17 @@ __all__ = [
     "BuyPlansNotFoundError",
     "BuyPlansValidationError",
     "BuyPlansForbiddenError",
+    "BuyFormulaRepository",
+    "BuyFormulaService",
+    "compute_promo_lifts",
+    "best_lift_for",
+    "compute_demand_buy",
+    "compute_display_qty",
+    "compute_safety_qty_statistical",
+    "binding_factor",
+    "build_sku_row",
+    "AssortmentMatrixRepository",
+    "AssortmentMatrixService",
+    "mixes_eligible_for_wedge",
+    "build_matrix",
 ]

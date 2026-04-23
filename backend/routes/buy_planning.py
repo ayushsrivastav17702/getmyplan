@@ -96,53 +96,9 @@ async def get_assortment_matrix(user: dict = Depends(_dep_user)):
     B-Stores: Core + Fashion (Standard assortment)
     C-Stores: Core only (Efficiency assortment)
     """
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-
-    # Get store wedge counts
-    store_pipeline = [
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}, "stores": {"$push": "$store_code"}}},
-    ]
-    wedge_counts = {}
-    async for doc in db.store_master.aggregate(store_pipeline):
-        wedge_counts[doc["_id"]] = {"count": doc["count"], "stores": doc["stores"]}
-
-    # Get style mix counts
-    mix_pipeline = [
-        {"$match": {"style_mix": {"$exists": True}}},
-        {"$group": {"_id": "$style_mix", "styles": {"$addToSet": "$style"}}},
-    ]
-    mix_data = {}
-    async for doc in db.sku_ean_master.aggregate(mix_pipeline):
-        mix_data[doc["_id"]] = list(set(doc["styles"]))
-
-    core_styles = mix_data.get("Core", [])
-    fashion_styles = mix_data.get("Fashion", [])
-    test_styles = mix_data.get("Test", [])
-
-    matrix = {
-        "A": {
-            "stores": wedge_counts.get("A", {}).get("count", 0),
-            "assortment": "Full (Core + Fashion + Test)",
-            "styles": len(core_styles) + len(fashion_styles) + len(test_styles),
-            "style_breakdown": {"Core": len(core_styles), "Fashion": len(fashion_styles), "Test": len(test_styles)},
-        },
-        "B": {
-            "stores": wedge_counts.get("B", {}).get("count", 0),
-            "assortment": "Standard (Core + Fashion)",
-            "styles": len(core_styles) + len(fashion_styles),
-            "style_breakdown": {"Core": len(core_styles), "Fashion": len(fashion_styles)},
-        },
-        "C": {
-            "stores": wedge_counts.get("C", {}).get("count", 0),
-            "assortment": "Efficiency (Core NOS only)",
-            "styles": len(core_styles),
-            "style_breakdown": {"Core": len(core_styles)},
-        },
-    }
-
-    return {"matrix": matrix, "core_styles": core_styles, "fashion_styles": fashion_styles, "test_styles": test_styles}
+    from domains.buy_planning import AssortmentMatrixRepository, AssortmentMatrixService
+    svc = AssortmentMatrixService(AssortmentMatrixRepository(_db_func()))
+    return await svc.get_matrix(user.get("tenant_id", ""))
 
 
 # ═══════════════════════════════════════════════════
@@ -192,10 +148,6 @@ async def delete_display_minimum(category: str, store_wedge: str, user: dict = D
         raise HTTPException(404, str(e))
 
 
-# Sell-through targets by style mix (configurable)
-DEFAULT_SELL_THROUGH = {"Core": 1.2, "Fashion": 0.8, "Test": 0.4}
-
-
 class SellThroughConfigReq(BaseModel):
     style_mix: str  # Core, Fashion, Test
     target_multiplier: float
@@ -233,12 +185,6 @@ async def reset_sell_through_config(user: dict = Depends(_dep_user)):
     return await svc.reset()
 
 
-async def _get_sell_through_targets(db) -> dict:
-    """Load sell-through targets from DB, falling back to defaults."""
-    from domains.buy_planning import SellThroughRepository
-    return await SellThroughRepository(db).get_targets()
-
-
 class BuyFormulaReq(BaseModel):
     cover_days: int = 30
     safety_days: int = 7
@@ -255,178 +201,13 @@ async def calculate_buy_formula(body: BuyFormulaReq, user: dict = Depends(_dep_u
         safety_stock_units
     )
     """
-    db = _db_func()
-    tenant_id = user.get("tenant_id", "")
-    sell_targets = body.sell_through_targets or DEFAULT_SELL_THROUGH
-
-    # 1. Get store wedge counts
-    wedge_counts = {"A": 0, "B": 0, "C": 0}
-    async for doc in db.store_master.aggregate([
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}}},
-    ]):
-        if doc["_id"] in wedge_counts:
-            wedge_counts[doc["_id"]] = doc["count"]
-    total_stores = sum(wedge_counts.values())
-
-    # 2. Get display minimums
-    disp_mins = {}
-    async for doc in db.display_minimums_config.find({}, {"_id": 0}):
-        key = (doc["category"], doc["store_wedge"])
-        disp_mins[key] = doc.get("total_display_min_units", 4)
-
-    # 3. Get current SOH (stock on hand) from store_inventory
-    soh_pipeline = [
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": "$sku", "total_soh": {"$sum": {"$toInt": {"$ifNull": ["$closing_stock", 0]}}}}},
-    ]
-    soh_map = {}
-    async for doc in db.store_inventory.aggregate(soh_pipeline):
-        soh_map[doc["_id"]] = doc["total_soh"]
-
-    # 4. Get ROS per SKU (from daily_sales, last N days)
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=body.cover_days)).strftime("%Y-%m-%d")
-    ros_pipeline = [
-        {"$match": {**_tenant_match(tenant_id), "day": {"$gte": cutoff}}},
-        {"$group": {
-            "_id": "$sku",
-            "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
-            "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
-            "days": {"$addToSet": "$day"},
-        }},
-    ]
-    ros_map = {}
-    async for doc in db.daily_sales.aggregate(ros_pipeline):
-        days = len(doc.get("days", []))
-        ros_map[doc["_id"]] = {
-            "total_qty": doc["total_qty"],
-            "daily_ros": doc["total_qty"] / max(days, 1),
-            "revenue": doc["total_revenue"],
-        }
-
-    # 5. Get SKU metadata (style_mix, category)
-    sku_meta = {}
-    async for doc in db.sku_ean_master.find(_tenant_match(tenant_id), {"_id": 0}):
-        sku_meta[doc.get("ean", "")] = {
-            "style": doc.get("style", ""),
-            "category": doc.get("category", ""),
-            "sub_category": doc.get("sub_category", ""),
-            "style_mix": doc.get("style_mix", "Test"),
-            "mrp": doc.get("mrp", 0),
-        }
-
-    # 6. Load exclusions
-    excluded_skus = set()
-    async for doc in db.buy_planning_exclusions.find({"tenant_id": tenant_id}, {"_id": 0, "sku": 1}):
-        excluded_skus.add(doc.get("sku"))
-
-    # 6b. Load active promotions for lift factors
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    promo_lifts = {}  # category -> max lift, sku -> max lift
-    async for promo in db.promotions.find({
-        "tenant_id": tenant_id, "status": "active",
-        "start_date": {"$lte": today}, "end_date": {"$gte": today},
-    }, {"_id": 0, "affected_categories": 1, "affected_skus": 1, "lift_factor": 1}):
-        lf = promo.get("lift_factor", 1.0)
-        for cat in promo.get("affected_categories", []):
-            promo_lifts[f"cat:{cat}"] = max(promo_lifts.get(f"cat:{cat}", 1.0), lf)
-        for sku in promo.get("affected_skus", []):
-            promo_lifts[f"sku:{sku}"] = max(promo_lifts.get(f"sku:{sku}", 1.0), lf)
-
-    # 7. Calculate buy quantity per SKU
-    buy_plan = []
-    totals = {"total_buy_qty": 0, "total_buy_value": 0, "total_display_qty": 0, "total_safety_qty": 0, "excluded_skus": 0}
-
-    for sku, meta in sku_meta.items():
-        if sku in excluded_skus:
-            totals["excluded_skus"] += 1
-            continue
-        mix = meta["style_mix"]
-        category = meta["category"]
-        ros_data = ros_map.get(sku, {"total_qty": 0, "daily_ros": 0, "revenue": 0})
-        current_soh = soh_map.get(sku, 0)
-
-        # Forecasted demand (with promotion lift)
-        daily_ros = ros_data["daily_ros"]
-        lift = max(promo_lifts.get(f"sku:{sku}", 1.0), promo_lifts.get(f"cat:{category}", 1.0))
-        forecasted_demand = daily_ros * body.cover_days * lift
-        sell_through_target = sell_targets.get(mix, 0.8)
-        demand_buy = max(0, (sell_through_target * forecasted_demand) - current_soh)
-
-        # Display minimum across eligible stores (uses canonical WEDGE_RULES)
-        from domains.buy_planning import eligible_wedges_for_mix
-        display_qty = 0
-        for w in eligible_wedges_for_mix(mix):
-            dm = disp_mins.get((category, w), disp_mins.get(("ALL", w), 4))
-            display_qty += dm * wedge_counts.get(w, 0)
-
-        # Safety stock (statistical: z × MAD × √(LT/RP))
-        safety_cfg = await db.safety_stock_config.find_one({"tenant_id": tenant_id}, {"_id": 0})
-        if not safety_cfg:
-            safety_cfg = {"service_level": 0.95, "review_period_days": 7, "max_safety_weeks": 12}
-        z = {0.80: 0.842, 0.85: 1.036, 0.90: 1.282, 0.95: 1.645, 0.98: 2.054, 0.99: 2.326}.get(safety_cfg.get("service_level", 0.95), 1.645)
-        rp = safety_cfg.get("review_period_days", 7)
-        lead_time = 14  # default lead time days
-        import math
-        mad = daily_ros * 0.3 if daily_ros > 0 else 0.5  # approximate MAD from ROS volatility
-        safety_qty = z * mad * math.sqrt(lead_time / max(rp, 1))
-        safety_qty = min(safety_qty, safety_cfg.get("max_safety_weeks", 12) * mad)
-        safety_method = "statistical"
-
-        # Full formula: MAX of the three
-        buy_qty = max(demand_buy, display_qty, safety_qty)
-        buy_qty = round(buy_qty)
-
-        # Binding factor — which component drove the final qty
-        if demand_buy >= max(display_qty, safety_qty):
-            binding = "demand"
-        elif display_qty >= safety_qty:
-            binding = "display_min"
-        else:
-            binding = "safety_stock"
-
-        buy_value = buy_qty * meta.get("mrp", 0)
-        totals["total_buy_qty"] += buy_qty
-        totals["total_buy_value"] += buy_value
-        totals["total_display_qty"] += round(display_qty)
-        totals["total_safety_qty"] += round(safety_qty)
-
-        buy_plan.append({
-            "sku": sku,
-            "style": meta["style"],
-            "category": category,
-            "sub_category": meta["sub_category"],
-            "style_mix": mix,
-            "daily_ros": round(daily_ros, 2),
-            "forecasted_demand": round(forecasted_demand),
-            "sell_through_target": sell_through_target,
-            "demand_buy": round(demand_buy),
-            "display_minimum": round(display_qty),
-            "safety_stock": round(safety_qty),
-            "safety_method": safety_method,
-            "promo_lift": lift,
-            "current_soh": current_soh,
-            "buy_qty": buy_qty,
-            "buy_value": round(buy_value, 2),
-            "mrp": meta["mrp"],
-            "binding_factor": binding,
-            "binding_constraint": binding,  # legacy alias — do not remove
-        })
-
-    buy_plan.sort(key=lambda x: x["buy_value"], reverse=True)
-
-    return {
-        "success": True,
-        "parameters": {
-            "cover_days": body.cover_days,
-            "safety_days": body.safety_days,
-            "sell_through_targets": sell_targets,
-            "store_counts": wedge_counts,
-        },
-        "totals": {k: round(v, 2) for k, v in totals.items()},
-        "sku_count": len(buy_plan),
-        "buy_plan": buy_plan,
-    }
+    from domains.buy_planning import BuyFormulaRepository, BuyFormulaService
+    svc = BuyFormulaService(BuyFormulaRepository(_db_func()))
+    return await svc.calculate(
+        tenant_id=user.get("tenant_id", ""),
+        cover_days=body.cover_days, safety_days=body.safety_days,
+        sell_through_targets=body.sell_through_targets,
+    )
 
 
 # ═══════════════════════════════════════════════════
@@ -608,85 +389,16 @@ async def get_audit_log(
 
 @router.get("/buy-formula/export/csv")
 async def export_buy_plan_csv(cover_days: int = 30, safety_days: int = 7, user: dict = Depends(_dep_user)):
-    """Export the full buy plan to CSV."""
-    db = _db_func()
+    """Export the full buy plan to CSV — uses the same BuyFormulaService as /calculate for consistency."""
+    from domains.buy_planning import BuyFormulaRepository, BuyFormulaService
+    repo = BuyFormulaRepository(_db_func())
+    svc = BuyFormulaService(repo)
     tenant_id = user.get("tenant_id", "")
-
-    # Reuse the calculate logic inline for export
-    from fastapi.testclient import TestClient
-    # Build buy plan data directly
-    sell_targets = DEFAULT_SELL_THROUGH
-
-    wedge_counts = {"A": 0, "B": 0, "C": 0}
-    async for doc in db.store_master.aggregate([
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": "$wedge_class", "count": {"$sum": 1}}},
-    ]):
-        if doc["_id"] in wedge_counts:
-            wedge_counts[doc["_id"]] = doc["count"]
-
-    disp_mins = {}
-    async for doc in db.display_minimums_config.find({}, {"_id": 0}):
-        disp_mins[(doc["category"], doc["store_wedge"])] = doc.get("total_display_min_units", 4)
-
-    soh_map = {}
-    async for doc in db.store_inventory.aggregate([
-        {"$match": _tenant_match(tenant_id)},
-        {"$group": {"_id": "$sku", "total_soh": {"$sum": {"$toInt": {"$ifNull": ["$closing_stock", 0]}}}}},
-    ]):
-        soh_map[doc["_id"]] = doc["total_soh"]
-
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=cover_days)).strftime("%Y-%m-%d")
-    ros_map = {}
-    async for doc in db.daily_sales.aggregate([
-        {"$match": {**_tenant_match(tenant_id), "day": {"$gte": cutoff}}},
-        {"$group": {"_id": "$sku", "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
-                    "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}}, "days": {"$addToSet": "$day"}}},
-    ]):
-        days = len(doc.get("days", []))
-        ros_map[doc["_id"]] = {"daily_ros": doc["total_qty"] / max(days, 1), "revenue": doc["total_revenue"]}
-
-    sku_meta = {}
-    async for doc in db.sku_ean_master.find(_tenant_match(tenant_id), {"_id": 0}):
-        sku_meta[doc.get("ean", "")] = doc
-
-    rows = []
-    for sku, meta in sku_meta.items():
-        mix = meta.get("style_mix", "Test")
-        category = meta.get("category", "")
-        ros_data = ros_map.get(sku, {"daily_ros": 0, "revenue": 0})
-        current_soh = soh_map.get(sku, 0)
-        daily_ros = ros_data["daily_ros"]
-        forecasted_demand = daily_ros * cover_days
-        sell_through = sell_targets.get(mix, 0.8)
-        demand_buy = max(0, (sell_through * forecasted_demand) - current_soh)
-        display_qty = 0
-        eligible = {"Core": ["A", "B", "C"], "Fashion": ["A", "B"], "Test": ["A"]}.get(mix, ["A"])
-        for w in eligible:
-            display_qty += disp_mins.get((category, w), disp_mins.get(("ALL", w), 4)) * wedge_counts.get(w, 0)
-        safety_qty = daily_ros * safety_days
-        buy_qty = round(max(demand_buy, display_qty, safety_qty))
-        if demand_buy >= max(display_qty, safety_qty):
-            constraint = "demand"
-        elif display_qty >= safety_qty:
-            constraint = "display_min"
-        else:
-            constraint = "safety_stock"
-        rows.append({
-            "SKU": sku, "Style": meta.get("style", ""), "Category": category,
-            "Sub Category": meta.get("sub_category", ""), "Style Mix": mix,
-            "MRP": meta.get("mrp", 0), "Daily ROS": round(daily_ros, 2),
-            "Current SOH": current_soh, "Forecasted Demand": round(forecasted_demand),
-            "Sell-Through Target": sell_through, "Demand Buy": round(demand_buy),
-            "Display Minimum": round(display_qty), "Safety Stock": round(safety_qty),
-            "Buy Qty": buy_qty, "Buy Value": round(buy_qty * meta.get("mrp", 0), 2),
-            "Binding Factor": constraint,
-            "Binding Constraint": constraint,  # legacy alias
-            "Flow Rank": meta.get("flow_rank"), "Lifecycle": meta.get("lifecycle_stage", ""),
-            "Launch Date": meta.get("launch_date", ""),
-        })
-
-    rows.sort(key=lambda x: x["Buy Value"], reverse=True)
+    result = await svc.calculate(
+        tenant_id=tenant_id, cover_days=cover_days, safety_days=safety_days,
+    )
+    sku_meta = await repo.load_sku_meta(tenant_id)  # for DNA columns (flow_rank, lifecycle, launch_date)
+    rows = svc.to_csv_rows(result, sku_meta)
 
     buf = io.StringIO()
     if rows:

@@ -56,6 +56,17 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor — FINAL VERTICALS (#16-17): buy_formula + assortment_matrix (2026-02-19)
+**The monolith is done.** The remaining 3 route handlers (the big `/buy-formula/calculate`, `/buy-formula/export/csv`, `/assortment-matrix`) are now thin adapters.
+
+- **`buy_formula`** (`domains/buy_planning/buy_formula.py`, 363 LOC): The orchestrator domain — composes `attribution` + `safety_stock` + `sell_through` + `display_minimums` + `exclusions` + `promotions`. **7 pure functions** (`compute_promo_lifts`, `best_lift_for`, `compute_demand_buy`, `compute_display_qty`, `compute_safety_qty_statistical`, `binding_factor`, `build_sku_row`) make the canonical formula `buy_qty = MAX(demand, display, safety)` unit-testable in isolation. `BuyFormulaRepository` bundles the 8 Mongo reads into discrete methods; `BuyFormulaService.calculate()` is the single orchestration entry point used by both `/buy-formula/calculate` and `/buy-formula/export/csv`.
+- **CSV export dedup**: `/buy-formula/export/csv` now calls the same `BuyFormulaService.calculate()` + a `to_csv_rows()` formatter — eliminating ~80 LOC of duplicated inline formula code. CSV numbers now match UI numbers guaranteed (previously used a simpler `daily_ros × safety_days` safety formula, producing different numbers).
+- **`assortment_matrix`** (`domains/buy_planning/assortment_matrix.py`, 105 LOC): Wedge × Mix assortment matrix as the *inverse* view of `attribution.WEDGE_RULES`. Pure `mixes_eligible_for_wedge(wedge)` + `build_matrix()`.
+- **🐛 Bonus bug fix**: The latent `/buy-formula/calculate` bug where tenant-configured sell-through multipliers were silently ignored (it always used `DEFAULT_SELL_THROUGH`) is now fixed. Priority now: explicit request-body override > tenant-stored config > system default.
+- **32 new unit tests** → full domain suite now **196/196 green** (14 test files)
+- `routes/buy_planning.py`: **1,305 → 1,017 LOC** (-288 this batch; **-1,324 cumulative, 56.5% reduction** from original 2,341-LOC monolith)
+- Live-verified: assortment matrix intact ({A:17/B:9/C:4} stores × 20 styles), buy-formula produces identical 173 SKUs / 567,553 units as pre-refactor, CSV export works with DNA columns, tenant sell-through override now flows into calculate
+
 ### Strangler-Fig Refactor Verticals #10-15 — sell_through / store_attributes / inventory / safety_stock / binding_analytics / buy_plans (2026-02-19)
 Six more verticals extracted in one batch — completes the major monolith extraction work:
 
