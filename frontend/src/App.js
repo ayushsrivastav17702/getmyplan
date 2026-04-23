@@ -67,6 +67,7 @@ const ForecastAccuracyDashboard = lazy(() => import("./pages/ForecastAccuracyDas
 const PlannerPerformance = lazy(() => import("./pages/PlannerPerformance"));
 const CategoryHealth = lazy(() => import("./pages/CategoryHealth"));
 const RoiDashboard = lazy(() => import("./pages/RoiDashboard"));
+const BindingFactorDashboard = lazy(() => import("./pages/BindingFactorDashboard"));
 const ApprovalWorkflow = lazy(() => import("./pages/ApprovalWorkflow"));
 const ProductPage = lazy(() => import("./pages/ProductPage"));
 const ProductsListing = lazy(() => import("./pages/ProductsListing"));
@@ -290,6 +291,7 @@ const AuthenticatedApp = () => {
             <Route path="/planner-performance" element={<PlannerPerformance />} />
             <Route path="/category-health" element={<CategoryHealth />} />
             <Route path="/roi" element={<RoiDashboard />} />
+            <Route path="/binding-factor" element={<BindingFactorDashboard />} />
             <Route path="/approvals" element={<ApprovalWorkflow />} />
             <Route path="/support" element={<Navigate to="/help" replace />} />
 

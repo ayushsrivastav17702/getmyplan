@@ -29,6 +29,58 @@ def _tenant_match(tenant_id: str) -> dict:
     return {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}]}
 
 
+def _compute_binding_breakdown(items: list) -> dict:
+    """
+    Summarize binding_factor across buy plan items.
+
+    This is the signal surface for "are display_minimums misconfigured?"
+    If floor_override_pct stays high cycle after cycle, either demand has
+    fallen below what floors justify, or the floors are set too aggressively.
+
+    Returned shape:
+      {
+        "counts":    {demand, display_min, safety_stock, unknown},
+        "pcts":      {same keys, percentage of total_skus},
+        "total_skus": int,
+        "demand_driven_pct": float,
+        "floor_override_pct": float,   # display_min + safety_stock
+        "by_category": [{category, counts, total}],
+      }
+    """
+    counts = {"demand": 0, "display_min": 0, "safety_stock": 0, "unknown": 0}
+    by_cat: dict = {}
+    for it in items:
+        bf = it.get("binding_factor") or it.get("binding_constraint") or "unknown"
+        key = bf if bf in counts else "unknown"
+        counts[key] += 1
+        cat = it.get("category") or "Uncategorised"
+        slot = by_cat.setdefault(cat, {"demand": 0, "display_min": 0, "safety_stock": 0, "unknown": 0, "total": 0})
+        slot[key] += 1
+        slot["total"] += 1
+
+    total = sum(counts.values())
+    pcts = {k: round((v / total * 100), 1) if total > 0 else 0 for k, v in counts.items()}
+    by_category = [
+        {
+            "category": cat,
+            "counts": {k: v for k, v in c.items() if k != "total"},
+            "total": c["total"],
+            "floor_override_pct": round(((c["display_min"] + c["safety_stock"]) / c["total"] * 100), 1) if c["total"] > 0 else 0,
+        }
+        for cat, c in by_cat.items()
+    ]
+    by_category.sort(key=lambda x: x["floor_override_pct"], reverse=True)
+
+    return {
+        "counts": counts,
+        "pcts": pcts,
+        "total_skus": total,
+        "demand_driven_pct": pcts["demand"],
+        "floor_override_pct": round(pcts["display_min"] + pcts["safety_stock"], 1),
+        "by_category": by_category,
+    }
+
+
 # ── Store Wedge Classification ──
 
 @router.post("/store-wedge/classify")
@@ -1301,6 +1353,8 @@ async def generate_and_save_plan(body: GeneratePlanReq, user: dict = Depends(_de
     result = await calculate_buy_formula(calc_body, user)
 
     plan_name = body.plan_name or f"Buy Plan {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+    items = result.get("buy_plan", [])
+    binding_breakdown = _compute_binding_breakdown(items)
     plan_doc = {
         "tenant_id": tenant_id,
         "plan_name": plan_name,
@@ -1309,10 +1363,11 @@ async def generate_and_save_plan(body: GeneratePlanReq, user: dict = Depends(_de
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generated_by": user.get("email", ""),
         "status": "draft",
-        "items": result.get("buy_plan", []),
+        "items": items,
         "parameters": result.get("parameters", {}),
         "totals": result.get("totals", {}),
         "sku_count": result.get("sku_count", 0),
+        "binding_breakdown": binding_breakdown,
         "notes": body.notes,
     }
     insert_result = await db.buy_plans.insert_one(plan_doc)
@@ -1414,9 +1469,16 @@ async def update_plan_item(plan_id: str, body: UpdateItemQtyReq, user: dict = De
     items[body.item_index]["edited_at"] = datetime.now(timezone.utc).isoformat()
     total_qty = sum(i.get("edited_qty", i.get("buy_qty", 0)) for i in items)
     total_val = sum(i.get("edited_qty", i.get("buy_qty", 0)) * i.get("mrp", 0) for i in items)
+    # Recompute breakdown in case items have been normalized/edited
+    binding_breakdown = _compute_binding_breakdown(items)
     await db.buy_plans.update_one(
         {"_id": ObjectId(plan_id)},
-        {"$set": {"items": items, "totals.total_buy_qty": total_qty, "totals.total_buy_value": round(total_val, 2)}},
+        {"$set": {
+            "items": items,
+            "totals.total_buy_qty": total_qty,
+            "totals.total_buy_value": round(total_val, 2),
+            "binding_breakdown": binding_breakdown,
+        }},
     )
     return {"success": True, "item_index": body.item_index, "new_qty": body.new_qty, "total_buy_qty": total_qty}
 
@@ -2160,3 +2222,122 @@ async def get_active_lift_factors(user: dict = Depends(_dep_user)):
     }, {"_id": 0, "promo_id": 1, "name": 1, "affected_categories": 1, "affected_skus": 1, "lift_factor": 1}):
         promos.append(doc)
     return {"active_promotions": promos, "total": len(promos)}
+
+
+# ═══════════════════════════════════════════════════
+# BINDING FACTOR ANALYTICS  (display-min misconfiguration detector)
+# ═══════════════════════════════════════════════════
+
+@router.post("/analytics/backfill-binding-breakdown")
+async def backfill_binding_breakdown(user: dict = Depends(_dep_user)):
+    """
+    One-shot: backfill `binding_breakdown` onto historical buy_plans that
+    pre-date the field. Idempotent — existing breakdowns are recomputed.
+    """
+    if user.get("role") not in ("super_admin", "admin"):
+        raise HTTPException(403, "Admin only")
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    updated = 0
+    async for doc in db.buy_plans.find({"tenant_id": tenant_id}, {"items": 1}):
+        items = doc.get("items", []) or []
+        breakdown = _compute_binding_breakdown(items)
+        await db.buy_plans.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"binding_breakdown": breakdown}},
+        )
+        updated += 1
+    return {"success": True, "plans_updated": updated}
+
+
+@router.get("/analytics/binding-factor")
+async def binding_factor_analytics(limit: int = 10, user: dict = Depends(_dep_user)):
+    """
+    Analytics for the "where did the buy qty come from?" question.
+    Returns:
+      - `latest`: the most recent plan's breakdown (for doughnut chart)
+      - `trend`: last N plans ordered oldest→newest (for time-series line)
+      - `worst_categories`: categories with highest floor_override_pct across last N plans
+      - `plan_count`, `total_skus_analyzed`
+    """
+    db = _db_func()
+    tenant_id = user.get("tenant_id", "")
+    limit = max(1, min(limit, 50))
+
+    plans: list = []
+    async for doc in db.buy_plans.find(
+        {"tenant_id": tenant_id},
+        {"_id": 1, "plan_name": 1, "generated_at": 1, "status": 1, "binding_breakdown": 1, "items": 1, "sku_count": 1},
+    ).sort("generated_at", -1).limit(limit):
+        # Fallback-compute breakdown if missing (rare after backfill)
+        bd = doc.get("binding_breakdown")
+        if not bd:
+            bd = _compute_binding_breakdown(doc.get("items", []) or [])
+        plans.append({
+            "plan_id": str(doc["_id"]),
+            "plan_name": doc.get("plan_name"),
+            "generated_at": doc.get("generated_at"),
+            "status": doc.get("status"),
+            "breakdown": bd,
+            "sku_count": doc.get("sku_count", bd.get("total_skus", 0)),
+        })
+
+    if not plans:
+        return {
+            "plan_count": 0,
+            "latest": None,
+            "trend": [],
+            "worst_categories": [],
+            "total_skus_analyzed": 0,
+        }
+
+    latest = plans[0]
+    trend = [
+        {
+            "plan_id": p["plan_id"],
+            "plan_name": p["plan_name"],
+            "generated_at": p["generated_at"],
+            "total_skus": p["breakdown"]["total_skus"],
+            "demand_driven_pct": p["breakdown"]["demand_driven_pct"],
+            "floor_override_pct": p["breakdown"]["floor_override_pct"],
+            "display_min_pct": p["breakdown"]["pcts"].get("display_min", 0),
+            "safety_stock_pct": p["breakdown"]["pcts"].get("safety_stock", 0),
+        }
+        for p in reversed(plans)  # chronological for chart
+    ]
+
+    # Aggregate category floor-override% across ALL plans in window
+    cat_totals: dict = {}
+    for p in plans:
+        for c in p["breakdown"].get("by_category", []):
+            slot = cat_totals.setdefault(c["category"], {"skus": 0, "overrides": 0})
+            slot["skus"] += c["total"]
+            slot["overrides"] += c["counts"].get("display_min", 0) + c["counts"].get("safety_stock", 0)
+    worst = sorted(
+        [
+            {
+                "category": cat,
+                "total_skus": v["skus"],
+                "override_count": v["overrides"],
+                "floor_override_pct": round((v["overrides"] / v["skus"] * 100), 1) if v["skus"] else 0,
+            }
+            for cat, v in cat_totals.items()
+            if v["skus"] >= 5  # ignore tiny categories
+        ],
+        key=lambda x: x["floor_override_pct"],
+        reverse=True,
+    )[:10]
+
+    return {
+        "plan_count": len(plans),
+        "latest": {
+            "plan_id": latest["plan_id"],
+            "plan_name": latest["plan_name"],
+            "generated_at": latest["generated_at"],
+            "status": latest["status"],
+            "breakdown": latest["breakdown"],
+        },
+        "trend": trend,
+        "worst_categories": worst,
+        "total_skus_analyzed": sum(p["breakdown"]["total_skus"] for p in plans),
+    }

@@ -9,7 +9,7 @@ import {
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
   HelpCircle, FileText, Flag, Blocks, ClipboardCheck, Target,
-  Trophy, Package, DollarSign, Bell, User, Key, ChevronUp,
+  Trophy, Package, DollarSign, Bell, User, Key, ChevronUp, Gauge,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -66,6 +66,7 @@ const NAV_GROUPS = [
       { path: "/planner-performance",  label: "Planner Performance",   icon: Trophy,         permission: null },
       { path: "/category-health",      label: "Category Health",       icon: Package,        permission: null },
       { path: "/roi",                  label: "ROI Dashboard",         icon: DollarSign,     permission: null },
+      { path: "/binding-factor",       label: "Binding Factor",        icon: Gauge,          permission: null },
     ],
   },
   {

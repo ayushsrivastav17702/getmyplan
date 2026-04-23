@@ -56,6 +56,15 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Binding Factor Persistence + Admin Dashboard (2026-02-19)
+- `binding_factor` now persisted on every buy plan save at two levels:
+  - Per-row inside `items[]` (already fixed earlier today)
+  - Plan-level `binding_breakdown` rollup: counts, pcts, total_skus, demand_driven_pct, floor_override_pct, by_category[]
+- Recomputed on item-edit (`/buy-plans/{plan_id}/edit-item`)
+- One-shot backfill endpoint `POST /api/buy-planning/analytics/backfill-binding-breakdown` (admin-gated) — backfilled 32 historical plans in live env
+- New analytics endpoint `GET /api/buy-planning/analytics/binding-factor?limit=N` returns latest + trend + worst_categories
+- New **Binding Factor Analytics** dashboard at `/binding-factor` — 4 KPIs + donut + worst-offender bar + trend line + interpretation guide. Wired into Sidebar under Insights.
+
 ### Buy Formula Attribution Safety (2026-02-19)
 - New canonical `/app/backend/core/buy_formula.py` — per-store `calculate_buy_qty()` that applies `attribution_pct` ONLY to the demand signal, never to the absolute floors (display_minimum, safety_stock)
 - Added `binding_factor` field to every buy plan row (alongside legacy `binding_constraint` alias for backward compat) — values: `demand` / `display_min` / `safety_stock`
