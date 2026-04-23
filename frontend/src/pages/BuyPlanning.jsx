@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { API } from "../App";
 import { toast } from "sonner";
@@ -15,6 +16,11 @@ import { DnaTagsTab } from "../components/BuyPlanning/DnaTagsTab";
 import { AttributionTab } from "../components/BuyPlanning/AttributionTab";
 
 export default function BuyPlanning() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlPlanId = searchParams.get("plan_id") || "";
+  const urlCategory = searchParams.get("category") || "";
+  const urlBinding = searchParams.get("binding") || ""; // "demand" | "display_min" | "safety_stock" | "floor_override"
+
   const [wedge, setWedge] = useState(null);
   const [mix, setMix] = useState(null);
   const [matrix, setMatrix] = useState(null);
@@ -195,7 +201,7 @@ export default function BuyPlanning() {
     setLoading(p => ({ ...p, generate: false }));
   };
 
-  const loadPlan = async (planId) => {
+  const loadPlan = useCallback(async (planId) => {
     if (!planId) { setSelectedPlanId(""); setSelectedPlan(null); setPlanItems([]); return; }
     setSelectedPlanId(planId);
     try {
@@ -203,6 +209,48 @@ export default function BuyPlanning() {
       setSelectedPlan(res.data);
       setPlanItems(res.data.items || []);
     } catch { toast.error("Failed to load plan"); }
+  }, []);
+
+  // Auto-load plan from URL ?plan_id=... (e.g. deep-link from Binding Factor dashboard)
+  useEffect(() => {
+    if (urlPlanId && urlPlanId !== selectedPlanId) {
+      setTab("buy-plan");
+      loadPlan(urlPlanId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlPlanId]);
+
+  // Filter chips → items filtered by category + binding_factor
+  // We annotate each filtered row with `_origIdx` so edits target the correct
+  // underlying item in planItems[] even when the view is filtered.
+  const filteredItems = useMemo(() => {
+    const src = planItems.length > 0 ? planItems : (buyPlan?.buy_plan || []);
+    const indexed = src.map((it, i) => ({ ...it, _origIdx: i }));
+    if (!urlCategory && !urlBinding) return indexed;
+    return indexed.filter((it) => {
+      if (urlCategory && (it.category || "") !== urlCategory) return false;
+      if (urlBinding) {
+        const bf = it.binding_factor || it.binding_constraint;
+        if (urlBinding === "floor_override") {
+          if (bf !== "display_min" && bf !== "safety_stock") return false;
+        } else if (bf !== urlBinding) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [planItems, buyPlan, urlCategory, urlBinding]);
+
+  const clearFilter = (key) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete(key);
+    setSearchParams(next);
+  };
+
+  const clearAllFilters = () => {
+    const next = new URLSearchParams();
+    if (urlPlanId) next.set("plan_id", urlPlanId);
+    setSearchParams(next);
   };
 
   const updateItemQty = async () => {
@@ -722,13 +770,70 @@ export default function BuyPlanning() {
             );
           })()}
 
+          {/* Filter chips banner — shown when deep-linked from Binding Factor dashboard */}
+          {(urlCategory || urlBinding) && (
+            <div className="flex flex-wrap items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl p-3" data-testid="active-filters-banner">
+              <span className="text-xs font-medium text-indigo-900">Filtered from Binding Factor Analytics:</span>
+              {urlCategory && (
+                <button
+                  onClick={() => clearFilter("category")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-indigo-300 rounded-full text-xs text-indigo-700 hover:bg-indigo-100"
+                  data-testid="filter-chip-category"
+                >
+                  Category: <strong>{urlCategory}</strong>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+              {urlBinding && (
+                <button
+                  onClick={() => clearFilter("binding")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-indigo-300 rounded-full text-xs text-indigo-700 hover:bg-indigo-100"
+                  data-testid="filter-chip-binding"
+                >
+                  Binding: <strong>{urlBinding === "floor_override" ? "Display-min or Safety" : urlBinding}</strong>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+              <button
+                onClick={clearAllFilters}
+                className="text-xs text-indigo-600 hover:underline ml-1"
+                data-testid="clear-all-filters-btn"
+              >
+                Clear all
+              </button>
+              <span className="ml-auto text-xs text-indigo-700 font-medium" data-testid="filtered-count-label">
+                {filteredItems.length} SKU{filteredItems.length !== 1 ? "s" : ""} match
+              </span>
+            </div>
+          )}
+
           {/* Items Table */}
           {(() => {
-            const items = planItems.length > 0 ? planItems : (buyPlan?.buy_plan || []);
+            const items = filteredItems;
             const isDraft = selectedPlan?.status === "draft";
-            if (items.length === 0) return (
+            const isFiltered = !!(urlCategory || urlBinding);
+            const underlyingCount = (planItems.length > 0 ? planItems : (buyPlan?.buy_plan || [])).length;
+
+            if (items.length === 0 && underlyingCount === 0) return (
               <div className="border border-gray-200 rounded-xl p-12 text-center text-gray-400">
                 No plan data. Generate a new plan or select a saved one above.
+              </div>
+            );
+            if (items.length === 0 && isFiltered) return (
+              <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-8 text-center" data-testid="no-filter-matches">
+                <p className="text-sm font-semibold text-amber-900 mb-1">No SKUs match the current filters in this plan</p>
+                <p className="text-xs text-amber-700 max-w-md mx-auto">
+                  The category override percentage on the Binding Factor dashboard is aggregated across the last 10
+                  plans. This particular plan may not contain any overridden SKUs for {urlCategory || "this filter"}.
+                  Try another plan from the selector above, or clear the filters to see all {underlyingCount} items.
+                </p>
+                <button
+                  onClick={clearAllFilters}
+                  className="mt-3 text-xs px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-medium"
+                  data-testid="no-matches-clear-btn"
+                >
+                  Clear filters and show all {underlyingCount} SKUs
+                </button>
               </div>
             );
             return (
@@ -751,9 +856,10 @@ export default function BuyPlanning() {
                   </thead>
                   <tbody>
                     {items.slice(0, 50).map((s, idx) => {
+                      const origIdx = s._origIdx ?? idx;
                       const qty = s.edited_qty || s.buy_qty;
                       return (
-                        <tr key={`${s.sku}-${idx}`} className="border-t border-gray-100 hover:bg-gray-50 group">
+                        <tr key={`${s.sku}-${origIdx}`} className="border-t border-gray-100 hover:bg-gray-50 group">
                           <td className="p-3 font-mono text-xs">{s.sku}</td>
                           <td className="p-3"><MixBadge mix={s.style_mix} /></td>
                           <td className="p-3 text-right text-gray-600">{s.daily_ros}</td>
@@ -762,7 +868,7 @@ export default function BuyPlanning() {
                           <td className="p-3 text-right text-gray-600">{(s.display_minimum ?? 0).toLocaleString()}</td>
                           <td className="p-3 text-right text-gray-600">{(s.safety_stock ?? 0).toLocaleString()}</td>
                           <td className="p-3 text-right bg-emerald-50">
-                            {editingItemIdx === idx ? (
+                            {editingItemIdx === origIdx ? (
                               <div className="flex items-center gap-1 justify-end">
                                 <input type="number" value={editingQty} onChange={e => setEditingQty(e.target.value)}
                                   className="w-20 border rounded px-1.5 py-0.5 text-sm text-right" autoFocus />
@@ -776,7 +882,7 @@ export default function BuyPlanning() {
                                 <span className="font-bold text-emerald-700">{qty?.toLocaleString()}</span>
                                 {s.edited_qty && <span className="text-[9px] text-orange-500 ml-0.5">edited</span>}
                                 {isDraft && (
-                                  <button onClick={() => { setEditingItemIdx(idx); setEditingQty(String(qty)); }}
+                                  <button onClick={() => { setEditingItemIdx(origIdx); setEditingQty(String(qty)); }}
                                     className="ml-1 p-0.5 hover:bg-emerald-100 rounded text-emerald-600 opacity-40 group-hover:opacity-100">
                                     <Edit2 className="h-3 w-3" />
                                   </button>
@@ -785,9 +891,9 @@ export default function BuyPlanning() {
                             )}
                           </td>
                           <td className="p-3 text-right text-gray-700">{"\u20B9"}{((qty * (s.mrp || 0)) / 1000).toFixed(0)}k</td>
-                          <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${s.binding_constraint === "demand" ? "bg-blue-50 text-blue-700" : s.binding_constraint === "display_min" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{s.binding_constraint}</span></td>
+                          <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${(s.binding_factor || s.binding_constraint) === "demand" ? "bg-blue-50 text-blue-700" : (s.binding_factor || s.binding_constraint) === "display_min" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>{s.binding_factor || s.binding_constraint}</span></td>
                           <td className="p-3">
-                            <button data-testid={`detail-btn-${idx}`} onClick={() => setDetailItem(s)} className="p-1 hover:bg-gray-100 rounded text-gray-400">
+                            <button data-testid={`detail-btn-${origIdx}`} onClick={() => setDetailItem(s)} className="p-1 hover:bg-gray-100 rounded text-gray-400">
                               <Eye className="h-3.5 w-3.5" />
                             </button>
                           </td>

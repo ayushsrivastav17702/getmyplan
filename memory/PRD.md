@@ -56,6 +56,15 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Binding Factor Dashboard — Clickable Drill-In (2026-02-19)
+- `BindingFactorDashboard` donut + worst-category bar now clickable → navigates to `/buy-planning?plan_id=...&category=...&binding=...`
+- Added keyboard-friendly worst-category drill list below the bar chart (5 accessible buttons)
+- Added "View plan →" link in the latest-plan card header
+- `/buy-planning` reads URL query params, auto-loads the plan, switches to Buy Plan tab, shows a filter chips banner (Category + Binding), and filters the items table
+- Individual chip removal + "Clear all" both supported
+- Safety fix: Item-edit now targets the ORIGINAL row index (via `_origIdx`) so edits stay correct even when the view is filtered
+- Friendly empty-state when filter yields 0 rows, explaining the "aggregated across 10 plans" semantic
+
 ### Binding Factor Persistence + Admin Dashboard (2026-02-19)
 - `binding_factor` now persisted on every buy plan save at two levels:
   - Per-row inside `items[]` (already fixed earlier today)

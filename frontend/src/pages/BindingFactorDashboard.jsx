@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API } from "../App";
 import {
   Activity, AlertTriangle, Loader2, RefreshCw, Database,
-  TrendingUp, Gauge, Layers,
+  TrendingUp, Gauge, Layers, ExternalLink,
 } from "lucide-react";
 import { Doughnut, Bar, Line } from "react-chartjs-2";
 import {
@@ -72,10 +73,19 @@ function Empty({ children }) {
 
 // ── Main component ───────────────────────────────────────────────────────
 export default function BindingFactorDashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState(null);
+
+  // Deep-link helper: jump to Buy Planning with plan + filters pre-applied.
+  const drillTo = useCallback((filters = {}) => {
+    const planId = data?.latest?.plan_id;
+    if (!planId) return;
+    const qs = new URLSearchParams({ plan_id: planId, ...filters });
+    navigate(`/buy-planning?${qs.toString()}`);
+  }, [data, navigate]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -282,6 +292,15 @@ export default function BindingFactorDashboard() {
         <Card
           title="Latest Plan Breakdown"
           subtitle={data.latest.plan_name}
+          right={
+            <button
+              onClick={() => drillTo()}
+              className="text-xs text-indigo-300 hover:text-indigo-200 inline-flex items-center gap-1"
+              data-testid="view-latest-plan-btn"
+            >
+              View plan <ExternalLink className="w-3 h-3" />
+            </button>
+          }
           testId="card-donut"
         >
           {donut ? (
@@ -292,6 +311,15 @@ export default function BindingFactorDashboard() {
                   responsive: true,
                   maintainAspectRatio: false,
                   cutout: "60%",
+                  onClick: (_evt, elements) => {
+                    if (!elements.length) return;
+                    const idx = elements[0].index;
+                    const bindingKey = ["demand", "display_min", "safety_stock", "unknown"][idx];
+                    if (bindingKey && bindingKey !== "unknown") drillTo({ binding: bindingKey });
+                  },
+                  onHover: (evt, elements) => {
+                    evt.native.target.style.cursor = elements.length ? "pointer" : "default";
+                  },
                   plugins: {
                     legend: {
                       position: "bottom",
@@ -302,7 +330,7 @@ export default function BindingFactorDashboard() {
                         label: (ctx) => {
                           const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                           const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                          return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+                          return `${ctx.label}: ${ctx.parsed} (${pct}%) — click to drill`;
                         },
                       },
                     },
@@ -327,13 +355,21 @@ export default function BindingFactorDashboard() {
                   responsive: true,
                   maintainAspectRatio: false,
                   indexAxis: "y",
+                  onClick: (_evt, elements) => {
+                    if (!elements.length) return;
+                    const cat = data.worst_categories[elements[0].index]?.category;
+                    if (cat) drillTo({ category: cat, binding: "floor_override" });
+                  },
+                  onHover: (evt, elements) => {
+                    evt.native.target.style.cursor = elements.length ? "pointer" : "default";
+                  },
                   plugins: {
                     legend: { display: false },
                     tooltip: {
                       callbacks: {
                         afterLabel: (ctx) => {
                           const c = data.worst_categories[ctx.dataIndex];
-                          return `${c.override_count} of ${c.total_skus} SKUs overridden`;
+                          return `${c.override_count} of ${c.total_skus} SKUs overridden — click to drill`;
                         },
                       },
                     },
@@ -350,6 +386,30 @@ export default function BindingFactorDashboard() {
               />
             </div>
           ) : <Empty>No category data yet</Empty>}
+          {/* Accessible drill-in list (also keyboard-friendly) */}
+          {data?.worst_categories?.length > 0 && (
+            <div className="mt-4 space-y-1" data-testid="worst-category-list">
+              {data.worst_categories.slice(0, 5).map((c) => (
+                <button
+                  key={c.category}
+                  onClick={() => drillTo({ category: c.category, binding: "floor_override" })}
+                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-700/30 hover:bg-slate-700/60 text-left group"
+                  data-testid={`worst-cat-drill-${c.category}`}
+                >
+                  <span className="text-xs text-slate-300 truncate">{c.category}</span>
+                  <span className="flex items-center gap-2 text-xs">
+                    <span className={
+                      c.floor_override_pct > 30 ? "text-rose-300" :
+                      c.floor_override_pct > 15 ? "text-amber-300" : "text-emerald-300"
+                    }>
+                      {c.floor_override_pct}%
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-indigo-300" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Trend line */}
