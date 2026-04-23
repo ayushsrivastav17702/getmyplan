@@ -56,6 +56,32 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Strangler-Fig Refactor — FINAL POLISH: routes package split (2026-02-19)
+The last 1,017-LOC `routes/buy_planning.py` file has been split into a **`routes/buy_planning/` package** with 11 focused sub-modules, one per vertical, mirroring the `domains/buy_planning/` layout:
+
+```
+routes/buy_planning/
+├── _shared.py              ← singleton router + deps + init (48 LOC)
+├── __init__.py             ← imports sub-modules to register routes (50 LOC)
+├── classification.py       ← store-wedge, style-mix, assortment, attribution (92 LOC)
+├── config.py               ← display-minimums, sell-through (90 LOC)
+├── buy_formula.py          ← calculate + CSV export (67 LOC)
+├── dna_tags.py             ← DNA tagging x4 (68 LOC)
+├── overrides_audit.py      ← manual overrides + audit-log x6 (97 LOC)
+├── buy_plans.py            ← plan CRUD + 7-stage approval (155 LOC — biggest)
+├── stores_and_exclusions.py← store attrs + exclusions (80 LOC)
+├── inventory_safety.py     ← inventory + safety-stock (121 LOC)
+├── orders.py               ← PO consolidation + phased (122 LOC)
+├── promotions.py           ← promo calendar + lift factors (88 LOC)
+└── analytics.py            ← binding-factor analytics (40 LOC)
+```
+
+- **All 57 routes register identically** (verified via FastAPI route introspection before restart)
+- **Shared router pattern**: every sub-module imports the same `APIRouter` from `_shared.py` and decorates its handlers; `__init__.py` imports every sub-module for decoration side-effect and re-exports `router`, `init_buy_planning`, `_tenant_match` — so `server.py` is untouched.
+- **Live verified**: 18 GET endpoints (one per sub-module) all return 200; core `/buy-formula/calculate` produces byte-identical output (sku_count=173, total_buy_qty=567,553) — zero regression.
+- **Domain test suite: 196/196 passing** after the split.
+- Largest file is 155 LOC (buy_plans with full approval workflow); median is 90 LOC. Every sub-module is independently readable, editable, and grep-friendly.
+
 ### Strangler-Fig Refactor — FINAL VERTICALS (#16-17): buy_formula + assortment_matrix (2026-02-19)
 **The monolith is done.** The remaining 3 route handlers (the big `/buy-formula/calculate`, `/buy-formula/export/csv`, `/assortment-matrix`) are now thin adapters.
 
