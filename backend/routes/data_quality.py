@@ -388,14 +388,28 @@ async def run_data_checks():
     # ─── TIMELINESS ───
     upload_hist = await _get_db().upload_history.find({}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
 
+    def _parse_upload_ts(raw) -> Optional[datetime]:
+        """Normalise an upload_history.uploaded_at value into a tz-aware datetime.
+
+        Motor returns BSON Date fields as `datetime` objects natively, but older
+        writes stored the same field as ISO-8601 strings. Accept both shapes so
+        the timeliness checks produce correct values regardless of how the row
+        was written.
+        """
+        if raw is None or raw == "":
+            return None
+        if isinstance(raw, datetime):
+            return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+        if isinstance(raw, str):
+            try:
+                return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        return None
+
     # DQ-22: Data age
     if upload_hist:
-        latest = upload_hist[0]
-        ts = latest.get("uploaded_at", "")
-        try:
-            last_dt = datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
-        except Exception:
-            last_dt = None
+        last_dt = _parse_upload_ts(upload_hist[0].get("uploaded_at"))
         if last_dt:
             age_hours = (datetime.now(timezone.utc) - last_dt).total_seconds() / 3600
             checks.append({
@@ -414,13 +428,9 @@ async def run_data_checks():
     on_time = 0
     total_uploads = len(upload_hist)
     for h in upload_hist:
-        ts = h.get("uploaded_at", "")
-        try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            if dt.hour < sla_target:
-                on_time += 1
-        except Exception:
-            pass
+        dt = _parse_upload_ts(h.get("uploaded_at"))
+        if dt and dt.hour < sla_target:
+            on_time += 1
     sla_pct = round(on_time / max(total_uploads, 1) * 100, 1) if total_uploads > 0 else 0
     checks.append({
         "id": "DQ-23", "category": "timeliness", "name": "Daily Upload SLA",
@@ -431,11 +441,8 @@ async def run_data_checks():
 
     # DQ-24: Data lag
     if upload_hist:
-        try:
-            last_dt = datetime.fromisoformat(upload_hist[0].get("uploaded_at", "").replace("Z", "+00:00"))
-            lag_days = (datetime.now(timezone.utc) - last_dt).days
-        except Exception:
-            lag_days = 99
+        last_dt = _parse_upload_ts(upload_hist[0].get("uploaded_at"))
+        lag_days = (datetime.now(timezone.utc) - last_dt).days if last_dt else 99
         checks.append({
             "id": "DQ-24", "category": "timeliness", "name": "Data Lag",
             "status": "pass" if lag_days <= 1 else "warn" if lag_days <= 3 else "fail",
@@ -455,8 +462,12 @@ async def run_data_checks():
         "value": time_score,
     })
 
-    # DQ-26: Late upload alerts
-    late_uploads = [h for h in upload_hist[:10] if h.get("uploaded_at", "T10").split("T")[1][:2] >= "10"]
+    # DQ-26: Late upload alerts (hour-of-day ≥ 10 counts as "late")
+    def _is_late_upload(h: dict) -> bool:
+        dt = _parse_upload_ts(h.get("uploaded_at"))
+        return bool(dt and dt.hour >= 10)
+
+    late_uploads = [h for h in upload_hist[:10] if _is_late_upload(h)]
     checks.append({
         "id": "DQ-26", "category": "timeliness", "name": "Late Upload Alerts",
         "status": "pass" if not late_uploads else "warn",

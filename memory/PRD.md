@@ -56,6 +56,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Fixed 2 pre-existing datetime bugs (2026-02-19)
+Two endpoints were silently returning HTTP 500 due to the same root cause — code assumed `uploaded_at` is always an ISO-string, but Motor returns BSON Date as a native `datetime` object:
+
+- **`/api/buy-plan/options`** — `tenant_data_provider.get_asp_by_category()` crashed on `KeyError: 'style'` when `sales_df` already had a pre-denormalised `style` column colliding with `sku_df.style` in the merge. Fix: drop `sales_df.style` before the merge + column-presence guards. Endpoint now returns the full options payload (3 categories, ASP for each, seasonality, channel splits).
+- **`/api/quality/data-checks`** — DQ-26 crashed on `'datetime.datetime' object has no attribute 'split'` trying to extract the hour via `ts.split("T")[1][:2]`. DQ-22, DQ-23, DQ-24 had the same root cause but were hidden by a `try/except Exception` that made them silently return 0. Fix: extracted `_parse_upload_ts()` helper that accepts both `datetime` and ISO strings, used by all 4 timeliness checks. All 5 timeliness checks now produce real values (was: always 0).
+
+Both fixes verified: `/api/buy-plan/options` → 200 with populated data; `/api/quality/data-checks` → 200 with 34 checks; 38 domain regression tests still pass.
+
 ### Guardrail docstrings — intentional-companion file pairs (2026-02-19)
 Extended the "DO NOT merge / DO NOT rewrite to match" guardrail pattern to two more file pairs where near-identical naming could tempt a future agent to "clean up" a perceived duplicate:
 

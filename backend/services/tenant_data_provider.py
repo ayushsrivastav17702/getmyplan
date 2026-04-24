@@ -285,7 +285,21 @@ class TenantDataProvider:
         sku_df = await self._get_df("sku_ean_master")
         if sales_df is None or sku_df is None or style_df is None:
             return {}
+        # Required columns — skip gracefully if a tenant's upload is missing any.
+        if not {"sku", "revenue", "quantity"}.issubset(sales_df.columns):
+            return {}
+        if not {"ean", "style"}.issubset(sku_df.columns):
+            return {}
+        if not {"style_code", "category"}.issubset(style_df.columns):
+            return {}
+        # If sales_df already has a "style" column (pre-denormalised by some uploaders)
+        # the merge below would rename into style_x/style_y and break line 289. Drop it
+        # so `sku_df.style` wins and becomes the merge key.
+        if "style" in sales_df.columns:
+            sales_df = sales_df.drop(columns=["style"])
         merged = sales_df.merge(sku_df[["ean", "style"]], left_on="sku", right_on="ean", how="left")
+        if "style" not in merged.columns:  # defensive: upstream merge produced no style col
+            return {}
         merged = merged.merge(style_df[["style_code", "category"]], left_on="style", right_on="style_code", how="left")
         merged["asp"] = merged["revenue"] / merged["quantity"].replace(0, 1)
         result = merged.groupby("category")["asp"].mean()
