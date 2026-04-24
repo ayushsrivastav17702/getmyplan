@@ -13,6 +13,18 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 ### Core Platform
 - Multi-tenant architecture, JWT Auth + Google OAuth SSO, Landing page
 
+### Attribute Grouping Analytics (2026-02-19)
+Second of 5 P0 missing features shipped. Rolls up sales across every product attribute level — category, style, size, brand, gender, season, derived sku_type/sku_color — to surface trends, compare performers, and forecast new-SKU demand.
+
+- **Backend domain** (`domains/analytics/attribute_grouping.py`, ~350 LOC): Dynamic level discovery (no hard-coded 17 schema). Repository walks `sku_master` (if present) or falls back to distinct SKUs from `store_inventory`, left-joins with `style_master`, parses dash-separated SKU codes for derived tokens, and surfaces every scalar field that has ≥1 populated value. Six pure functions (`parse_sku_tokens`, `merge_sku_and_style`, `discover_levels`, `group_sales_by_attribute`, `compute_trend_split`, `compare_attribute_values`, `forecast_new_combination`) — zero Mongo required for unit tests. `_tenant_match()` handles pre-multi-tenant seed rows (convention-shared with `buy_planning/_shared.py`).
+- **5 routes** (`routes/analytics/attribute_grouping.py`): `GET /levels`, `GET /sales/{level_key}`, `GET /trends/{level_key}`, `POST /compare`, `POST /forecast`. Pydantic validation enforces `attribute_values` ≥2, non-empty `attribute_combination`, `days` ∈ [1,365].
+- **Frontend page** (`pages/AttributeGrouping.jsx`, ~480 LOC) at `/attribute-grouping`: Header, level selector (auto-populated from `/levels`), period selector, SKU count; 4 tabs:
+  1. **Trend Explorer** — trending-up + declining side-by-side panels with growth % and SKU counts.
+  2. **Sales Distribution** — 4 KPI cards (attribute values, total units, total revenue, SKUs covered) + horizontal bar chart ranked by units.
+  3. **Compare Attributes** — clickable value chips, side-by-side metrics table, "Best" badge, buy-more recommendations (only when ratio ≥1.5×).
+  4. **New Product Forecast** — up to 6 attribute dropdowns, similarity-weighted averaging returns daily / monthly / quarterly forecasts for hypothetical new SKUs.
+- Sidebar link added under INSIGHTS (`Layers` icon). **21 pure-function unit tests + 14 backend integration tests + full frontend E2E smoke — all green**. Production tenant discovery finds 10 usable levels (category, style, size, sku_type, sku_color, brand, gender, season, style_name, sub_category) across 175 SKUs × 185k daily_sales rows.
+
 ### Inter-Store Transfer Optimizer (2026-02-19)
 First of 5 missing P0 retail features shipped.
 
