@@ -21,6 +21,15 @@ class ForecastReq(BaseModel):
     days: int = 90
 
 
+class SaveRecReq(BaseModel):
+    level_key: str
+    best_value: str
+    vs_value: str
+    ratio: float
+    message: str
+    days: int = 90
+
+
 # ─── Handlers ───────────────────────────────────────────────────────────────
 
 @router.get("/attribute-grouping/levels")
@@ -108,3 +117,49 @@ async def forecast_new_combo(body: ForecastReq, user: dict = Depends(_dep_user))
         )
     except ValidationError as e:
         raise HTTPException(400, str(e))
+
+
+@router.post("/attribute-grouping/save-recommendation")
+async def save_attribute_recommendation(
+    body: SaveRecReq, user: dict = Depends(_dep_user),
+):
+    """Persist a buy-more recommendation so merchants can action it on the Buy Planning page.
+
+    Stores the rec in the `buy_plan_recommendations` collection (scoped by
+    tenant_id) with source='attribute-grouping-compare' so the Buy Planning
+    UI can later surface it as a pending action.
+    """
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    db = get_db()
+    rec_id = str(uuid4())
+    doc = {
+        "rec_id": rec_id,
+        "tenant_id": user.get("tenant_id", ""),
+        "source": "attribute-grouping-compare",
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user.get("email", ""),
+        **body.model_dump(),
+    }
+    await db.buy_plan_recommendations.insert_one(doc)
+    return {"success": True, "rec_id": rec_id, "status": "pending"}
+
+
+@router.get("/attribute-grouping/recommendations")
+async def list_attribute_recommendations(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    user: dict = Depends(_dep_user),
+):
+    """List saved buy-more recommendations (excludes Mongo _id)."""
+    db = get_db()
+    q: Dict[str, object] = {"tenant_id": user.get("tenant_id", "")}
+    if status:
+        q["status"] = status
+    recs = []
+    async for doc in db.buy_plan_recommendations.find(
+        q, {"_id": 0},
+    ).sort("created_at", -1).limit(limit):
+        recs.append(doc)
+    return {"recommendations": recs, "total": len(recs)}

@@ -43,6 +43,7 @@ const BuyPlanDashboard = lazy(() => import("./pages/BuyPlanDashboard"));
 const BuyPlanning = lazy(() => import("./pages/BuyPlanning"));
 const TransferOptimizer = lazy(() => import("./pages/TransferOptimizer"));
 const AttributeGrouping = lazy(() => import("./pages/AttributeGrouping"));
+const SizeCurve = lazy(() => import("./pages/SizeCurve"));
 const OnboardingWizardPage = lazy(() => import("./pages/OnboardingWizard"));
 const Signup = lazy(() => import("./pages/Signup"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
@@ -271,6 +272,7 @@ const AuthenticatedApp = () => {
             <Route path="/buy-planning"  element={<BuyPlanning />} />
             <Route path="/transfers"     element={<TransferOptimizer />} />
             <Route path="/attribute-grouping" element={<AttributeGrouping />} />
+            <Route path="/size-curve"    element={<SizeCurve />} />
             <Route path="/onboarding"    element={<OnboardingWizardPage onComplete={() => window.location.href = '/upload'} />} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />

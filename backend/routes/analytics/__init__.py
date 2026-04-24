@@ -37,3 +37,4 @@ def get_db():
 # Import sub-modules so their route decorators execute against `router`.
 # Must come after the globals are declared.
 from . import attribute_grouping  # noqa: E402, F401
+from . import size_curve  # noqa: E402, F401

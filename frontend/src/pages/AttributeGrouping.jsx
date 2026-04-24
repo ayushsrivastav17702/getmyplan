@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import {
-  AlertCircle, BarChart3, GitCompare, Loader2, Sparkles,
+  AlertCircle, BarChart3, Check, GitCompare, Loader2, Sparkles,
   TrendingDown, TrendingUp, Layers,
 } from "lucide-react";
 import { API } from "../App";
@@ -431,13 +432,13 @@ function CompareAttributes({ level, days }) {
             </table>
           </div>
           {result.recommendations.length > 0 ? (
-            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2"
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-3"
                  data-testid="recommendations">
               <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
                 <Sparkles className="w-4 h-4" /> Buy-more recommendations
               </div>
               {result.recommendations.map((rec, i) => (
-                <div key={i} className="text-sm text-slate-200">{rec.message}</div>
+                <SaveableRec key={i} rec={rec} levelKey={level.key} days={days} />
               ))}
             </div>
           ) : (
@@ -550,6 +551,60 @@ function NewProductForecast({ levels, days }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// SaveableRec: one buy-more recommendation row with a Save-to-Buy-Plan button.
+// ────────────────────────────────────────────────────────────────────────────
+function SaveableRec({ rec, levelKey, days }) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const onSave = async () => {
+    setSaving(true);
+    try {
+      const { data } = await axios.post(
+        `${API}/analytics/attribute-grouping/save-recommendation`,
+        {
+          level_key: levelKey,
+          best_value: rec.attribute,
+          vs_value: rec.vs,
+          ratio: rec.ratio,
+          message: rec.message,
+          days,
+        },
+      );
+      setSaved(true);
+      toast.success(`Saved to Buy Plan (id ${data.rec_id.slice(0, 8)}…)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to save recommendation");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 bg-slate-900/40 rounded-lg p-3"
+         data-testid="saveable-rec">
+      <div className="flex-1 text-sm text-slate-200">{rec.message}</div>
+      <button
+        onClick={onSave}
+        disabled={saving || saved}
+        data-testid="save-rec-btn"
+        className={`shrink-0 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          saved
+            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+            : "bg-indigo-500 hover:bg-indigo-400 text-white"
+        } disabled:opacity-60`}
+      >
+        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> :
+         saved ? <Check className="w-3 h-3" /> :
+         <Sparkles className="w-3 h-3" />}
+        {saved ? "Saved" : "Save to Buy Plan"}
+      </button>
     </div>
   );
 }
