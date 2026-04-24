@@ -49,6 +49,7 @@ from routes.debug import router as debug_router
 from routes.upload import router as upload_v2_router
 from routes.demo import router as demo_router
 from routes.buy_planning import router as buy_planning_router, init_buy_planning
+from routes.analytics import router as analytics_router, init_analytics
 from routes.health import router as health_router
 from routes.super_admin import router as super_admin_router, init_super_admin
 from routes.modules import router as modules_router, init_modules
@@ -2775,6 +2776,7 @@ api_router.include_router(dq_rules_router)
 api_router.include_router(debug_router)
 api_router.include_router(upload_v2_router, prefix="/upload/v2")
 api_router.include_router(demo_router)
+api_router.include_router(analytics_router)
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(tenant_router)
@@ -3094,6 +3096,7 @@ async def startup():
     init_ai_demand(client, get_cached_data, get_db, get_current_user, require_role)
     init_buy_plan(client, get_db, get_current_user, require_role)
     init_buy_planning(get_db, get_current_user)
+    init_analytics(get_db, get_current_user)
     init_onboarding(client, get_db, get_current_user)
     init_super_admin(client, get_current_user, require_role)
     init_tenant_provider(get_cached_data, get_db)
