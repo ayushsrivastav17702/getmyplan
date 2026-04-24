@@ -1,24 +1,45 @@
 """
-Canonical per-store Buy Formula.
+Canonical per-STORE Buy Formula (anti-regression primitive).
 
-CRITICAL RULE:
-  display_minimum and safety_stock are ABSOLUTE per-store floors.
-  They must NEVER be scaled by attribution_pct.
+## What this file is
+A tiny, deliberately-isolated implementation of the single-store, single-SKU
+buy formula. It exists ONLY to pin the correct attribution semantics so the
+"attribution scaling bug" (see below) cannot silently regress.
 
-WHY:
-  A store that needs 6 units on the floor to look presentable needs
-  6 units regardless of whether it's an A-store (100%) or a C-store (20%).
+## How it differs from the domain-level orchestrator
+`/app/backend/domains/buy_planning/buy_formula.py` is the tenant-wide
+aggregator — it iterates every SKU, loads wedge counts / SOH / ROS in bulk,
+and decides buy quantities at the WEDGE level (A+B+C eligibility via
+`eligible_wedges_for_mix`). It does NOT take an `attribution_pct` per store
+because the production code does not allocate on a per-store basis; it
+allocates on a per-wedge basis.
 
-CORRECT FORMULA:
+This file is the OPPOSITE abstraction: if you ever need to compute a buy
+quantity for a SINGLE store with a SINGLE attribution_pct, use this. The
+6 regression tests in `backend/tests/test_buy_formula_attribution.py` pin
+this contract forever.
+
+## THE BUG (banned forever by calculate_buy_qty + its regression tests)
+  buy_qty = max(demand, display_min, safety_stock) * attribution_pct
+  # ^ scales the absolute floors down for B/C stores — WRONG
+
+## THE FIX
   attributed_demand = target_multiplier * forecast * attribution_pct
   attributed_stock  = current_stock * attribution_pct
-  demand_buy = max(attributed_demand - attributed_stock, 0)
-  buy_qty = max(demand_buy, display_minimum, safety_stock)
+  demand_buy        = max(attributed_demand - attributed_stock, 0)
+  buy_qty           = max(demand_buy, display_minimum, safety_stock)
+  # ^ attribution applied ONLY to demand signal; floors stay absolute
 
-BROKEN FORMULA (DO NOT USE):
-  max((target_mult * forecast) - stock, display_min, safety_stock) * attribution_pct
+## Why floors must NOT be scaled
+A store that needs 6 units on the floor to look presentable needs 6 units
+regardless of whether it is an A-store (100%) or a C-store (20%).
 
-The broken formula silently scales display_min + safety_stock down for B/C stores.
+## DO NOT
+- Do not merge this with `domains/buy_planning/buy_formula.py` — different
+  abstractions, different call sites, different test contracts.
+- Do not rewrite this to "match" the domain aggregator — previous agents
+  attempted that and silently re-introduced the attribution-scaling bug.
+- Do not add I/O (Mongo reads, HTTP deps) here. Keep it pure.
 """
 
 from dataclasses import dataclass
@@ -40,10 +61,11 @@ class BuyInputs:
 
 def calculate_buy_qty(inp: BuyInputs) -> dict:
     """
-    Compute the per-store buy quantity with attribution applied ONLY
-    to the demand signal, never to the absolute floors.
+    Per-store buy quantity. Attribution scales the demand signal ONLY;
+    absolute floors (display_minimum, safety_stock) stay untouched.
 
     Returns a dict with breakdown + the binding_factor that drove the result.
+    See `test_buy_formula_attribution.py` for the 6 pinned behaviours.
     """
     # Step 1: scale demand signal and existing stock by attribution
     attributed_demand = inp.target_multiplier * inp.forecast * inp.attribution_pct

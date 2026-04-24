@@ -8,7 +8,18 @@ how many units should we buy for each SKU?"
 Endpoints owned:
   POST /buy-formula/calculate     run the full formula + return full buy plan
 
-Composition graph:
+## Relationship to `core/buy_formula.py`
+`/app/backend/core/buy_formula.py` is the SINGLE-STORE primitive that takes a
+per-store `attribution_pct` — a pinned anti-regression for the attribution
+scaling bug. This module is a DIFFERENT abstraction: it iterates every SKU,
+loads wedge-level data in bulk, and decides buy quantities at the wedge level
+via `eligible_wedges_for_mix`. There is no per-store `attribution_pct` here
+because the production system allocates per-wedge, not per-store.
+
+Do NOT merge the two files — they have separate call sites, separate test
+contracts, and they encode different business rules.
+
+## Composition graph (this module)
   attribution.eligible_wedges_for_mix  ← which wedges a mix can ship to
   safety_stock.*                       ← z-score, MAD-based safety
   sell_through.SellThroughRepository   ← tenant-tunable sell-through multipliers
@@ -16,9 +27,7 @@ Composition graph:
   exclusions                           ← SKUs deliberately kept out of plans
   promotions                           ← active lift factors
 
-The canonical formula (preserved from legacy monolith + also present in
-core/buy_formula.py as a pinned reference):
-
+## Canonical formula
     buy_qty = MAX(
         (sell_through_target × forecasted_demand) - current_SOH,
         display_minimum_units × eligible_store_count,

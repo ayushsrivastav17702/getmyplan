@@ -56,6 +56,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### core/buy_formula.py — kept and clarified (2026-02-19)
+Originally suggested for deletion, but investigation showed it is NOT a duplicate of `domains/buy_planning/buy_formula.py`:
+
+- **`core/buy_formula.py`** (74 LOC) — per-store primitive with `attribution_pct`. Pinned by 6 regression tests (`test_buy_formula_attribution.py`) to prevent the attribution-scaling bug from coming back.
+- **`domains/buy_planning/buy_formula.py`** (363 LOC) — tenant-wide cross-SKU aggregator that iterates every SKU and decides at wedge level via `eligible_wedges_for_mix`. No per-store `attribution_pct` because production allocates per-wedge.
+
+Action taken: **enhanced docstrings on BOTH files** to make the architectural relationship explicit + added "DO NOT merge" guardrails. 6 pinned regression tests still pass.
+
 ### Strangler-Fig Refactor — FINAL POLISH: routes package split (2026-02-19)
 The last 1,017-LOC `routes/buy_planning.py` file has been split into a **`routes/buy_planning/` package** with 11 focused sub-modules, one per vertical, mirroring the `domains/buy_planning/` layout:
 
