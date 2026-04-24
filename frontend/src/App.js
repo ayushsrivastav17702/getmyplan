@@ -41,6 +41,7 @@ const TenantAdminPanel = lazy(() => import("./pages/TenantAdminPanel"));
 const AIDemandPlanning = lazy(() => import("./pages/AIDemandPlanning"));
 const BuyPlanDashboard = lazy(() => import("./pages/BuyPlanDashboard"));
 const BuyPlanning = lazy(() => import("./pages/BuyPlanning"));
+const TransferOptimizer = lazy(() => import("./pages/TransferOptimizer"));
 const OnboardingWizardPage = lazy(() => import("./pages/OnboardingWizard"));
 const Signup = lazy(() => import("./pages/Signup"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
@@ -267,6 +268,7 @@ const AuthenticatedApp = () => {
             <Route path="/ai-demand"     element={<PlanGuard module="ai_forecasting"><AIDemandPlanning /></PlanGuard>} />
             <Route path="/buy-plan"      element={<PlanGuard module="buy_plan"><BuyPlanDashboard /></PlanGuard>} />
             <Route path="/buy-planning"  element={<BuyPlanning />} />
+            <Route path="/transfers"     element={<TransferOptimizer />} />
             <Route path="/onboarding"    element={<OnboardingWizardPage onComplete={() => window.location.href = '/upload'} />} />
             <Route path="/chatbot"       element={<ProtectedRoute permission="chatbot.faq.view"><FAQChatbot /></ProtectedRoute>} />
             <Route path="/users"         element={<ProtectedRoute permission="users.list.view"><UserManagement /></ProtectedRoute>} />

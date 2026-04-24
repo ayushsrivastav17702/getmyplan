@@ -70,7 +70,7 @@ export default function TransferOptimizer() {
     setSavedBatchId(null);
     try {
       const { data } = await axios.post(
-        `${API}/api/buy-planning/transfers/optimize`, params, { headers: authHeaders },
+        `${API}/buy-planning/transfers/optimize`, params, { headers: authHeaders },
       );
       setResult(data);
     } catch (e) {
@@ -86,7 +86,7 @@ export default function TransferOptimizer() {
     setError(null);
     try {
       const { data } = await axios.post(
-        `${API}/api/buy-planning/transfers/generate`, params, { headers: authHeaders },
+        `${API}/buy-planning/transfers/generate`, params, { headers: authHeaders },
       );
       setSavedBatchId(data.batch_id);
     } catch (e) {

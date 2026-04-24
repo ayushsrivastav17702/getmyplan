@@ -9,7 +9,7 @@ import {
   LogOut, Building2, Users, Shield, Zap, FileSpreadsheet,
   Rocket, Lock, Crown, Menu, X, Keyboard, Database, Activity, Mail,
   HelpCircle, FileText, Flag, Blocks, ClipboardCheck, Target,
-  Trophy, Package, DollarSign, Bell, User, Key, ChevronUp, Gauge,
+  Trophy, Package, DollarSign, Bell, User, Key, ChevronUp, Gauge, Truck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { NAV_PLAN_MODULE_MAP } from "./PlanGuard";
@@ -54,6 +54,7 @@ const NAV_GROUPS = [
       { path: "/warehouse",     label: "Warehouse",            icon: Warehouse,       permission: "dashboard.warehouse.view" },
       { path: "/buy-plan",      label: "Buy Plan Generator",   icon: FileSpreadsheet, permission: null },
       { path: "/buy-planning",  label: "Buy Planning",         icon: BarChart3,       permission: null },
+      { path: "/transfers",     label: "Transfer Optimizer",   icon: Truck,           permission: null },
       { path: "/approvals",     label: "Approval Workflow",    icon: CheckCircle,     permission: null },
     ],
   },

@@ -13,6 +13,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 ### Core Platform
 - Multi-tenant architecture, JWT Auth + Google OAuth SSO, Landing page
 
+### Inter-Store Transfer Optimizer (2026-02-19)
+First of 5 missing P0 retail features shipped.
+
+- **Backend algorithm** (`domains/buy_planning/transfers.py`, ~410 LOC): Greedy rule-based IST matcher. Per-SKU, pairs highest-DOS donors with lowest-DOS recipients, respecting donor-residual and min-transfer-qty floors. Pure functions (`compute_dos`, `build_store_sku_metrics`, `identify_donors/recipients`, `match_transfers_greedily`, `rank_by_uplift`) — unit-testable without Mongo. Repository reads canonical `closing_stock`/`uploaded_at` fields (not the stubbed `$soh`/`$date` that the v0 draft used).
+- **5 routes** (`routes/buy_planning/transfers.py`): `POST /optimize` (live, no-save), `POST /generate` (persist as draft), `GET /transfers` (list), `GET /transfers/{batch_id}` (detail), `POST /transfers/{id}/transition` (draft → approved/rejected/executed). Status transitions validated server-side.
+- **Frontend page** (`pages/TransferOptimizer.jsx`, ~290 LOC) at `/transfers`: Parameter panel (7 tunable knobs with reset-to-defaults), Run Optimizer + Save-as-Draft-Batch CTAs, 4 KPI cards (donors / recipients / suggestions / expected uplift), ranked recommendations table (first 100) with SKU, transfer (from→to chips), qty, DOS before/after, uplift ₹. Three empty/loading states (first-run hint, "no transfers needed", inline error banner).
+- Sidebar link added under OPERATIONS (`Truck` icon). All 27 domain unit tests passing. Smoke-tested live: login → `/transfers` → Run Optimizer returns 4 donors, 5,190 recipients, shows empty state correctly (demo data too balanced for suggestions at default thresholds).
+
 ### Super Admin Panel
 - Tenant/User CRUD, Impersonation, Audit Trail, Anomaly Detection, Trial Expiration, Feature Flags, Global Config, IP Whitelisting
 

@@ -191,13 +191,19 @@ class TransfersRepository:
         self._db = db
 
     async def load_latest_soh(self, tenant_id: str) -> Dict[tuple, int]:
-        """Latest SOH per (sku, store) from store_inventory — picks max(date) row."""
+        """Latest SOH per (sku, store) from store_inventory — picks max(uploaded_at) row.
+
+        NOTE: the canonical inventory quantity field in `store_inventory` is
+        `closing_stock` (not `soh`); there is no top-level `date` field —
+        snapshots are timestamped by `uploaded_at`. Verified via
+        mongo_aggregations.py L597 and buy_formula.py L206.
+        """
         pipeline = [
             {"$match": {"tenant_id": tenant_id}},
-            {"$sort": {"date": -1}},
+            {"$sort": {"uploaded_at": -1}},
             {"$group": {
                 "_id": {"sku": "$sku", "store": "$store_code"},
-                "soh": {"$first": "$soh"},
+                "soh": {"$first": {"$toInt": {"$ifNull": ["$closing_stock", 0]}}},
             }},
         ]
         out: Dict[tuple, int] = {}
