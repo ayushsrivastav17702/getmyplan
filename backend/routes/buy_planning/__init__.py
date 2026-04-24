@@ -66,5 +66,6 @@ from . import inventory_safety      # noqa: F401
 from . import orders                # noqa: F401
 from . import promotions            # noqa: F401
 from . import analytics             # noqa: F401
+from . import transfers             # noqa: F401  (Inter-Store Transfer Optimization)
 
 __all__ = ["router", "init_buy_planning", "_tenant_match"]
