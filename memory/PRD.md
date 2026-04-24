@@ -13,6 +13,20 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 ### Core Platform
 - Multi-tenant architecture, JWT Auth + Google OAuth SSO, Landing page
 
+### Size Curve Optimizer (2026-02-19)
+Third of 5 P0 missing features shipped. Per-store size-mix recommendations driven by actual sell-through.
+
+- **Backend domain** (`domains/analytics/size_curve.py`, ~300 LOC): Six pure helpers (`normalize_distribution`, `build_store_category_curves`, `compute_corporate_curve`, `compute_deviations`, `classify_stores`, `allocate_by_curve`) + Repository that re-uses `AttributeGroupingRepository.load_enriched_skus` (no double-plumbing) + Service with 4 orchestration methods. Largest-remainder method in `allocate_by_curve` guarantees the size-split always sums to exactly the requested total_qty.
+- **4 routes** (`routes/analytics/size_curve.py`): `GET /size-curve/categories`, `GET /size-curve/corporate/{category}`, `POST /size-curve/recommend`, `POST /size-curve/allocate`. Pydantic bounds on days / total_qty / threshold.
+- **Frontend page** (`pages/SizeCurve.jsx`, ~480 LOC) at `/size-curve`: header, category selector (auto-populated), lookback selector; 3 tabs:
+  1. **Corporate Curve** — 4 KPIs + stacked horizontal bar visualising tenant-wide size mix.
+  2. **Per-Store Curves** — threshold + min-units controls, 4 KPIs (analysed / outliers / aligned / sizes), corporate reference bar, sortable store list. Each row collapses to show per-size deviation cards with +Δ/−Δ arrows.
+  3. **Allocate Buy** — total-qty + optional store-code input, Allocate CTA, curve visualisation + allocation table with running total.
+- Sidebar link added under INSIGHTS (`Ruler` icon). **13 unit tests** added (77/77 domain tests green). Live-tested on production tenant: 30 stores × 3 categories, corporate Apparel curve (S:24.8 / M:25.1 / L:24.9 / XL:25.2), 1000-unit allocation sums exactly to 1000.
+
+### Save-to-Buy-Plan enhancement on Attribute Grouping (2026-02-19)
+Added a small closure-of-loop action: every buy-more recommendation in the Compare tab now carries a "Save to Buy Plan" button. Clicking it POSTs to `/api/analytics/attribute-grouping/save-recommendation` which persists into a new `buy_plan_recommendations` collection scoped by tenant_id with status=pending + source='attribute-grouping-compare'. A companion `GET /recommendations` endpoint exposes the list for the Buy Planning page to surface later. Button transitions to a disabled "Saved ✓" state on success; sonner toast confirms persistence.
+
 ### Attribute Grouping Analytics (2026-02-19)
 Second of 5 P0 missing features shipped. Rolls up sales across every product attribute level — category, style, size, brand, gender, season, derived sku_type/sku_color — to surface trends, compare performers, and forecast new-SKU demand.
 
