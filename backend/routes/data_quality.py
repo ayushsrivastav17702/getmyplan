@@ -1,7 +1,24 @@
 """
-Data Quality Analytics — Comprehensive data quality checks across
-Completeness, Accuracy, Consistency, Timeliness, and Scorecard dimensions.
-Covers DQ-01 through DQ-32.
+Data Quality Analytics — SYSTEM-DEFINED checks (DQ-01 through DQ-32).
+
+Covers the Completeness / Accuracy / Consistency / Timeliness / Scorecard
+dimensions baked into the product. These checks are identical across every
+tenant and live under `/api/quality/*`.
+
+## How this differs from `routes/data_quality_rules.py`
+`data_quality_rules.py` mounts under `/api/quality/rules/*` (nested prefix)
+and handles TENANT-DEFINED custom validation rules (threshold / null_check /
+pattern / uniqueness / cross_reference / range). Those rules are stored
+per-tenant in Mongo and evaluated at upload time — completely different
+abstraction from the fixed DQ-01..DQ-32 analytics this file owns.
+
+## DO NOT
+- Do NOT merge with `data_quality_rules.py` — fixed-catalog vs
+  tenant-custom are intentionally separate surfaces.
+- Do NOT add tenant-custom rule endpoints here — they belong in
+  `data_quality_rules.py`.
+- Do NOT change the `/quality` prefix — it is shared with the rules module
+  as a parent namespace, and the nesting is intentional.
 """
 
 from fastapi import APIRouter, Query

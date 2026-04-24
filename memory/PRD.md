@@ -56,6 +56,14 @@ Multi-tenant AI Demand Planning system with ML forecasting, Super Admin governan
 - API Reference at `/resources/api-reference` — Authentication, Base URL, Forecasting, Inventory, Buy Plans, Rate Limits with anchor quick-links
 - Navbar + Footer cleanup: removed empty links (Case Studies, Webinars, Careers, Press, White Papers); wired Solutions + API Reference to real routes
 
+### Guardrail docstrings — intentional-companion file pairs (2026-02-19)
+Extended the "DO NOT merge / DO NOT rewrite to match" guardrail pattern to two more file pairs where near-identical naming could tempt a future agent to "clean up" a perceived duplicate:
+
+- **`routes/buy_plan.py` (Excel bulk) ↔ `routes/buy_planning/` (piece-level interactive)**: Both ship side-by-side. Guardrail docstring on both explains URL prefixes (`/api/buy-plan/*` singular vs `/api/buy-planning/*` gerund), unit of work (category-level vs SKU × store), and driving force (uploaded Excel vs buy-formula domain). Previous agents have proposed deleting `buy_plan.py` — now explicitly banned.
+- **`routes/data_quality.py` (fixed DQ-01..32 catalogue) ↔ `routes/data_quality_rules.py` (tenant custom rules)**: Both mount under the shared `/quality` prefix but the nesting (`/quality/rules/`) is intentional. Guardrail docstrings explain the fixed-catalog vs tenant-custom distinction.
+
+Backend restarts cleanly; 6 attribution regression tests still pass; both sibling pipelines reachable.
+
 ### core/buy_formula.py — kept and clarified (2026-02-19)
 Originally suggested for deletion, but investigation showed it is NOT a duplicate of `domains/buy_planning/buy_formula.py`:
 

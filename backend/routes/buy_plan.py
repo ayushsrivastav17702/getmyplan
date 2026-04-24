@@ -1,8 +1,43 @@
 """
-Buy Plan Engine — Backend Route Module
-Endpoints: generate, export-excel, upload-edited-plan, history, options
-Uses TenantDataProvider for dynamic categories, channels, ASP, and seasonality.
-Falls back to defaults only when no uploaded data exists.
+Buy Plan Engine — Excel/Bulk workflow (pandas-driven).
+
+## What this file is
+The OPERATIONAL bulk workflow for merchandisers who think in spreadsheets:
+generate a full-category buy plan from uploaded historical data, export to
+Excel (multi-sheet workbook with sell-through scenarios), re-import an edited
+plan, and keep a history. Endpoints live under `/api/buy-plan/*` (singular).
+
+## How it differs from `routes/buy_planning/`
+`/app/backend/routes/buy_planning/` (gerund, with an "-ing") is a completely
+different pipeline: interactive, piece-level (SKU × store), formula-driven,
+no Excel. Its endpoints live under `/api/buy-planning/*`.
+
+| file                           | URL prefix        | unit of work        | driven by           |
+| ------------------------------ | ----------------- | ------------------- | ------------------- |
+| routes/buy_plan.py  (this)     | /api/buy-plan/    | category-level plan | uploaded Excel/CSV  |
+| routes/buy_planning/           | /api/buy-planning/| SKU × store piece   | buy-formula domain  |
+
+Both workflows ship side by side because some customers plan top-down in
+spreadsheets (this module) while others plan bottom-up via the UI+formula
+(the sibling package). Do not assume one replaces the other.
+
+## DO NOT
+- Do NOT delete this file "because buy_planning/ already exists" — earlier
+  agents have proposed that and it would break the Excel pipeline for every
+  customer that uploads .xlsx buy plans.
+- Do NOT merge this module with `routes/buy_planning/buy_plans.py` — same
+  prefix word, different abstraction. One is pandas/Excel bulk; the other
+  is a thin adapter over `domains/buy_planning/buy_plans.BuyPlansService`.
+- Do NOT move endpoints under `/api/buy-planning/` — the URL prefix is a
+  contract with the Excel import UI and 3rd-party integrations.
+
+## Endpoints
+  GET  /buy-plan/options            dropdown values (channels, ASP, seasonality)
+  POST /buy-plan/generate           run the bulk top-down generator
+  POST /buy-plan/export-excel       produce the multi-sheet xlsx
+  POST /buy-plan/upload-edited-plan re-import a planner-edited xlsx
+  GET  /buy-plan/history            previous plan runs for this tenant
+  GET  /buy-plan/summary            rolled-up totals for dashboards
 """
 from fastapi import APIRouter, HTTPException, Query, Body, File, UploadFile, Depends, Request
 from fastapi.responses import StreamingResponse, JSONResponse

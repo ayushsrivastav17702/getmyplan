@@ -1,7 +1,23 @@
 """
-Data Quality Rules Engine — tenant-specific custom validation rules.
-Supports 6 rule types: threshold, null_check, pattern, uniqueness, cross_reference, range.
-Rules are stored per-tenant and evaluated against uploaded data files.
+Data Quality Rules Engine — TENANT-DEFINED custom validation rules.
+
+Supports 6 rule types: threshold / null_check / pattern / uniqueness /
+cross_reference / range. Rules are stored per-tenant in Mongo and evaluated
+at upload time. Endpoints live under `/api/quality/rules/*`.
+
+## How this differs from `routes/data_quality.py`
+`data_quality.py` mounts under `/api/quality/*` (parent prefix) and owns
+the fixed catalogue of SYSTEM-DEFINED checks (DQ-01 through DQ-32) that
+are identical across every tenant. Those are analytics + scorecard
+endpoints; this file is CRUD + rule evaluation — different abstraction.
+
+## DO NOT
+- Do NOT merge with `data_quality.py` — tenant-custom vs fixed-catalog
+  are intentionally separate surfaces. Merging would force tenants to see
+  each other's rules or would force the system catalogue to become editable.
+- Do NOT move these endpoints to `/api/quality/*` (drop the `/rules`
+  segment) — existing UI + audit log queries depend on the nested prefix
+  to tell system vs custom rules apart in logs.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
