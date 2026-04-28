@@ -3196,7 +3196,18 @@ async def _deferred_startup_tasks():
 
 
 async def _warmup_cache():
-    """Pre-warm Redis cache for heavy dashboard queries after startup."""
+    """Pre-warm Redis cache for heavy dashboard queries after startup.
+
+    Disabled by default in production because loading all heavy pandas
+    DataFrames at startup spikes memory and can trigger OOMKilled on small
+    K8s pods (1Gi limit). First dashboard request will warm organically.
+
+    Set ``WARM_CACHE_ON_STARTUP=1`` in backend/.env to force pre-loading —
+    only do this on pods with >= 2Gi headroom.
+    """
+    if os.environ.get("WARM_CACHE_ON_STARTUP", "0") != "1":
+        logger.info("Cache warmup: skipped (set WARM_CACHE_ON_STARTUP=1 to enable)")
+        return
     await asyncio.sleep(5)  # Wait for DB connections to stabilize
     try:
         from services.cache_service import get_redis
@@ -3210,6 +3221,8 @@ async def _warmup_cache():
                 await get_cached_data(ft)
             except Exception:
                 pass
+        # Release transient allocator pressure before we yield the event loop
+        _gc.collect()
         logger.info("Cache warmup complete")
     except Exception as e:
         logger.warning("Cache warmup failed (non-fatal): %s", e)
