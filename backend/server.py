@@ -2962,6 +2962,52 @@ app.add_middleware(
 )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# OUTERMOST: K8s health-probe shortcut (pure ASGI)
+#
+# Why pure ASGI and not another BaseHTTPMiddleware?
+# Starlette's `BaseHTTPMiddleware` uses an internal anyio task group + streams
+# to bridge between the middleware's `dispatch(request, call_next)` API and the
+# underlying ASGI messages. When the client (nginx) disconnects during cold
+# start — which happens routinely during K8s probe timeouts — the task group
+# can be cancelled mid-flight, leaving the response stream empty. Starlette
+# then raises `RuntimeError: No response returned.` even for endpoints that
+# would have been fast. This is a long-standing bug (see encode/starlette#1438
+# and #2008). Short-circuiting inside each BaseHTTPMiddleware is not enough:
+# the failure is in the BaseHTTPMiddleware wrapper itself, not the user code.
+#
+# The only bulletproof workaround is to answer probe requests at the pure-ASGI
+# level, BEFORE any BaseHTTPMiddleware wraps the scope. That's what this class
+# does. It's added LAST via `add_middleware`, which puts it at position 0 in
+# the user_middleware list — i.e. the OUTERMOST wrapper. Probes get a 200 in
+# microseconds; everything else falls through to the full stack untouched.
+# ─────────────────────────────────────────────────────────────────────────────
+class HealthProbeShortcut:
+    """Answers /health, /healthz, /readyz, /livez at the ASGI layer directly."""
+
+    _BODY = b'{"status":"ok"}'
+    _HEADERS = [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(_BODY)).encode()),
+        (b"cache-control", b"no-store"),
+    ]
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") in HEALTH_PROBE_PATHS:
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": self._HEADERS})
+            await send({"type": "http.response.body", "body": self._BODY})
+            return
+        await self.app(scope, receive, send)
+
+
+# MUST be the last `add_middleware` call so it ends up as the outermost wrapper
+app.add_middleware(HealthProbeShortcut)
+
+
 # ==================== STARTUP / SHUTDOWN ====================
 
 async def _ensure_default_tenant():
