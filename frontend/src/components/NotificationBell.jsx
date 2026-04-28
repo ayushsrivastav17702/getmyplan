@@ -18,10 +18,14 @@ export default function NotificationBell() {
 
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const resp = await axios.get(`${API}/notifications/unread-count`);
+      // Tight 2s timeout: this runs on every page load and MUST NOT block the
+      // UI if the endpoint is slow. If it takes longer than 2s we fail open
+      // with 0 unread — a stale badge is far less bad than a hanging header.
+      const resp = await axios.get(`${API}/notifications/unread-count`, { timeout: 2000 });
       setUnreadCount(resp.data.unread_count);
     } catch {
-      // silent
+      // Fail open: 0 unread, keep rendering the rest of the app.
+      setUnreadCount(0);
     }
   }, []);
 

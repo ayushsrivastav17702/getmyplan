@@ -290,7 +290,7 @@ const FAQChatbot = () => {
             <div className="flex items-start gap-2">
               <Info size={16} className="text-neutral-400 mt-0.5" />
               <p className="text-xs text-neutral-500">
-                This chatbot is powered by GPT-5.2 and trained on the platform's documentation. For technical issues, please contact support.
+                This chatbot is trained on the platform's documentation. For technical issues, please contact support.
               </p>
             </div>
           </div>

@@ -4,6 +4,15 @@ import { toast } from "sonner";
 const MAX_RETRIES = 3;
 const BASE_DELAY = 2000;
 
+// Default timeout for every axios request — prevents the "infinite spinner"
+// failure mode where a request hits a dead backend and silently hangs forever.
+// 15s is generous for large analytics queries but still bounded.
+// Callers that legitimately need longer (e.g. a 60s PDF export) can pass
+// `{ timeout: 60000 }` on the individual call to override.
+if (!axios.defaults.timeout) {
+  axios.defaults.timeout = 15000;
+}
+
 const isRetryable = (error) => {
   const status = error.response?.status;
   return status === 503 || status === 520 || error.code === "ECONNABORTED" || !error.response;
