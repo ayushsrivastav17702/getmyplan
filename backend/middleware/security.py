@@ -20,6 +20,11 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 
+# K8s probe paths that every middleware must pass through untouched — kept in
+# sync with `HEALTH_PROBE_PATHS` in server.py. See the comment there for why.
+HEALTH_PROBE_PATHS = frozenset({"/health", "/healthz", "/readyz", "/livez"})
+
+
 # ─── 1. Rate Limiter (per IP + per tenant) ───
 
 def _get_rate_limit_key(request: Request) -> str:
@@ -64,6 +69,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Adds enterprise-grade security headers to every response."""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # K8s probes — pass through untouched, no header injection needed
+        if request.url.path in HEALTH_PROBE_PATHS:
+            return await call_next(request)
         response = await call_next(request)
 
         # Prevent clickjacking
@@ -101,6 +109,8 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     """Reject oversized request bodies to prevent resource exhaustion."""
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        if request.url.path in HEALTH_PROBE_PATHS:
+            return await call_next(request)
         content_length = request.headers.get("content-length")
         if content_length:
             size = int(content_length)
@@ -131,6 +141,8 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        if request.url.path in HEALTH_PROBE_PATHS:
+            return await call_next(request)
         correlation_id = request.headers.get("x-correlation-id", str(uuid.uuid4())[:8])
         tenant_id = request.headers.get("x-tenant-id", "-")
 
@@ -178,6 +190,8 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        if request.url.path in HEALTH_PROBE_PATHS:
+            return await call_next(request)
         try:
             return await call_next(request)
         except Exception as exc:

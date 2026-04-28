@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 # Paths that should bypass tenant resolution entirely
 PUBLIC_PATHS = {
+    "/health",
+    "/healthz",
+    "/readyz",
+    "/livez",
     "/api/health",
     "/api/tenants/create",
     "/api/tenants/check-subdomain",

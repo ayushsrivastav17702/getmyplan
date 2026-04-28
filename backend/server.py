@@ -141,8 +141,17 @@ _app_start_time = datetime.now(timezone.utc)
 # cold-start Atlas round-trip can exceed the probe timeout → pod restart loop.
 # See 2026-04-28 deploy failure: nginx 111 "connect refused" + 110 timeouts on
 # `/health` while startup was still doing index creation + RBAC seeding.
+#
+# Paths treated as "fast health probes" by every custom middleware — listed
+# once here so each middleware can short-circuit consistently.
 # ─────────────────────────────────────────────────────────────────────────────
+HEALTH_PROBE_PATHS = frozenset({"/health", "/healthz", "/readyz", "/livez"})
+
+
 @app.get("/health", include_in_schema=False)
+@app.get("/healthz", include_in_schema=False)
+@app.get("/readyz", include_in_schema=False)
+@app.get("/livez", include_in_schema=False)
 async def k8s_health_probe():
     """Lightweight probe — returns 200 as soon as the process is up."""
     return {"status": "ok"}
@@ -2832,6 +2841,10 @@ _gc_counter = 0
 @app.middleware("http")
 async def ip_whitelist_middleware(request, call_next):
     """Enforce IP whitelisting per tenant."""
+    # Skip for K8s health probes — must stay sub-ms even during cold start
+    if request.url.path in HEALTH_PROBE_PATHS:
+        return await call_next(request)
+
     # Only check on authenticated API routes
     path = request.url.path
     if not path.startswith("/api/") or path.startswith("/api/auth/") or path.startswith("/api/health"):
@@ -2887,6 +2900,9 @@ async def ip_whitelist_middleware(request, call_next):
 
 @app.middleware("http")
 async def gc_middleware(request, call_next):
+    # Skip health probes — keep cold-start probes minimal-overhead
+    if request.url.path in HEALTH_PROBE_PATHS:
+        return await call_next(request)
     global _gc_counter
     response = await call_next(request)
     _gc_counter += 1
@@ -2898,6 +2914,9 @@ async def gc_middleware(request, call_next):
 @app.middleware("http")
 async def impersonation_audit_middleware(request, call_next):
     """Auto-log mutating API calls made during an impersonation session."""
+    # Skip health probes
+    if request.url.path in HEALTH_PROBE_PATHS:
+        return await call_next(request)
     response = await call_next(request)
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         auth = request.headers.get("Authorization", "")
