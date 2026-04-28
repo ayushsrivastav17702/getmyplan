@@ -508,9 +508,44 @@ export default function OnboardingWizard({ onComplete }) {
   }
 
   // If fully onboarded, just complete immediately
-  if (status?.is_onboarded) {
-    if (onComplete) onComplete();
-    return null;
+  // If fully onboarded, show a "Setup Complete" acknowledgement instead of
+  // silently bouncing the user to /upload. A silent redirect looks like a
+  // broken route. Users can re-run the wizard with `/onboarding?force=1`.
+  const forceWizard = typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("force") === "1";
+
+  if (status?.is_onboarded && !forceWizard) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4"
+           data-testid="onboarding-complete">
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-md text-center shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-6 h-6 text-emerald-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">Setup already complete</h2>
+          <p className="text-sm text-slate-500 mb-6">
+            Your workspace is ready. You can head to the dashboard, or re-run the
+            wizard if you want to walk through setup again.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <button
+              data-testid="goto-dashboard-btn"
+              onClick={() => { window.location.href = "/dashboard"; }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-500"
+            >
+              Go to Dashboard
+            </button>
+            <button
+              data-testid="rerun-wizard-btn"
+              onClick={() => { window.location.href = "/onboarding?force=1"; }}
+              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200"
+            >
+              Re-run Setup Wizard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Error display

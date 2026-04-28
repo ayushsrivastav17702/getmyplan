@@ -2,7 +2,9 @@
 Reporting APIs: Planner Performance, Category Health, ROI Dashboard.
 """
 from fastapi import APIRouter, Depends, Request
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
+from typing import Dict
 import logging
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -120,106 +122,141 @@ async def planner_performance(user: dict = Depends(_dep_user)):
 
 @router.get("/category-health")
 async def category_health(user: dict = Depends(_dep_user)):
-    """Category-level health metrics: stock health, fill rate, DOH."""
+    """Category-level health metrics: stock health, fill rate, topseller availability, DOH.
+
+    ## Definitions (SOH-driven, not plan-driven)
+      - `stock_health`   = pct of SKUs in the category with SOH > 0
+      - `fill_rate`      = units_in_stock / (units_in_stock + units_lost_to_stockouts)
+                           simplified: pct of SKU-stores with SOH > 0
+      - `topseller_availability` = pct of top-20% revenue SKUs that have SOH > 0
+      - `doh`            = total_soh / daily_sales_rate (days of supply)
+
+    ## Field-name note
+    The canonical inventory quantity field in `store_inventory` is `closing_stock`
+    (NOT `soh`). See `mongo_aggregations.py` L597 and the Transfer Optimizer
+    repository for the same convention. A prior version of this route aggregated
+    `$soh` and always got 0, which — combined with the active/total bug below —
+    made every KPI show 100%.
+    """
     db = _db_func()
     tenant_id = user.get("tenant_id", "")
     tmatch = _tmatch(tenant_id)
 
-    # Get categories from style_master
-    styles = await db.style_master.find(tmatch, {"_id": 0, "style_code": 1, "category": 1}).to_list(500)
-    categories = list({s["category"] for s in styles if s.get("category")})
+    # 1. Style catalogue → category mapping
+    styles = await db.style_master.find(
+        tmatch, {"_id": 0, "style_code": 1, "category": 1},
+    ).to_list(500)
+    style_cat_map = {s["style_code"]: s.get("category") or "Other" for s in styles}
 
-    if not categories:
-        # Fallback: infer from SKU patterns
-        categories = ["Apparel", "Footwear", "Accessories"]
+    # 2. Full SKU list from sku_master, with style→category back-reference
+    skus = await db.sku_master.find(
+        tmatch, {"_id": 0, "sku": 1, "style": 1},
+    ).to_list(5000)
 
-    # Get recent sales aggregated by SKU prefix (style) — single efficient pipeline
+    # Fallback: if sku_master is empty, derive from distinct inventory rows
+    if not skus:
+        async for doc in db.store_inventory.aggregate([
+            {"$match": tmatch},
+            {"$group": {"_id": "$sku", "style": {"$first": "$style"}}},
+        ]):
+            skus.append({"sku": doc["_id"], "style": doc.get("style")})
+
+    sku_cat_map: Dict[str, str] = {
+        s["sku"]: style_cat_map.get(s.get("style"), "Other") for s in skus
+    }
+
+    # 3. Latest SOH per SKU-store (canonical field: closing_stock)
+    inv_pipeline = [
+        {"$match": tmatch},
+        {"$sort": {"uploaded_at": -1}},
+        {"$group": {
+            "_id": {"sku": "$sku", "store": "$store_code"},
+            "soh": {"$first": {"$toInt": {"$ifNull": ["$closing_stock", 0]}}},
+        }},
+    ]
+    soh_rows = await db.store_inventory.aggregate(inv_pipeline).to_list(None)
+    # Roll SOH up to SKU level and count in-stock SKU-stores for fill-rate
+    sku_soh: Dict[str, int] = defaultdict(int)
+    sku_store_total: Dict[str, int] = defaultdict(int)
+    sku_store_instock: Dict[str, int] = defaultdict(int)
+    for row in soh_rows:
+        sku = row["_id"]["sku"]
+        qty = row.get("soh") or 0
+        sku_soh[sku] += qty
+        sku_store_total[sku] += 1
+        if qty > 0:
+            sku_store_instock[sku] += 1
+
+    # 4. 30-day sales per SKU → revenue, units, and top-20% flag
     cutoff_30d = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     sales_pipeline = [
         {"$match": {**tmatch, "day": {"$gte": cutoff_30d}}},
-        {"$addFields": {
-            "style_prefix": {"$concat": [
-                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 0]}, "-",
-                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 1]}, "-",
-                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 2]},
-            ]}
-        }},
         {"$group": {
-            "_id": "$style_prefix",
-            "total_revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
-            "total_qty": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
-            "unique_skus": {"$addToSet": "$sku"},
+            "_id": "$sku",
+            "revenue": {"$sum": {"$toDouble": {"$ifNull": ["$revenue", 0]}}},
+            "units": {"$sum": {"$toInt": {"$ifNull": ["$quantity", 0]}}},
         }},
     ]
-    style_sales = await db.daily_sales.aggregate(sales_pipeline).to_list(500)
+    sku_sales = {doc["_id"]: doc async for doc in db.daily_sales.aggregate(sales_pipeline)}
 
-    # Map style prefix -> category
-    style_cat_map = {s["style_code"]: s["category"] for s in styles}
+    # Top-20% revenue SKUs = "topsellers"
+    revenues = sorted((s.get("revenue", 0) for s in sku_sales.values()), reverse=True)
+    topseller_threshold = revenues[max(0, len(revenues) // 5 - 1)] if revenues else 0
+    topseller_skus = {
+        sku for sku, s in sku_sales.items()
+        if s.get("revenue", 0) >= topseller_threshold and topseller_threshold > 0
+    }
 
-    # Get inventory aggregated by style prefix
-    inv_pipeline = [
-        {"$match": tmatch},
-        {"$addFields": {
-            "style_prefix": {"$concat": [
-                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 0]}, "-",
-                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 1]}, "-",
-                {"$arrayElemAt": [{"$split": ["$sku", "-"]}, 2]},
-            ]}
-        }},
-        {"$group": {"_id": "$style_prefix", "total_soh": {"$sum": "$soh"}}},
-    ]
-    inv_by_style = await db.store_inventory.aggregate(inv_pipeline).to_list(500)
-    inv_map = {i["_id"]: i["total_soh"] for i in inv_by_style}
+    # 5. Bucket everything per category
+    categories = sorted({c for c in sku_cat_map.values() if c})
+    if not categories:
+        categories = ["Apparel", "Footwear", "Accessories"]
 
-    # Build per-category metrics
-    cat_metrics = {}
-    for cat in categories:
-        cat_metrics[cat] = {
-            "category": cat, "total_skus": 0, "active_skus": 0,
-            "total_revenue": 0, "total_qty": 0, "total_soh": 0,
-        }
-
-    for ss in style_sales:
-        prefix = ss["_id"]
-        cat = style_cat_map.get(prefix, "Other")
-        if cat not in cat_metrics:
-            cat_metrics[cat] = {
-                "category": cat, "total_skus": 0, "active_skus": 0,
-                "total_revenue": 0, "total_qty": 0, "total_soh": 0,
-            }
-        cat_metrics[cat]["total_skus"] += len(ss["unique_skus"])
-        cat_metrics[cat]["active_skus"] += len(ss["unique_skus"])
-        cat_metrics[cat]["total_revenue"] += ss["total_revenue"]
-        cat_metrics[cat]["total_qty"] += ss["total_qty"]
-        cat_metrics[cat]["total_soh"] += inv_map.get(prefix, 0)
-
-    # Calculate derived metrics
     results = []
-    for cat, m in cat_metrics.items():
-        total_skus = m["total_skus"] or 1
-        active_skus = m["active_skus"]
-        daily_sales_rate = m["total_qty"] / 30 if m["total_qty"] > 0 else 0
+    for cat in categories:
+        cat_skus = [s for s, c in sku_cat_map.items() if c == cat]
+        if not cat_skus:
+            continue
 
-        stock_health = round((active_skus / total_skus * 100) if total_skus > 0 else 0, 1)
-        fill_rate = round(min(100, (active_skus / total_skus * 100)) if total_skus > 0 else 0, 1)
-        doh = round(m["total_soh"] / daily_sales_rate) if daily_sales_rate > 0 else 0
-        topseller_pct = round(min(100, stock_health + 5), 1)  # Approximation
+        total_skus = len(cat_skus)
+        in_stock_skus = sum(1 for s in cat_skus if sku_soh.get(s, 0) > 0)
+        total_store_cells = sum(sku_store_total.get(s, 0) for s in cat_skus)
+        instock_store_cells = sum(sku_store_instock.get(s, 0) for s in cat_skus)
+        total_soh = sum(sku_soh.get(s, 0) for s in cat_skus)
+        revenue_30d = sum(sku_sales.get(s, {}).get("revenue", 0) for s in cat_skus)
+        qty_30d = sum(sku_sales.get(s, {}).get("units", 0) for s in cat_skus)
+
+        cat_topsellers = [s for s in cat_skus if s in topseller_skus]
+        top_in_stock = sum(1 for s in cat_topsellers if sku_soh.get(s, 0) > 0)
+
+        # KPIs — every one is SOH-driven; when SOH=0 anywhere, the metric is 0
+        stock_health = round(in_stock_skus / total_skus * 100, 1) if total_skus else 0.0
+        fill_rate = (
+            round(instock_store_cells / total_store_cells * 100, 1)
+            if total_store_cells else 0.0
+        )
+        topseller_availability = (
+            round(top_in_stock / len(cat_topsellers) * 100, 1)
+            if cat_topsellers else 0.0
+        )
+        daily_rate = qty_30d / 30 if qty_30d else 0
+        doh = round(total_soh / daily_rate) if daily_rate > 0 else 0
 
         results.append({
             "category": cat,
             "total_skus": total_skus,
-            "active_skus": active_skus,
+            "in_stock_skus": in_stock_skus,
             "stock_health": stock_health,
             "fill_rate": fill_rate,
-            "topseller_availability": topseller_pct,
+            "topseller_availability": topseller_availability,
+            "topseller_count": len(cat_topsellers),
             "doh": doh,
-            "revenue_30d": round(m["total_revenue"], 2),
-            "qty_30d": m["total_qty"],
-            "soh": m["total_soh"],
+            "revenue_30d": round(revenue_30d, 2),
+            "qty_30d": qty_30d,
+            "soh": total_soh,
         })
 
     results.sort(key=lambda x: x["revenue_30d"], reverse=True)
-
     return {"categories": results, "period": "last_30_days"}
 
 
