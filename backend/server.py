@@ -26,7 +26,10 @@ import random
 import io
 import asyncio
 import chardet
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# NOTE: emergentintegrations.llm.chat is lazy-imported inside the `/api/chat`
+# handler (it's the only caller). Eager import costs ~1.3s at cold start
+# because it pulls OpenAI + Anthropic + Gemini SDKs upfront, which trips K8s
+# readiness probes on slow nodes. See 2026-04-28 deploy failure analysis.
 from sftp import sftp_service, sftp_scheduler
 from routes.core_logic import router as core_logic_router, init_core_logic
 from routes.replenishment import router as replenishment_router, init_replenishment
@@ -2178,6 +2181,10 @@ Guidelines:
 - If the question is outside the platform scope, politely redirect to platform features
 - Always maintain a professional, helpful tone"""
         
+        # Lazy-import: emergentintegrations eagerly loads OpenAI+Anthropic+Gemini
+        # SDKs (~1.3s cold-start cost). Only needed in this handler.
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+
         chat = LlmChat(
             api_key=api_key,
             session_id=session_id,

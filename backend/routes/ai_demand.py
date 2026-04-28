@@ -18,12 +18,15 @@ from bson import ObjectId
 from services.tenant_data_provider import get_tenant_provider
 from services.cache_service import cache_get, cache_set, cache_extra, get_tenant_id as _cache_tid
 
+# Lazy sklearn probe — the actual `LinearRegression` class is imported at call
+# site below to avoid paying ~640ms of import cost at every pod cold-start when
+# 90%+ of requests don't need ML. See 2026-04-28 deploy failure analysis.
 try:
-    from sklearn.linear_model import LinearRegression
-    SKLEARN_AVAILABLE = True
+    import importlib.util
+    SKLEARN_AVAILABLE = importlib.util.find_spec("sklearn") is not None
 except ImportError:
     SKLEARN_AVAILABLE = False
-    LinearRegression = None
+LinearRegression = None  # resolved lazily inside handlers that need it
 
 logger = logging.getLogger(__name__)
 
@@ -779,9 +782,11 @@ async def topseller_prediction(
             if len(revs) < 2: continue
             first = revs[0] if revs[0] > 0 else 1
             growth = ((revs[-1] - first) / first) * 100
-            if SKLEARN_AVAILABLE and LinearRegression is not None:
+            if SKLEARN_AVAILABLE:
+                # Lazy import — saves ~640ms at cold-start when ML isn't used.
+                from sklearn.linear_model import LinearRegression as _LR
                 x = np.arange(len(revs)).reshape(-1, 1)
-                lr = LinearRegression()
+                lr = _LR()
                 lr.fit(x, revs)
                 future = lr.predict([[len(revs)], [len(revs) + 1], [len(revs) + 2]])
                 predicted_3m = round(float(sum(future)), 2)
