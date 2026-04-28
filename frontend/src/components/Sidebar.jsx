@@ -331,7 +331,13 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
           ) : (
             <>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Upload Status</span>
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+                  title="Counts your uploaded data files. Sample/demo data from platform setup does not count."
+                  data-testid="your-uploads-label"
+                >
+                  Your Uploads
+                </span>
                 <span className={`text-[10px] font-bold ${uploaded === total ? "text-emerald-400" : "text-amber-400"}`}>{uploaded}/{total}</span>
               </div>
               <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">

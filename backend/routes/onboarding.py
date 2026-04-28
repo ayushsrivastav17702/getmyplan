@@ -77,11 +77,28 @@ async def get_onboarding_status(request: Request):
         pass
 
     # Step completion logic
+    #
+    # NB: we intentionally ignore system-seeded demo data when deciding if a
+    # tenant is "really" onboarded. Demo data is marked with
+    # `uploaded_by = 'system'` in upload_history; a tenant is only considered
+    # onboarded once at least one *human* upload has landed. This keeps the
+    # `/onboarding` wizard from being skipped for brand-new tenants that
+    # received sample data via `_ensure_default_tenant()`.
+    try:
+        real_uploads_count = await db.upload_history.count_documents({
+            "tenant_id": tenant_id,
+            "uploaded_by": {"$nin": [None, "", "system"]},
+        })
+    except Exception:
+        real_uploads_count = 0
+    has_real_uploads = real_uploads_count > 0
+
     has_any_data = (sku_count + store_count + sales_count + inv_count) > 0
     master_complete = sku_count > 0 and store_count > 0
     master_all = sku_count > 0 and store_count > 0 and style_count > 0 and wh_count > 0
     transactional_has_sales = sales_count > 0
-    all_ready = master_complete and transactional_has_sales
+    # "all_ready" = data exists AND a real user has uploaded at least once.
+    all_ready = master_complete and transactional_has_sales and has_real_uploads
 
     master_uploaded = sum(1 for c in [sku_count, store_count, style_count, wh_count] if c > 0)
     trans_uploaded = sum(1 for c in [sales_count, inv_count, cogs_count, orders_count] if c > 0)
@@ -104,6 +121,13 @@ async def get_onboarding_status(request: Request):
         "current_step": current_step,
         "progress_percentage": int((steps_done / 4) * 100),
         "sample_data_loaded": has_any_data,
+        # True when data exists in collections (seeded or uploaded).
+        # False when the workspace is literally empty.
+        "has_data": has_any_data,
+        # True only when a real user (not "system") has uploaded at least once.
+        # Used by the dashboard to decide whether to show the "demo data" banner.
+        "has_real_uploads": has_real_uploads,
+        "real_uploads_count": real_uploads_count,
         "master_data": {
             "sku_master": {"uploaded": sku_count > 0, "count": sku_count},
             "store_master": {"uploaded": store_count > 0, "count": store_count},

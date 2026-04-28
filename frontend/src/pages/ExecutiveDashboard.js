@@ -37,6 +37,16 @@ const ExecutiveDashboard = () => {
   const [exporting, setExporting] = useState(false);
   const dashboardRef = useRef(null);
 
+  // Demo-data awareness: when the tenant has zero real user uploads, the
+  // dashboard is rendering sample data. Surface that honestly with a banner
+  // so users don't wonder "where did these numbers come from?".
+  const [hasRealUploads, setHasRealUploads] = useState(true);  // optimistic
+  useEffect(() => {
+    axios.get(`${API}/onboarding/status`)
+      .then(r => setHasRealUploads(!!r.data?.has_real_uploads))
+      .catch(() => {});
+  }, []);
+
   const handleExportPDF = async () => {
     if (!dashboardRef.current || exporting) return;
     setExporting(true);
@@ -329,6 +339,30 @@ const ExecutiveDashboard = () => {
       {data && !loading && !error && (
         <div ref={dashboardRef}>
         <>
+          {/* Demo-data banner — shown when the tenant has zero real user uploads.
+              The dashboard is still honest about numbers (they're accurate for the
+              seeded sample), but we make the data source obvious. */}
+          {!hasRealUploads && (
+            <div
+              className="mb-5 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+              data-testid="demo-data-banner"
+            >
+              <Database size={18} className="text-amber-600 shrink-0" />
+              <div className="flex-1 text-sm text-amber-900">
+                <span className="font-semibold">You're viewing sample data.</span>{" "}
+                The numbers below reflect the demo dataset bundled with your workspace.
+                Upload your own CSVs to see your actual business metrics.
+              </div>
+              <button
+                data-testid="go-to-upload-btn"
+                onClick={() => navigate("/upload")}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-3 py-1.5"
+              >
+                <Upload size={14} /> Upload Your Data
+              </button>
+            </div>
+          )}
+
           {/* ── Revenue & Margin KPI Row ── */}
           {kpis && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="kpi-cards">
