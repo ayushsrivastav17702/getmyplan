@@ -131,6 +131,23 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 # Track uptime
 _app_start_time = datetime.now(timezone.utc)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Kubernetes liveness / readiness probes
+#
+# K8s pods probe `/health` on the bind port directly (NO `/api` prefix) because
+# probes are container-local and don't traverse the `/api` ingress rewrite. We
+# MUST answer these sub-second and without touching the database, otherwise a
+# cold-start Atlas round-trip can exceed the probe timeout → pod restart loop.
+# See 2026-04-28 deploy failure: nginx 111 "connect refused" + 110 timeouts on
+# `/health` while startup was still doing index creation + RBAC seeding.
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/health", include_in_schema=False)
+async def k8s_health_probe():
+    """Lightweight probe — returns 200 as soon as the process is up."""
+    return {"status": "ok"}
+
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
@@ -3040,44 +3057,16 @@ async def _ensure_v2_collection_indexes(tenant_db):
 
 @app.on_event("startup")
 async def startup():
-    # === DATABASE CONFIGURATION DEBUG (remove after production verification) ===
-    logger.warning("=" * 60)
-    logger.warning("DATABASE CONFIGURATION DEBUG")
-    logger.warning("=" * 60)
-    logger.warning(f"SHARED_DB_NAME from env: {os.getenv('SHARED_DB_NAME', 'NOT SET')}")
-    logger.warning(f"DB_NAME from env: {os.getenv('DB_NAME', 'NOT SET')}")
-    logger.warning(f"MONGO_URL prefix: {os.getenv('MONGO_URL', '')[:40]}...")
-    logger.warning(f"MONGODB_URI prefix: {os.getenv('MONGODB_URI', 'NOT SET')[:40] if os.getenv('MONGODB_URI') else 'NOT SET'}...")
-    logger.warning(f"Resolved shared DB name: {get_shared_db_name()}")
-    try:
-        shared = get_shared_db()
-        logger.warning(f"Actual shared database object name: {shared.name}")
-        colls = await shared.list_collection_names()
-        logger.warning(f"Can list collections: {colls}")
-    except Exception as e:
-        logger.error(f"Database connection test failed: {e}")
-    logger.warning("=" * 60)
-    # === END DEBUG ===
+    # ─────────────────────────────────────────────────────────────────────────
+    # Critical path: keep this FAST (< 2s). Anything hitting the DB belongs in
+    # `_deferred_startup_tasks()` which runs as a background task — otherwise a
+    # slow Atlas cold-start will blow past the K8s readiness-probe timeout and
+    # the pod will be killed before it ever answers `/health`. (See 2026-04-28
+    # deploy failure logs.)
+    # ─────────────────────────────────────────────────────────────────────────
 
-    await ensure_shared_indexes()
-    try:
-        await _ensure_enterprise_indexes()
-    except Exception as e:
-        logger.warning(f"Enterprise index creation skipped: {e}")
-    # Ensure V2 collection indexes on the default DB
-    try:
-        await _ensure_v2_collection_indexes(db)
-    except Exception as e:
-        logger.warning(f"V2 index creation skipped: {e}")
-    try:
-        await _ensure_default_tenant()
-    except Exception as e:
-        logger.warning(f"Default tenant seeding skipped: {e}")
-    try:
-        await seed_rbac()
-    except Exception as e:
-        logger.warning(f"RBAC seeding skipped: {e}")
-    logger.info("Multi-tenant startup complete — enterprise security enabled")
+    # Wire route-module dependencies synchronously — these are pure in-process
+    # function calls with no DB I/O, safe to run before the app starts serving.
     init_core_logic(client, get_cached_data)
     init_replenishment(client, get_cached_data)
     init_doh(client, get_cached_data)
@@ -3104,14 +3093,41 @@ async def startup():
     init_dashboards(get_db, get_current_user)
     init_reports(get_db, get_current_user)
 
-    # Start daily drip campaign background task
+    # Fire-and-forget background tasks (each must guard its own failures).
+    asyncio.create_task(_deferred_startup_tasks())
     asyncio.create_task(_drip_scheduler())
-    # Start trial expiration checker
     asyncio.create_task(_trial_expiration_scheduler())
-    # Weekly buy planning auto-refresh (wedge + style mix + DNA)
     asyncio.create_task(_buy_planning_refresh_scheduler())
-    # Warm Redis cache for heavy dashboard queries (runs once at startup)
     asyncio.create_task(_warmup_cache())
+
+
+async def _deferred_startup_tasks():
+    """One-shot DB bootstrap — indexes, seed data, RBAC.
+
+    Runs off the critical path so the pod becomes ready immediately. Each step
+    is individually try/excepted so a failure in one doesn't block the others.
+    """
+    try:
+        await ensure_shared_indexes()
+    except Exception as e:
+        logger.warning(f"Shared index creation skipped: {e}")
+    try:
+        await _ensure_enterprise_indexes()
+    except Exception as e:
+        logger.warning(f"Enterprise index creation skipped: {e}")
+    try:
+        await _ensure_v2_collection_indexes(db)
+    except Exception as e:
+        logger.warning(f"V2 index creation skipped: {e}")
+    try:
+        await _ensure_default_tenant()
+    except Exception as e:
+        logger.warning(f"Default tenant seeding skipped: {e}")
+    try:
+        await seed_rbac()
+    except Exception as e:
+        logger.warning(f"RBAC seeding skipped: {e}")
+    logger.info("Deferred startup complete — indexes + seed data ensured")
 
 
 async def _warmup_cache():
