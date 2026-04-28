@@ -324,7 +324,8 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
         {/* ─── Upload Progress ─── */}
         <div className={`border-b border-white/5 shrink-0 ${collapsed ? "px-2 py-3" : "px-4 py-3"}`}>
           {collapsed ? (
-            <div className="flex flex-col items-center gap-1" title={`${uploaded}/${total} files uploaded`}>
+            <div className="flex flex-col items-center gap-1"
+                 title={`${uploaded}/${total} files uploaded (4 master files + 3 daily feeds)`}>
               <Upload size={14} className={uploaded === total ? "text-emerald-400" : "text-amber-400"} />
               <span className={`text-[10px] font-bold ${uploaded === total ? "text-emerald-400" : "text-amber-400"}`}>{uploaded}/{total}</span>
             </div>
@@ -333,7 +334,7 @@ const Sidebar = ({ uploadStatus, isOpen, setIsOpen }) => {
               <div className="flex items-center justify-between mb-1.5">
                 <span
                   className="text-[10px] font-semibold uppercase tracking-wider text-slate-500"
-                  title="Counts your uploaded data files. Sample/demo data from platform setup does not count."
+                  title="Counts your own uploads. Covers 4 master files (Style, SKU-EAN, Store, Warehouse) and 3 daily feeds (Daily Sales, Store Inventory, Warehouse Inventory). Sample/demo data from platform setup is not counted here."
                   data-testid="your-uploads-label"
                 >
                   Your Uploads

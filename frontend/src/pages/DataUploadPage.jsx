@@ -6,7 +6,7 @@ import {
 } from "../components/ui/select";
 import {
   Package, CheckCircle, Upload, Download, RefreshCw,
-  Rocket, X, Eye,
+  Rocket, X, Eye, ShieldCheck, ChevronDown,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -288,6 +288,8 @@ const DataUploadPage = () => {
         </div>
       </div>
 
+      <ValidationRulesCard />
+
       {/* SECTION 1: MASTER DATA */}
       <section data-testid="master-data-section">
         <div className="flex items-center gap-3 mb-4">
@@ -421,5 +423,66 @@ const DataUploadPage = () => {
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ValidationRulesCard — collapsible card that summarises the 75+ validation
+// rules every uploaded CSV is checked against. Kept inline (not in components/)
+// because it's tightly coupled to the copy on this page.
+// ─────────────────────────────────────────────────────────────────────────────
+const VALIDATION_RULE_GROUPS = [
+  { label: "Required column presence",       count: 12, desc: "SKU, store_code, day, quantity, revenue, etc. must be present per file type" },
+  { label: "Data-type enforcement",          count: 10, desc: "Numeric fields reject text; dates parsed as ISO-8601" },
+  { label: "Cross-file referential checks",  count:  8, desc: "Every SKU in daily_sales must exist in sku_master; same for stores, styles" },
+  { label: "Range & bound checks",           count:  9, desc: "Quantity ≥ 0; revenue ≥ 0; MRP > 0; dates within last 2 years" },
+  { label: "Uniqueness & duplicate keys",    count:  6, desc: "No duplicate (sku, store, day) rows within a single upload" },
+  { label: "Format validators",              count: 14, desc: "EAN checksum; currency decimals; non-empty strings; whitespace trim" },
+  { label: "Business-logic warnings",        count: 10, desc: "Soft warnings for outliers — e.g. revenue > 100× typical SKU price" },
+  { label: "Encoding & file health",         count:  6, desc: "UTF-8 / Latin-1 auto-detect; empty file rejection; max row cap" },
+];
+
+function ValidationRulesCard() {
+  const [open, setOpen] = useState(false);
+  const total = VALIDATION_RULE_GROUPS.reduce((s, g) => s + g.count, 0);
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden" data-testid="validation-rules-card">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100 transition-colors text-left"
+        data-testid="validation-rules-toggle"
+      >
+        <div className="p-2 bg-emerald-100 rounded-lg shrink-0">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+        </div>
+        <div className="flex-1">
+          <div className="text-sm font-semibold text-slate-900">
+            {total} validation rules run on every upload
+          </div>
+          <div className="text-xs text-slate-500">
+            Uploads are rejected on any hard failure; soft-warning rules flag anomalies without blocking.
+          </div>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t border-slate-200 px-4 py-3 grid grid-cols-1 md:grid-cols-2 gap-2 bg-white">
+          {VALIDATION_RULE_GROUPS.map(g => (
+            <div key={g.label} className="flex items-start gap-2 py-1.5"
+                 data-testid={`validation-rule-${g.label.toLowerCase().replace(/\s+/g, "-")}`}>
+              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-700 text-[10px] font-bold rounded">
+                {g.count}
+              </span>
+              <div>
+                <div className="text-xs font-semibold text-slate-800">{g.label}</div>
+                <div className="text-[11px] text-slate-500 leading-snug">{g.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default DataUploadPage;

@@ -248,6 +248,15 @@ const DOHAnalysis = () => {
                 <p className="text-xs text-slate-700 font-mono">Optimal: +/-20% of ideal</p>
               </div>
             </div>
+            <div className="mt-3 bg-[#EFF5FB] border border-[#C9DEF1] rounded p-2.5"
+                 data-testid="doh-threshold-explainer">
+              <div className="text-xs font-semibold text-[#0C5184] mb-1">Threshold Reference</div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                Default <span className="font-semibold">Ideal DOH = 9 days</span>. With the ±20% band, an SKU-store's
+                DOH is <span className="font-semibold">Optimal between 7 – 11 days</span>. Below 7d → Understocked;
+                above 11d → Overstocked. Slide the control to recalibrate for your category (e.g. 14d for seasonal).
+              </p>
+            </div>
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">

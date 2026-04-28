@@ -9,7 +9,9 @@ import {
   Search, ChevronDown, Copy, Eye, EyeOff, Lock,
 } from "lucide-react";
 
-const PLANS = ["starter", "professional", "business", "enterprise"];
+// Canonical plan tiers — keep in sync with backend `PLAN_LIMITS` config.
+// (Dropped the "business" tier in 2026-04; the app ships three tiers only.)
+const PLANS = ["starter", "professional", "enterprise"];
 const ROLES = ["admin", "merchandiser", "viewer"];
 
 export default function TenantManagement() {

@@ -137,7 +137,10 @@ const BackupRestore = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900" data-testid="backup-title">Backup & Restore</h1>
-            <p className="text-sm text-slate-500">Create snapshots of your workspace data. Retains last {maxBackups} backups.</p>
+            <p className="text-sm text-slate-500">
+              Create snapshots of your workspace data. Keeps the most recent <span className="font-semibold text-slate-700">{maxBackups} backups</span> —
+              when a new snapshot is created past this limit, the oldest one is auto-removed (rolling window, not time-based).
+            </p>
           </div>
         </div>
         <button
