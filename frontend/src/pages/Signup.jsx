@@ -21,7 +21,16 @@ async function signupFetch(url, options = {}) {
   try {
     data = await resp.json();
   } catch {
-    throw { message: `Server returned non-JSON response (HTTP ${resp.status})` };
+    // Body wasn't JSON. Map status to a human-friendly message.
+    const friendly =
+      resp.status === 400 ? "We couldn't process that — your email or workspace URL may already be taken. Try signing in instead, or pick a different workspace URL." :
+      resp.status === 401 ? "Authentication failed. Please check your credentials." :
+      resp.status === 403 ? "You don't have permission to perform this action." :
+      resp.status === 404 ? "That endpoint isn't available — please contact support." :
+      resp.status === 429 ? "Too many requests. Please wait a moment and try again." :
+      resp.status >= 500 ? "Server is temporarily unavailable. Please try again in a minute." :
+      `Unexpected error (HTTP ${resp.status}). Please try again or contact support.`;
+    throw { message: friendly };
   }
   if (!resp.ok) throw { response: { status: resp.status, data } };
   return data;
